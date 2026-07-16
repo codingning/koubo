@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>打开AI口播工作台</title>
+  <style>body{font-family:"Microsoft YaHei",sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#f4f6f8;color:#17324d}.card{max-width:620px;padding:28px;border:1px solid #dfe5ea;border-radius:18px;background:#fff;box-shadow:0 12px 36px rgba(15,42,67,.08)}h1{margin:0 0 8px;font-size:25px}p{color:#607484}a{color:#0f8278;font-weight:700}.status{margin-top:14px;padding:10px 12px;border-radius:10px;background:#def7f3}</style>
+</head>
+<body>
+  <div class="card">
+    <h1>正在打开AI口播工作台</h1>
+    <p>如果本地剪辑服务已启动，将进入“口播素材 + AI剪辑”完整版；否则先打开无需服务的素材查看页。</p>
+    <div id="status" class="status">正在检查本地剪辑服务……</div>
+    <p>没有自动跳转？<a href="web/index.html">打开素材工作台</a>，或双击同目录的 <strong>打开AI口播工作台.vbs</strong> 启用视频剪辑。</p>
+  </div>
+  <script>
+    const fallback = () => location.replace("web/index.html");
+    const timer = setTimeout(fallback, 1300);
+    fetch("http://127.0.0.1:8787/api/health", {cache:"no-store"})
+      .then(response => response.ok ? response.json() : Promise.reject())
+      .then(data => { clearTimeout(timer); document.getElementById("status").textContent = "本地AI剪辑服务已就绪，正在进入……"; location.replace("http://127.0.0.1:8787/"); })
+      .catch(() => { document.getElementById("status").textContent = "未检测到剪辑服务，正在进入素材查看页……"; });
+  </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+interface:
+  display_name: "口播AI视频剪辑"
+  short_description: "把口播原片分析、剪辑、动态包装并完成本地视频质量检查"
+  brand_color: "#14B8A6"
+  default_prompt: "Use $koubo-ai-video-editor to edit the newest talking-head video job in this project."
+policy:
+  allow_implicit_invocation: true

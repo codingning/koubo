@@ -1,0 +1,10 @@
+opencli v1.8.6 doctor (node v22.20.0)
+
+[OK] Daemon: running on port 19825 (v1.8.6)
+[OK] Extension: connected (v1.0.22)
+
+Profiles:
+  • jyvqayu7: connected v1.0.22
+[OK] Connectivity: connected in 0.1s
+
+Everything looks good!

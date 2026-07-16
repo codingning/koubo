@@ -1,0 +1,94 @@
+{
+    "timezone":  "Asia/Shanghai",
+    "windowHours":  48,
+    "defaultQueries":  [
+                           "Codex 实际使用",
+                           "AI 工作流 踩坑",
+                           "AI 项目 实测",
+                           "AI 工具 更新",
+                           "普通人 学AI"
+                       ],
+    "rssFeeds":  [
+                     {
+                         "name":  "OpenAI News",
+                         "category":  "AI官方",
+                         "url":  "https://openai.com/news/rss.xml"
+                     },
+                     {
+                         "name":  "Google AI Blog",
+                         "category":  "AI官方",
+                         "url":  "https://blog.google/technology/ai/rss/"
+                     },
+                     {
+                         "name":  "Microsoft AI Blog",
+                         "category":  "AI官方",
+                         "url":  "https://blogs.microsoft.com/ai/feed/"
+                     },
+                     {
+                         "name":  "BBC World",
+                         "category":  "国际新闻",
+                         "url":  "https://feeds.bbci.co.uk/news/world/rss.xml"
+                     },
+                     {
+                         "name":  "BBC Technology",
+                         "category":  "科技新闻",
+                         "url":  "https://feeds.bbci.co.uk/news/technology/rss.xml"
+                     },
+                     {
+                         "name":  "Hacker News",
+                         "category":  "开发者讨论",
+                         "url":  "https://hnrss.org/frontpage"
+                     }
+                 ],
+    "browserSources":  [
+                           {
+                               "name":  "抖音官方热榜",
+                               "url":  "https://www.douyin.com/hot",
+                               "mode":  "browser"
+                           },
+                           {
+                               "name":  "微博官方热搜",
+                               "url":  "https://s.weibo.com/top/summary",
+                               "mode":  "browser"
+                           },
+                           {
+                               "name":  "热搜引擎聚合榜",
+                               "url":  "https://zhaoyizhe.com/",
+                               "mode":  "browser-fallback"
+                           }
+                       ],
+    "webSearchRules":  {
+                           "officialFirst":  [
+                                                 "AI产品发布",
+                                                 "法规政策",
+                                                 "企业公告"
+                                             ],
+                           "twoSourcesRequired":  [
+                                                      "社会事件",
+                                                      "争议事实",
+                                                      "国际新闻",
+                                                      "统计数据"
+                                                  ],
+                           "discussionOnly":  [
+                                                  "网友观点",
+                                                  "评论区情绪",
+                                                  "创作者角度"
+                                              ]
+                       },
+    "contentMode":  "ai-growth-first",
+    "contentProportions":  {
+                               "realGrowthLog":  45,
+                               "aiToolProjectExperiment":  30,
+                               "aiHotspotHandsOn":  15,
+                               "reflectionOrRealFanCoCreation":  10
+                           },
+    "primaryEvidenceSources":  [
+                                   "当天Codex任务",
+                                   "文件和作品",
+                                   "功能与运行结果",
+                                   "错误与返工",
+                                   "截图和前后对比",
+                                   "昨日挑战验证",
+                                   "真实粉丝问题"
+                               ]
+}

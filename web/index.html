@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>AI口播成长工作台</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="sidebar" aria-label="工作台导航">
+      <div class="brand">
+        <div class="brand-mark">口</div>
+        <div>
+          <strong>AI口播工作台</strong>
+          <span>30天成长计划</span>
+        </div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item is-active" data-view="today"><span class="nav-icon">1</span><span>当前拍摄包</span></button>
+        <button class="nav-item" data-view="script"><span class="nav-icon">2</span><span>照着念</span></button>
+        <button class="nav-item" data-view="shoot"><span class="nav-icon">3</span><span>拍什么画面</span></button>
+        <button class="nav-item" data-view="creative"><span class="nav-icon">4</span><span>标题和封面</span></button>
+
+        <button class="nav-item" data-view="edit"><span class="nav-icon">剪</span><span>拍完AI剪辑</span></button>
+        <button class="nav-item" data-view="publish"><span class="nav-icon">发</span><span>发布文案</span></button>
+        <button class="nav-item" data-view="evidence"><span class="nav-icon">证</span><span>证据和风险</span></button>
+        <button class="nav-item" data-view="roadmap"><span class="nav-icon">30</span><span>成长路线</span></button>
+        <button class="nav-item" data-view="library"><span class="nav-icon">库</span><span>历史内容</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="safe-card">
+          <span class="safe-dot"></span>
+          <div><strong>人工审核中</strong><small>不会自动发布或评论</small></div>
+        </div>
+        <button id="export-review" class="sidebar-action">导出我的审核结果</button>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <button id="mobile-menu" class="mobile-menu" aria-label="打开菜单">☰</button>
+        <div>
+          <div class="eyebrow" id="page-eyebrow">打开网页就能直接拍</div>
+          <h1 id="page-title">当前拍摄包</h1>
+        </div>
+        <div class="top-actions">
+          <label class="content-picker-label" for="content-picker">内容</label>
+          <select id="content-picker" class="content-picker"></select>
+          <div class="status-chip" id="global-status">待审核</div>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <section id="view-today" class="view is-active" data-title="当前拍摄包" data-eyebrow="打开网页就能直接拍">
+          <div class="start-banner">
+            <div>
+              <span class="start-kicker">不用找文件 · 不用运行脚本</span>
+              <h2>你要拍的口播已经放在这个网页里</h2>
+              <p>以后只要双击项目根目录的 <strong>打开口播工作台.html</strong>，然后按下面 1—4 步操作。</p>
+            </div>
+            <div class="entry-path">
+              <span>固定入口</span>
+              <code>F:\code\koubo\打开口播工作台.html</code>
+            </div>
+          </div>
+
+          <div class="operation-steps" aria-label="拍摄操作步骤">
+            <button class="operation-step is-current" data-go="today"><b>1</b><span><strong>确认拍哪条</strong><small>当前页已经选好主稿</small></span></button>
+            <button class="operation-step" data-go="script"><b>2</b><span><strong>直接照着念</strong><small>完整版、精简版、提词器</small></span></button>
+            <button class="operation-step" data-go="shoot"><b>3</b><span><strong>补拍画面</strong><small>B-roll和字幕提示</small></span></button>
+            <button class="operation-step" data-go="creative"><b>4</b><span><strong>选标题封面</strong><small>选完再人工发布</small></span></button>
+          </div>
+
+          <div class="hero-card">
+            <div class="hero-meta">
+              <span id="hero-day" class="pill pill-accent"></span>
+              <span id="hero-column" class="pill"></span>
+              <span id="hero-duration" class="pill"></span>
+            </div>
+            <h2 id="hero-topic"></h2>
+            <p id="hero-hook" class="hero-hook"></p>
+            <div class="hero-benefit">
+              <span>观众能带走</span>
+              <strong id="hero-benefit"></strong>
+            </div>
+            <div class="hero-actions">
+              <button class="btn btn-primary" data-go="script">查看完整口播稿</button>
+              <button id="start-teleprompter" class="btn btn-dark">开始提词器</button>
+              <button id="copy-short-hero" class="btn btn-secondary">复制精简稿</button>
+            </div>
+          </div>
+
+          <div class="focus-grid">
+            <article class="panel quick-script-panel">
+              <div class="panel-head">
+                <div><span class="step-tag">建议先拍精简版</span><h3>打开相机后，直接念这一版</h3></div>
+                <span id="home-script-duration" class="mini-label"></span>
+              </div>
+              <p id="home-script-preview" class="home-script-preview"></p>
+              <div class="inline-actions">
+                <button id="copy-home-script" class="btn btn-primary">复制这版口播稿</button>
+                <button class="btn btn-dark" data-go="script">查看分段和语气</button>
+                <button class="btn btn-secondary" data-go="shoot">看要拍什么画面</button>
+              </div>
+            </article>
+
+            <article class="panel location-panel">
+              <div class="panel-head"><h3>这条内容生成到了哪里</h3><span class="mini-label">不用自己翻目录</span></div>
+              <div class="location-row">
+                <span>完整素材包</span>
+                <code id="source-package-path"></code>
+              </div>
+              <div class="location-row">
+                <span>网页查看入口</span>
+                <code>F:\code\koubo\打开口播工作台.html</code>
+              </div>
+              <div class="location-actions">
+                <a id="open-source-package" class="btn btn-secondary" href="#" target="_blank">打开完整素材包</a>
+                <button id="copy-source-path" class="btn btn-ghost">复制文件位置</button>
+              </div>
+              <p class="location-tip">以后Codex生成新内容后，会把最新稿同步到这个网页；你刷新页面就能查看。</p>
+            </article>
+          </div>
+
+          <div class="summary-grid">
+            <article class="panel story-panel">
+              <div class="panel-head"><h3>这一集为什么值得拍</h3><span class="mini-label">真实进展</span></div>
+              <div class="story-flow">
+                <div><span>之前</span><p id="story-yesterday"></p></div>
+                <div class="flow-arrow">→</div>
+                <div><span>今天</span><p id="story-today"></p></div>
+                <div class="flow-arrow">→</div>
+                <div><span>明天</span><p id="story-tomorrow"></p></div>
+              </div>
+            </article>
+
+            <article class="panel decision-panel">
+              <div class="panel-head"><h3>我的审核</h3><span id="save-indicator" class="save-indicator">已自动保存</span></div>
+              <div class="status-buttons" role="group" aria-label="审核状态">
+                <button data-review-status="待审核" class="status-btn is-active">待审核</button>
+                <button data-review-status="需要修改" class="status-btn">需要修改</button>
+                <button data-review-status="已通过" class="status-btn">已通过</button>
+              </div>
+              <label for="review-notes">我的修改意见</label>
+              <textarea id="review-notes" rows="5" placeholder="例如：开头太像项目汇报；想把Excel错误删掉；封面用方案B……"></textarea>
+              <button id="copy-review-summary" class="btn btn-secondary btn-block">复制审核意见，发给Codex</button>
+            </article>
+          </div>
+
+          <article class="panel progress-panel">
+            <div class="panel-head"><h3>今天真实完成了什么</h3><button class="text-button" data-go="evidence">查看证据</button></div>
+            <ul id="progress-list" class="check-list"></ul>
+          </article>
+
+          <article class="panel candidates-panel">
+            <div class="panel-head"><h3>候选方向</h3><span class="mini-label">没有真实素材就留空</span></div>
+            <div id="candidate-list" class="candidate-list"></div>
+          </article>
+        </section>
+
+        <section id="view-script" class="view" data-title="口播稿" data-eyebrow="直接照着拍">
+          <div class="section-toolbar">
+            <div class="segmented" role="tablist">
+              <button class="segment is-active" data-script-mode="full">完整版</button>
+              <button class="segment" data-script-mode="short">精简版</button>
+              <button class="segment" data-script-mode="edit">我的修改版</button>
+            </div>
+            <div class="toolbar-actions">
+              <button id="copy-current-script" class="btn btn-secondary">复制当前稿</button>
+              <button id="open-teleprompter" class="btn btn-primary">提词器模式</button>
+            </div>
+          </div>
+
+          <div id="full-script-panel" class="script-layout">
+            <div id="script-segments" class="script-segments"></div>
+            <aside class="script-side">
+              <div class="side-stat"><span>预计时长</span><strong id="script-duration"></strong></div>
+              <div class="side-stat"><span>核心情绪</span><strong>坦诚 → 返工 → 笃定</strong></div>
+              <div class="side-tip"><b>拍摄提示</b><p>不要像汇报项目。把它讲成一次“及时发现方向不对”的真实复盘。</p></div>
+            </aside>
+          </div>
+
+          <div id="short-script-panel" class="script-card is-hidden">
+            <div class="script-card-head"><span>30—45秒精简稿</span><button class="text-button" id="copy-short-script">复制</button></div>
+            <p id="short-script-text" class="editable-display"></p>
+          </div>
+
+          <div id="edit-script-panel" class="edit-panel is-hidden">
+            <div class="edit-head">
+              <div><h3>我的修改版</h3><p>修改内容只保存在这个浏览器里，不会覆盖原文件。</p></div>
+              <button id="reset-edited-script" class="text-button danger">恢复原稿</button>
+            </div>
+            <textarea id="edited-script" class="script-editor" aria-label="我的修改版口播稿"></textarea>
+          </div>
+        </section>
+
+        <section id="view-creative" class="view" data-title="标题和封面" data-eyebrow="选择最终包装">
+          <div class="two-column">
+            <article class="panel">
+              <div class="panel-head"><h3>选择视频标题</h3><span id="selected-title-label" class="mini-label">未选择</span></div>
+              <div id="title-options" class="option-list"></div>
+              <label for="custom-title">或者自己改一个</label>
+              <div class="inline-input">
+                <input id="custom-title" type="text" placeholder="输入自定义标题">
+                <button id="use-custom-title" class="btn btn-secondary">使用</button>
+              </div>
+            </article>
+
+            <article class="panel selected-summary">
+              <div class="panel-head"><h3>最终选择</h3></div>
+              <div class="selected-card">
+                <span>标题</span>
+                <strong id="final-title">还没有选择</strong>
+              </div>
+              <div class="selected-card cover-summary-card">
+                <span>封面</span>
+                <strong id="final-cover">还没有选择</strong>
+              </div>
+              <button id="copy-creative-choice" class="btn btn-primary btn-block">复制标题和封面选择</button>
+            </article>
+          </div>
+
+          <div class="section-heading"><h3>选择封面方案</h3><p>点击一张卡片即可选中，选择会自动保存。</p></div>
+          <div id="cover-options" class="cover-grid"></div>
+        </section>
+
+        <section id="view-shoot" class="view" data-title="拍摄清单" data-eyebrow="拍之前逐项确认">
+          <div class="shoot-grid">
+            <article class="panel shoot-guide">
+              <h3>口播状态</h3>
+              <dl id="shoot-guide-list"></dl>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3>B-roll画面</h3><span id="broll-progress" class="mini-label"></span></div>
+              <div id="broll-list" class="task-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h3>字幕高亮词</h3></div>
+              <div id="highlight-list" class="tag-cloud"></div>
+            </article>
+            <article class="panel shoot-ready">
+              <h3>拍摄前确认</h3>
+              <div id="shoot-checks" class="task-list"></div>
+              <div class="readiness"><span>准备度</span><strong id="readiness-value">0%</strong></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-edit" class="view" data-title="拍完AI剪辑" data-eyebrow="视频只在本机处理">
+          <div class="edit-intro">
+            <div>
+              <span class="start-kicker">拍完以后，不用自己拉时间线</span>
+              <h2>上传原视频，自动删停顿、做字幕、调音量并导出竖屏成片</h2>
+              <p>基础剪辑完全在本机运行；原视频不会上传网络。需要更高级的语义剪辑和动态卡片时，再交给 Codex 项目 Skill 继续处理。</p>
+            </div>
+            <div class="service-card">
+              <span id="video-service-status" class="service-status is-checking">正在检查本地剪辑服务</span>
+              <p id="video-service-detail">如果服务没有启动，请双击项目根目录的“打开AI口播工作台.vbs”。</p>
+            </div>
+          </div>
+
+          <div class="edit-layout-grid">
+            <article class="panel upload-panel">
+              <div class="panel-head"><h3>1. 选择你拍好的原视频</h3><span class="mini-label">MP4 / MOV / WebM</span></div>
+              <label class="video-drop" for="video-file">
+                <input id="video-file" type="file" accept="video/*">
+                <span class="video-drop-icon">＋</span>
+                <strong>点击选择视频</strong>
+                <small>视频只会复制到 F:\code\koubo\video-jobs</small>
+              </label>
+              <video id="video-preview" class="video-preview is-hidden" controls playsinline></video>
+              <div id="selected-video-info" class="selected-video-info">尚未选择视频</div>
+            </article>
+
+            <article class="panel edit-options-panel">
+              <div class="panel-head"><h3>2. 选择剪辑方式</h3><span class="mini-label">推荐选项已预设</span></div>
+              <label class="edit-option-row"><span><strong>输出画面</strong><small>抖音/小红书优先使用9:16</small></span><select id="edit-layout"><option value="vertical">9:16 竖屏</option><option value="original">保持原比例</option><option value="square">1:1 方形</option></select></label>
+              <label class="edit-option-row"><span><strong>自动删除长停顿</strong><small>保留自然呼吸，切点加入音频淡化</small></span><input id="edit-remove-silence" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>自动添加字幕</strong><small>优先使用当前口播稿生成本地字幕</small></span><input id="edit-captions" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>停顿灵敏度</strong><small>数值越小，删除的停顿越多</small></span><select id="edit-silence-duration"><option value="0.35">积极剪辑</option><option value="0.45" selected>自然剪辑</option><option value="0.65">保守剪辑</option></select></label>
+              <label class="edit-option-row"><span><strong>AI模式</strong><small>本地智能剪辑无需API Key</small></span><select id="edit-ai-mode"><option value="local-smart-cut">本地智能剪辑</option><option value="codex-semantic">生成Codex语义剪辑任务</option><option value="video-use">Video Use高级剪辑（需ElevenLabs）</option></select></label>
+            </article>
+          </div>
+
+          <article class="panel edit-run-panel">
+            <div class="edit-run-head">
+              <div><h3>3. 分析并生成成片</h3><p>先分析停顿和时长；确认结果后再正式渲染，不覆盖原视频。</p></div>
+              <div class="inline-actions"><button id="analyze-video" class="btn btn-primary" disabled>分析原视频</button><button id="render-video" class="btn btn-dark" disabled>生成剪辑成片</button></div>
+            </div>
+            <div class="job-progress"><div id="edit-progress-bar"></div></div>
+            <div id="edit-job-status" class="job-status">等待选择视频</div>
+            <div id="edit-analysis" class="edit-analysis is-hidden"></div>
+          </article>
+
+          <article id="edit-results" class="panel result-panel is-hidden">
+            <div class="panel-head"><h3>4. 成片结果</h3><span class="mini-label">H.264 / AAC / faststart</span></div>
+            <div class="result-grid">
+              <video id="final-video" class="final-video" controls playsinline></video>
+              <div>
+                <div id="final-qa" class="final-qa"></div>
+                <div class="inline-actions result-actions"><a id="download-final" class="btn btn-primary" href="#" download>下载最终成片</a><button id="copy-ai-edit-prompt" class="btn btn-secondary">复制高级AI剪辑指令</button></div>
+                <code id="job-folder" class="job-folder"></code>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel inherited-skills-panel">
+            <div class="panel-head"><h3>已经继承到工作流的6项能力</h3><span class="mini-label">来自目标对话中的视频</span></div>
+            <div class="skill-capability-grid">
+              <div><b>01</b><strong>HyperFrames</strong><span>动态标题、数据卡片和画面包装</span></div>
+              <div><b>02</b><strong>Video Use</strong><span>删除停顿、错句、字幕和切点自检</span></div>
+              <div><b>03</b><strong>Promotion</strong><span>竖屏、方形和多平台版本</span></div>
+              <div><b>04</b><strong>Generative Media</strong><span>图片、视频和音频素材扩展接口</span></div>
+              <div><b>05</b><strong>Video Cut</strong><span>根据自然语言剪辑任务生成EDL</span></div>
+              <div><b>06</b><strong>AI Video Workflow</strong><span>上传、分析、确认、渲染和QA闭环</span></div>
+            </div>
+            <div class="privacy-note"><strong>隐私边界：</strong>默认只运行本地 FFmpeg。任何把原视频上传到 ElevenLabs、HeyGen、Hedra 或其他云服务的操作，都必须再次获得你的明确确认。</div>
+          </article>
+        </section>
+
+        <section id="view-publish" class="view" data-title="发布文案" data-eyebrow="审核后再手动发布">
+          <div class="platform-tabs">
+            <button class="platform-tab is-active" data-platform="douyin">抖音</button>
+            <button class="platform-tab" data-platform="xiaohongshu">小红书</button>
+            <button class="platform-tab" data-platform="weibo">微博</button>
+          </div>
+          <article class="panel publish-panel">
+            <div class="publish-head">
+              <div><span id="platform-name">抖音发布文案</span><small>不会自动发布，只能复制</small></div>
+              <button id="copy-publish" class="btn btn-primary">复制文案</button>
+            </div>
+            <textarea id="publish-text" class="publish-text" readonly></textarea>
+          </article>
+          <div class="warning-banner"><strong>发布边界</strong><span>请先确认真实证据、隐私、版权、标题和封面。此网页不会连接任何平台账号。</span></div>
+        </section>
+
+        <section id="view-evidence" class="view" data-title="证据和风险" data-eyebrow="只讲能证明的事实">
+          <div class="evidence-grid">
+            <article class="panel">
+              <div class="panel-head"><h3>可公开证据</h3><span class="mini-label">E1直接证据优先</span></div>
+              <div id="evidence-list" class="evidence-list"></div>
+            </article>
+            <article class="panel risk-panel">
+              <div class="panel-head"><h3>发布前风险检查</h3><span id="risk-progress" class="mini-label"></span></div>
+              <div id="risk-list" class="task-list"></div>
+            </article>
+          </div>
+          <article class="panel source-panel">
+            <div class="panel-head"><h3>原始文件入口</h3><span class="mini-label">打开Markdown查看完整细节</span></div>
+            <div id="source-links" class="source-links"></div>
+          </article>
+        </section>
+
+        <section id="view-roadmap" class="view" data-title="30天成长路线" data-eyebrow="计划不等于完成">
+          <div class="roadmap-head">
+            <div><strong>当前进度</strong><span>Day 1 / 30</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:3.33%"></div></div>
+          </div>
+          <div class="phase-legend">
+            <span><i class="legend-dot phase-1"></i>建立记录系统</span>
+            <span><i class="legend-dot phase-2"></i>第一个真实项目</span>
+            <span><i class="legend-dot phase-3"></i>提高判断能力</span>
+            <span><i class="legend-dot phase-4"></i>稳定与作品集</span>
+          </div>
+          <div id="roadmap-grid" class="roadmap-grid"></div>
+        </section>
+
+        <section id="view-library" class="view" data-title="历史内容" data-eyebrow="成长版和旧基线都保留">
+          <div class="library-toolbar">
+            <input id="library-search" type="search" placeholder="搜索标题、栏目或日期">
+            <div class="library-filters">
+              <button class="filter-btn is-active" data-filter="all">全部</button>
+              <button class="filter-btn" data-filter="growth">成长版</button>
+              <button class="filter-btn" data-filter="legacy">旧基线</button>
+            </div>
+          </div>
+          <div id="library-list" class="library-list"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="teleprompter-modal" class="modal" aria-hidden="true" role="dialog" aria-label="口播提词器">
+    <div class="teleprompter">
+      <div class="teleprompter-toolbar">
+        <button id="close-teleprompter" class="icon-btn" aria-label="关闭提词器">×</button>
+        <div class="tele-control"><label for="font-size-range">字号 <span id="font-size-value">42</span></label><input id="font-size-range" type="range" min="28" max="72" value="42"></div>
+        <div class="tele-control"><label for="speed-range">速度 <span id="speed-value">20</span></label><input id="speed-range" type="range" min="5" max="60" value="20"></div>
+        <button id="tele-reset" class="tele-btn">回到开头</button>
+        <button id="tele-play" class="tele-btn tele-primary">开始滚动</button>
+        <button id="tele-fullscreen" class="tele-btn">全屏</button>
+      </div>
+      <div id="teleprompter-scroll" class="teleprompter-scroll"><div id="teleprompter-text" class="teleprompter-text"></div></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="data/content-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

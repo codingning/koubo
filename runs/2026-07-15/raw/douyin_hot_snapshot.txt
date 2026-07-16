@@ -1,0 +1,275 @@
+heading "抖音热榜" [level=1]
+- list:
+  - link "总书记心系这一“年轻的事业”":
+    - /url: /hot/2572486/%E6%80%BB%E4%B9%A6%E8%AE%B0%E5%BF%83%E7%B3%BB%E8%BF%99%E4%B8%80%E2%80%9C%E5%B9%B4%E8%BD%BB%E7%9A%84%E4%BA%8B%E4%B8%9A%E2%80%9D
+    - heading "总书记心系这一“年轻的事业”" [level=3]
+  - link "感受云南菌子的N种打开方式":
+    - /url: /hot/2572095/%E6%84%9F%E5%8F%97%E4%BA%91%E5%8D%97%E8%8F%8C%E5%AD%90%E7%9A%84N%E7%A7%8D%E6%89%93%E5%BC%80%E6%96%B9%E5%BC%8F
+    - heading "感受云南菌子的N种打开方式" [level=3]
+  - generic: 1210.7万热度
+  - link "暑假学习做饭成果展":
+    - /url: /hot/2571945/%E6%9A%91%E5%81%87%E5%AD%A6%E4%B9%A0%E5%81%9A%E9%A5%AD%E6%88%90%E6%9E%9C%E5%B1%95
+    - heading "暑假学习做饭成果展" [level=3]
+  - generic: 1208.3万热度
+  - link "上半年中国拿下N个世界第一":
+    - /url: /hot/2572339/%E4%B8%8A%E5%8D%8A%E5%B9%B4%E4%B8%AD%E5%9B%BD%E6%8B%BF%E4%B8%8BN%E4%B8%AA%E4%B8%96%E7%95%8C%E7%AC%AC%E4%B8%80
+    - heading "上半年中国拿下N个世界第一" [level=3]
+  - generic: 1208.3万热度
+  - generic: "4"
+  - link "今日入伏":
+    - /url: /hot/2571670/%E4%BB%8A%E6%97%A5%E5%85%A5%E4%BC%8F
+    - heading "今日入伏" [level=3]
+  - generic: 1198.6万热度
+  - generic: "5"
+  - link "抖火杯S3投票开启":
+    - /url: /hot/2572292/%E6%8A%96%E7%81%AB%E6%9D%AFS3%E6%8A%95%E7%A5%A8%E5%BC%80%E5%90%AF
+    - heading "抖火杯S3投票开启" [level=3]
+  - generic: 1095.1万热度
+  - generic: "6"
+  - link "未成年如何申领网号网证":
+    - /url: /hot/2571706/%E6%9C%AA%E6%88%90%E5%B9%B4%E5%A6%82%E4%BD%95%E7%94%B3%E9%A2%86%E7%BD%91%E5%8F%B7%E7%BD%91%E8%AF%81
+    - heading "未成年如何申领网号网证" [level=3]
+  - generic: 1085.4万热度
+  - generic: "7"
+  - link "蔡赴朝被查":
+    - /url: /hot/2572220/%E8%94%A1%E8%B5%B4%E6%9C%9D%E8%A2%AB%E6%9F%A5
+    - heading "蔡赴朝被查" [level=3]
+  - generic: 952.3万热度
+  - generic: "8"
+  - link "日常不费力的复古氛围感穿搭":
+    - /url: /hot/2570366/%E6%97%A5%E5%B8%B8%E4%B8%8D%E8%B4%B9%E5%8A%9B%E7%9A%84%E5%A4%8D%E5%8F%A4%E6%B0%9B%E5%9B%B4%E6%84%9F%E7%A9%BF%E6%90%AD
+    - heading "日常不费力的复古氛围感穿搭" [level=3]
+  - generic: 948.5万热度
+  - generic: "9"
+  - link "吃蛋糕不发胖的方法找到了":
+    - /url: /hot/2570947/%E5%90%83%E8%9B%8B%E7%B3%95%E4%B8%8D%E5%8F%91%E8%83%96%E7%9A%84%E6%96%B9%E6%B3%95%E6%89%BE%E5%88%B0%E4%BA%86
+    - heading "吃蛋糕不发胖的方法找到了" [level=3]
+  - generic: 942.2万热度
+  - generic: "10"
+  - link "上半年我国GDP同比增长4.7%":
+    - /url: /hot/2571818/%E4%B8%8A%E5%8D%8A%E5%B9%B4%E6%88%91%E5%9B%BDGDP%E5%90%8C%E6%AF%94%E5%A2%9E%E9%95%BF4.7%25
+    - heading "上半年我国GDP同比增长4.7%" [level=3]
+  - generic: 941.6万热度
+  - generic: "11"
+  - link "长鑫科技发行价确定为8.66元":
+    - /url: /hot/2571581/%E9%95%BF%E9%91%AB%E7%A7%91%E6%8A%80%E5%8F%91%E8%A1%8C%E4%BB%B7%E7%A1%AE%E5%AE%9A%E4%B8%BA8.66%E5%85%83
+    - heading "长鑫科技发行价确定为8.66元" [level=3]
+  - generic: 918.8万热度
+  - generic: "12"
+  - link "西北大学通报贾浅浅论文抄袭":
+    - /url: /hot/2571836/%E8%A5%BF%E5%8C%97%E5%A4%A7%E5%AD%A6%E9%80%9A%E6%8A%A5%E8%B4%BE%E6%B5%85%E6%B5%85%E8%AE%BA%E6%96%87%E6%8A%84%E8%A2%AD
+    - heading "西北大学通报贾浅浅论文抄袭" [level=3]
+  - generic: 916.2万热度
+  - generic: "13"
+  - link "87版红楼梦刘姥姥扮演者去世":
+    - /url: /hot/2572331/87%E7%89%88%E7%BA%A2%E6%A5%BC%E6%A2%A6%E5%88%98%E5%A7%A5%E5%A7%A5%E6%89%AE%E6%BC%94%E8%80%85%E5%8E%BB%E4%B8%96
+    - heading "87版红楼梦刘姥姥扮演者去世" [level=3]
+  - generic: 915.8万热度
+  - generic: "14"
+  - link "“新能源车平均车龄1.8年”系误读":
+    - /url: /hot/2571300/%E2%80%9C%E6%96%B0%E8%83%BD%E6%BA%90%E8%BD%A6%E5%B9%B3%E5%9D%87%E8%BD%A6%E9%BE%841.8%E5%B9%B4%E2%80%9D%E7%B3%BB%E8%AF%AF%E8%AF%BB
+    - heading "“新能源车平均车龄1.8年”系误读" [level=3]
+  - generic: 913.7万热度
+  - generic: "15"
+  - link "星穹铁道姬子启行上线":
+    - /url: /hot/2572132/%E6%98%9F%E7%A9%B9%E9%93%81%E9%81%93%E5%A7%AC%E5%AD%90%E5%90%AF%E8%A1%8C%E4%B8%8A%E7%BA%BF
+    - heading "星穹铁道姬子启行上线" [level=3]
+  - generic: 905.7万热度
+  - generic: "16"
+  - link "姆巴佩称作为队长承担全部责任":
+    - /url: /hot/2571777/%E5%A7%86%E5%B7%B4%E4%BD%A9%E7%A7%B0%E4%BD%9C%E4%B8%BA%E9%98%9F%E9%95%BF%E6%89%BF%E6%8B%85%E5%85%A8%E9%83%A8%E8%B4%A3%E4%BB%BB
+    - heading "姆巴佩称作为队长承担全部责任" [level=3]
+  - generic: 898.4万热度
+  - generic: "17"
+  - link "英格兰vs阿根廷":
+    - /url: /hot/2572453/%E8%8B%B1%E6%A0%BC%E5%85%B0vs%E9%98%BF%E6%A0%B9%E5%BB%B7
+    - heading "英格兰vs阿根廷" [level=3]
+  - generic: 883.0万热度
+  - generic: "18"
+  - link "侯明昊艾米雀骨抖音直播":
+    - /url: /hot/2572159/%E4%BE%AF%E6%98%8E%E6%98%8A%E8%89%BE%E7%B1%B3%E9%9B%80%E9%AA%A8%E6%8A%96%E9%9F%B3%E7%9B%B4%E6%92%AD
+    - heading "侯明昊艾米雀骨抖音直播" [level=3]
+  - generic: 847.7万热度
+  - generic: "19"
+  - link "一起进入世纪夏天":
+    - /url: /hot/2571953/%E4%B8%80%E8%B5%B7%E8%BF%9B%E5%85%A5%E4%B8%96%E7%BA%AA%E5%A4%8F%E5%A4%A9
+    - heading "一起进入世纪夏天" [level=3]
+  - generic: 843.2万热度
+  - generic: "20"
+  - link "马克龙回应法国队无缘决赛":
+    - /url: /hot/2571904/%E9%A9%AC%E5%85%8B%E9%BE%99%E5%9B%9E%E5%BA%94%E6%B3%95%E5%9B%BD%E9%98%9F%E6%97%A0%E7%BC%98%E5%86%B3%E8%B5%9B
+    - heading "马克龙回应法国队无缘决赛" [level=3]
+  - generic: 839.4万热度
+  - generic: "21"
+  - link "伊朗称美进入正式战争状态":
+    - /url: /hot/2571461/%E4%BC%8A%E6%9C%97%E7%A7%B0%E7%BE%8E%E8%BF%9B%E5%85%A5%E6%AD%A3%E5%BC%8F%E6%88%98%E4%BA%89%E7%8A%B6%E6%80%81
+    - heading "伊朗称美进入正式战争状态" [level=3]
+  - generic: 819.3万热度
+  - generic: "22"
+  - link "拜见番茄拉丝鸡蛋大王":
+    - /url: /hot/2572398/%E6%8B%9C%E8%A7%81%E7%95%AA%E8%8C%84%E6%8B%89%E4%B8%9D%E9%B8%A1%E8%9B%8B%E5%A4%A7%E7%8E%8B
+    - heading "拜见番茄拉丝鸡蛋大王" [level=3]
+  - generic: 799.0万热度
+  - generic: "23"
+  - link "王晶评功夫女足":
+    - /url: /hot/2572187/%E7%8E%8B%E6%99%B6%E8%AF%84%E5%8A%9F%E5%A4%AB%E5%A5%B3%E8%B6%B3
+    - heading "王晶评功夫女足" [level=3]
+  - generic: 795.0万热度
+  - generic: "24"
+  - link "亚马尔是姆巴佩的克星吗":
+    - /url: /hot/2571960/%E4%BA%9A%E9%A9%AC%E5%B0%94%E6%98%AF%E5%A7%86%E5%B7%B4%E4%BD%A9%E7%9A%84%E5%85%8B%E6%98%9F%E5%90%97
+    - heading "亚马尔是姆巴佩的克星吗" [level=3]
+  - generic: 787.4万热度
+  - generic: "25"
+  - link "想你的星星划过了空":
+    - /url: /hot/2571290/%E6%83%B3%E4%BD%A0%E7%9A%84%E6%98%9F%E6%98%9F%E5%88%92%E8%BF%87%E4%BA%86%E7%A9%BA
+    - heading "想你的星星划过了空" [level=3]
+  - generic: 781.8万热度
+  - generic: "26"
+  - link "西班牙2:0法国":
+    - /url: /hot/2571098/%E8%A5%BF%E7%8F%AD%E7%89%992%3A0%E6%B3%95%E5%9B%BD
+    - heading "西班牙2:0法国" [level=3]
+  - generic: 780.2万热度
+  - generic: "27"
+  - link "周星驰：是我欠观众太多":
+    - /url: /hot/2570694/%E5%91%A8%E6%98%9F%E9%A9%B0%EF%BC%9A%E6%98%AF%E6%88%91%E6%AC%A0%E8%A7%82%E4%BC%97%E5%A4%AA%E5%A4%9A
+    - heading "周星驰：是我欠观众太多" [level=3]
+  - generic: 776.4万热度
+  - generic: "28"
+  - link "功夫女足口碑":
+    - /url: /hot/2572289/%E5%8A%9F%E5%A4%AB%E5%A5%B3%E8%B6%B3%E5%8F%A3%E7%A2%91
+    - heading "功夫女足口碑" [level=3]
+  - generic: 775.7万热度
+  - generic: "29"
+  - link "人形机器人赛里木湖挑战骑射":
+    - /url: /hot/2572482/%E4%BA%BA%E5%BD%A2%E6%9C%BA%E5%99%A8%E4%BA%BA%E8%B5%9B%E9%87%8C%E6%9C%A8%E6%B9%96%E6%8C%91%E6%88%98%E9%AA%91%E5%B0%84
+    - heading "人形机器人赛里木湖挑战骑射" [level=3]
+  - generic: 775.5万热度
+  - generic: "30"
+  - link "特效一开雷霆动物全嗨了":
+    - /url: /hot/2572228/%E7%89%B9%E6%95%88%E4%B8%80%E5%BC%80%E9%9B%B7%E9%9C%86%E5%8A%A8%E7%89%A9%E5%85%A8%E5%97%A8%E4%BA%86
+    - heading "特效一开雷霆动物全嗨了" [level=3]
+  - generic: 775.1万热度
+  - generic: "31"
+  - link "热巴复刻功夫女足踢球场面鞋掉了":
+    - /url: /hot/2572078/%E7%83%AD%E5%B7%B4%E5%A4%8D%E5%88%BB%E5%8A%9F%E5%A4%AB%E5%A5%B3%E8%B6%B3%E8%B8%A2%E7%90%83%E5%9C%BA%E9%9D%A2%E9%9E%8B%E6%8E%89%E4%BA%86
+    - heading "热巴复刻功夫女足踢球场面鞋掉了" [level=3]
+  - generic: 775.0万热度
+  - generic: "32"
+  - link "窄脸才能驾驭这个瘦脸面具":
+    - /url: /hot/2570973/%E7%AA%84%E8%84%B8%E6%89%8D%E8%83%BD%E9%A9%BE%E9%A9%AD%E8%BF%99%E4%B8%AA%E7%98%A6%E8%84%B8%E9%9D%A2%E5%85%B7
+    - heading "窄脸才能驾驭这个瘦脸面具" [level=3]
+  - generic: 774.7万热度
+  - generic: "33"
+  - link "张小斐热巴回应演功夫女足压力":
+    - /url: /hot/2571525/%E5%BC%A0%E5%B0%8F%E6%96%90%E7%83%AD%E5%B7%B4%E5%9B%9E%E5%BA%94%E6%BC%94%E5%8A%9F%E5%A4%AB%E5%A5%B3%E8%B6%B3%E5%8E%8B%E5%8A%9B
+    - heading "张小斐热巴回应演功夫女足压力" [level=3]
+  - generic: 774.4万热度
+  - generic: "34"
+  - link "我将认真学习这个哈兰德仿妆":
+    - /url: /hot/2571468/%E6%88%91%E5%B0%86%E8%AE%A4%E7%9C%9F%E5%AD%A6%E4%B9%A0%E8%BF%99%E4%B8%AA%E5%93%88%E5%85%B0%E5%BE%B7%E4%BB%BF%E5%A6%86
+    - heading "我将认真学习这个哈兰德仿妆" [level=3]
+  - generic: 774.4万热度
+  - generic: "35"
+  - link "何与西北舞王进军手势舞赛道":
+    - /url: /hot/2572406/%E4%BD%95%E4%B8%8E%E8%A5%BF%E5%8C%97%E8%88%9E%E7%8E%8B%E8%BF%9B%E5%86%9B%E6%89%8B%E5%8A%BF%E8%88%9E%E8%B5%9B%E9%81%93
+    - heading "何与西北舞王进军手势舞赛道" [level=3]
+  - generic: 773.7万热度
+  - generic: "36"
+  - link "万妮达搞笑配音毫无违和感":
+    - /url: /hot/2572311/%E4%B8%87%E5%A6%AE%E8%BE%BE%E6%90%9E%E7%AC%91%E9%85%8D%E9%9F%B3%E6%AF%AB%E6%97%A0%E8%BF%9D%E5%92%8C%E6%84%9F
+    - heading "万妮达搞笑配音毫无违和感" [level=3]
+  - generic: 773.4万热度
+  - generic: "37"
+  - link "318最动人的是出发的勇气":
+    - /url: /hot/2571481/318%E6%9C%80%E5%8A%A8%E4%BA%BA%E7%9A%84%E6%98%AF%E5%87%BA%E5%8F%91%E7%9A%84%E5%8B%87%E6%B0%94
+    - heading "318最动人的是出发的勇气" [level=3]
+  - generic: 772.8万热度
+  - generic: "38"
+  - link "缘分和时间都到了就能见面":
+    - /url: /hot/2571224/%E7%BC%98%E5%88%86%E5%92%8C%E6%97%B6%E9%97%B4%E9%83%BD%E5%88%B0%E4%BA%86%E5%B0%B1%E8%83%BD%E8%A7%81%E9%9D%A2
+    - heading "缘分和时间都到了就能见面" [level=3]
+  - generic: 772.8万热度
+  - generic: "39"
+  - link "陈泽杯钢牙路西法成功复活":
+    - /url: /hot/2572148/%E9%99%88%E6%B3%BD%E6%9D%AF%E9%92%A2%E7%89%99%E8%B7%AF%E8%A5%BF%E6%B3%95%E6%88%90%E5%8A%9F%E5%A4%8D%E6%B4%BB
+    - heading "陈泽杯钢牙路西法成功复活" [level=3]
+  - generic: 772.6万热度
+  - generic: "40"
+  - link "世上只有妈妈好都出DJ版了":
+    - /url: /hot/2571295/%E4%B8%96%E4%B8%8A%E5%8F%AA%E6%9C%89%E5%A6%88%E5%A6%88%E5%A5%BD%E9%83%BD%E5%87%BADJ%E7%89%88%E4%BA%86
+    - heading "世上只有妈妈好都出DJ版了" [level=3]
+  - generic: 772.6万热度
+  - generic: "41"
+  - link "怎么偶尔听到老歌时":
+    - /url: /hot/2571301/%E6%80%8E%E4%B9%88%E5%81%B6%E5%B0%94%E5%90%AC%E5%88%B0%E8%80%81%E6%AD%8C%E6%97%B6
+    - heading "怎么偶尔听到老歌时" [level=3]
+  - generic: 772.3万热度
+  - generic: "42"
+  - link "这是个好地方 那个男孩女孩也是":
+    - /url: /hot/2571308/%E8%BF%99%E6%98%AF%E4%B8%AA%E5%A5%BD%E5%9C%B0%E6%96%B9%20%E9%82%A3%E4%B8%AA%E7%94%B7%E5%AD%A9%E5%A5%B3%E5%AD%A9%E4%B9%9F%E6%98%AF
+    - heading "这是个好地方 那个男孩女孩也是" [level=3]
+  - generic: 772.2万热度
+  - generic: "43"
+  - link "动画版三英战吕布好燃":
+    - /url: /hot/2572097/%E5%8A%A8%E7%94%BB%E7%89%88%E4%B8%89%E8%8B%B1%E6%88%98%E5%90%95%E5%B8%83%E5%A5%BD%E7%87%83
+    - heading "动画版三英战吕布好燃" [level=3]
+  - generic: 770.9万热度
+  - generic: "44"
+  - link "野狗骨头车内吻好绝":
+    - /url: /hot/2572019/%E9%87%8E%E7%8B%97%E9%AA%A8%E5%A4%B4%E8%BD%A6%E5%86%85%E5%90%BB%E5%A5%BD%E7%BB%9D
+    - heading "野狗骨头车内吻好绝" [level=3]
+  - generic: 770.7万热度
+  - generic: "45"
+  - link "逐玉演唱会定档8月15日":
+    - /url: /hot/2572138/%E9%80%90%E7%8E%89%E6%BC%94%E5%94%B1%E4%BC%9A%E5%AE%9A%E6%A1%A38%E6%9C%8815%E6%97%A5
+    - heading "逐玉演唱会定档8月15日" [level=3]
+  - generic: 770.7万热度
+  - generic: "46"
+  - link "全网晒功夫女足票根":
+    - /url: /hot/2571599/%E5%85%A8%E7%BD%91%E6%99%92%E5%8A%9F%E5%A4%AB%E5%A5%B3%E8%B6%B3%E7%A5%A8%E6%A0%B9
+    - heading "全网晒功夫女足票根" [level=3]
+  - generic: 769.5万热度
+  - generic: "47"
+  - link "全世界都在偶遇李昀锐":
+    - /url: /hot/2571579/%E5%85%A8%E4%B8%96%E7%95%8C%E9%83%BD%E5%9C%A8%E5%81%B6%E9%81%87%E6%9D%8E%E6%98%80%E9%94%90
+    - heading "全世界都在偶遇李昀锐" [level=3]
+  - generic: 769.1万热度
+  - generic: "48"
+  - link "当大地铺满了悲泣的落叶":
+    - /url: /hot/2571210/%E5%BD%93%E5%A4%A7%E5%9C%B0%E9%93%BA%E6%BB%A1%E4%BA%86%E6%82%B2%E6%B3%A3%E7%9A%84%E8%90%BD%E5%8F%B6
+    - heading "当大地铺满了悲泣的落叶" [level=3]
+  - generic: 768.3万热度
+  - generic: "49"
+  - link "一口酸菜鱼吃透淮南烟火气":
+    - /url: /hot/2571260/%E4%B8%80%E5%8F%A3%E9%85%B8%E8%8F%9C%E9%B1%BC%E5%90%83%E9%80%8F%E6%B7%AE%E5%8D%97%E7%83%9F%E7%81%AB%E6%B0%94
+    - heading "一口酸菜鱼吃透淮南烟火气" [level=3]
+  - generic: 767.1万热度
+  - generic: "50"
+  - link "到底又兜兜转转了多少年":
+    - /url: /hot/2570922/%E5%88%B0%E5%BA%95%E5%8F%88%E5%85%9C%E5%85%9C%E8%BD%AC%E8%BD%AC%E4%BA%86%E5%A4%9A%E5%B0%91%E5%B9%B4
+    - heading "到底又兜兜转转了多少年" [level=3]
+  - generic: 767.0万热度
+  - generic: 抖音热榜规则说明
+- article:
+  - generic: 登录后免费畅享高清视频
+  - generic: 扫码登录
+  - generic: 如何扫码
+  - img "二维码"
+  - paragraph:
+    - paragraph: 打开「抖音APP」点击左上角
+    - paragraph: 扫一扫
+  - generic: 验证码登录
+  - generic: 密码登录
+  - combobox "国家/地区": "+86"
+  - textbox "请输入手机号"
+  - textbox "请输入验证码"
+  - generic: 获取验证码
+  - generic: 登录
+  - generic "登录即代表同意用户协议和隐私政策":
+    - text: 登录即代表同意
+    - link "用户协议":
+      - /url: https://www.douyin.com/agreements/?id=6773906068725565448
+    - text: 和
+    - link "隐私政策":
+      - /url: https://www.douyin.com/agreements/?id=6773901168964798477

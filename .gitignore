@@ -1,0 +1,17 @@
+# Local secrets and dependencies
+.env
+.env.*
+!.env.example
+node_modules/
+.venv/
+
+# Local video jobs and generated footage
+video-jobs/*
+!video-jobs/.gitkeep
+outputs/qa-ai-edit/
+outputs/thread-019f68f7-video-frame.jpg
+
+# OS/editor
+Thumbs.db
+.DS_Store
+*.tmp

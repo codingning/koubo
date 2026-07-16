@@ -1,0 +1,10 @@
+item,date,source_level,source_type,name,path_or_url,public_evidence,verification_status,privacy_or_copyright_notes
+旧定位Day 1基线,2026-07-15,E1,本地项目文件,旧定位基线标记,F:\code\koubo\runs\2026-07-15\LEGACY_BASELINE.md,是,已核对,公开时不展示完整路径
+新账号定位,2026-07-15,E1,本地项目文件,创作者档案,F:\code\koubo\docs\CREATOR_PROFILE.md,是,已核对,只展示公开定位和栏目
+30天成长路线,2026-07-15,E1,本地项目文件,30天AI成长路线,F:\code\koubo\docs\30_DAY_AI_GROWTH_ROADMAP.md,是,已核对,必须标明计划不等于完成
+新成长模板,2026-07-15,E1,本地项目文件,每日真实进展和16项素材包,F:\code\koubo\templates,是,已核对,不展示私人任务内容
+成长Excel台账,2026-07-15,E1,本地工作簿,内容台账,F:\code\koubo\data\content_ledger.xlsx,是,已核对,隐藏私人数据和用户名
+临时目录权限错误,2026-07-15,E2,运行错误,EPERM mkdir,脱敏错误摘要,是,已复现并解决,删除完整系统路径
+Excel公式校验,2026-07-15,E1,校验输出,formula_errors.ndjson,F:\code\koubo\outputs\growth-ledger-2026-07-15\formula_errors.ndjson,是,0个匹配,只展示结果摘要
+AI热点,2026-07-15,E4,未使用,本集未使用热点,无,否,不适用,不为凑数补写
+粉丝问题,2026-07-15,E4,未收到,本集无粉丝问题,无,否,不适用,不得虚构
