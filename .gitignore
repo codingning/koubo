@@ -15,3 +15,8 @@ outputs/thread-019f68f7-video-frame.jpg
 Thumbs.db
 .DS_Store
 *.tmp
+# Generated AI content and local runtime
+content-items/
+.runtime/
+__pycache__/
+*.pyc

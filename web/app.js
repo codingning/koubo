@@ -47,8 +47,10 @@
   let teleLastTime = null;
   let toastTimer = null;
   let libraryFilter = "all";
-  const videoApiBase = "http://127.0.0.1:8787";
+  const videoApiBase = /^https?:$/.test(window.location.protocol) ? window.location.origin : "http://127.0.0.1:8787";
   let videoServiceOnline = false;
+  let serviceHealth = null;
+  let contentGenerating = false;
   let selectedVideoFile = null;
   let currentVideoJob = null;
   let videoPollTimer = null;
@@ -414,7 +416,7 @@
     if (teleRunning) teleFrame = requestAnimationFrame(teleStep);
   }
 
-﻿  function formatBytes(bytes) {
+  function formatBytes(bytes) {
     const value = Number(bytes || 0);
     if (value < 1024) return `${value} B`;
     if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
@@ -434,24 +436,81 @@
     if (message) byId("edit-job-status").textContent = message;
   }
 
+  function mergeGeneratedContents(items, selectId = null) {
+    const generated = Array.isArray(items) ? items.filter(item => item && item.id) : [];
+    const generatedIds = new Set(generated.map(item => item.id));
+    data.contentItems = [...generated, ...data.contentItems.filter(item => !generatedIds.has(item.id))];
+    const wanted = selectId || persisted.currentId || currentItem?.id;
+    currentItem = data.contentItems.find(item => item.id === wanted) || data.contentItems[0];
+    persisted.currentId = currentItem.id;
+    saveState();
+    renderAll();
+  }
+
+  async function refreshGeneratedContents(selectId = null) {
+    if (!videoServiceOnline) return;
+    try {
+      const response = await fetch(`${videoApiBase}/api/contents`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "无法读取AI生成内容");
+      mergeGeneratedContents(payload.items, selectId);
+    } catch (error) {
+      byId("generation-status").textContent = `读取生成内容失败：${error.message}`;
+    }
+  }
+
+  async function generateNewContent() {
+    if (!videoServiceOnline || contentGenerating) return;
+    contentGenerating = true;
+    const button = byId("generate-content");
+    button.disabled = true;
+    button.textContent = "AI正在生成……";
+    byId("generation-status").textContent = "正在汇总最近真实进展、Git记录和公开边界，然后由公司模型生成可拍口播。通常需要1—3分钟。";
+    try {
+      const response = await fetch(`${videoApiBase}/api/contents/generate`, { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "口播生成失败");
+      await refreshGeneratedContents(payload.item.id);
+      switchView("today");
+      byId("generation-status").textContent = `已生成 ${payload.item.day} · ${payload.item.mainTopic}`;
+      toast("新口播已生成，可以直接拍摄");
+    } catch (error) {
+      byId("generation-status").textContent = `生成失败：${error.message}`;
+      toast("生成失败，请查看页面提示");
+    } finally {
+      contentGenerating = false;
+      button.textContent = "AI生成新口播";
+      button.disabled = !(videoServiceOnline && serviceHealth?.ai?.configured);
+    }
+  }
+
   async function checkVideoService() {
     const status = byId("video-service-status");
     const detail = byId("video-service-detail");
     try {
       const response = await fetch(`${videoApiBase}/api/health`, { cache: "no-store" });
       if (!response.ok) throw new Error("服务响应异常");
-      const health = await response.json();
-      videoServiceOnline = !!health.ok && !!health.ffmpeg;
-      status.textContent = videoServiceOnline ? "本地AI剪辑服务已就绪" : "已连接，但FFmpeg不可用";
+      serviceHealth = await response.json();
+      videoServiceOnline = !!serviceHealth.ok && !!serviceHealth.ffmpeg;
+      status.textContent = videoServiceOnline ? "全自动口播工作流已就绪" : "已连接，但FFmpeg不可用";
       status.className = `service-status ${videoServiceOnline ? "is-online" : "is-offline"}`;
+      const modelText = serviceHealth.ai?.configured ? `公司模型 ${serviceHealth.ai.model}` : "公司模型未配置";
       detail.textContent = videoServiceOnline
-        ? `本地处理已启用 · FFmpeg ${health.ffmpeg ? "可用" : "不可用"} · HyperFrames ${health.hyperframes ? "可用" : "未就绪"}`
+        ? `本地视频处理 · ${modelText} · 本地转录 ${serviceHealth.ai?.transcriptionModel || "faster-whisper/small"}`
         : "请确认 FFmpeg 已安装并重新打开工作台。";
+      byId("generation-status").textContent = serviceHealth.ai?.configured
+        ? `已连接 ${serviceHealth.ai.model}；点击即可根据最近真实进展生成新口播。`
+        : "视频仍可本地处理，但AI口播生成和语义剪辑需要公司模型配置。";
+      byId("generate-content").disabled = !(videoServiceOnline && serviceHealth.ai?.configured);
+      await refreshGeneratedContents();
     } catch (_) {
+      serviceHealth = null;
       videoServiceOnline = false;
-      status.textContent = "本地AI剪辑服务未启动";
+      status.textContent = "全自动工作流未启动";
       status.className = "service-status is-offline";
       detail.textContent = "请双击 F:\\code\\koubo\\打开AI口播工作台.vbs；它会静默启动服务并重新打开网页。";
+      byId("generation-status").textContent = "请先通过“打开AI口播工作台.vbs”启动本地工作流。";
+      byId("generate-content").disabled = true;
     }
     byId("analyze-video").disabled = !(videoServiceOnline && selectedVideoFile);
   }
@@ -462,11 +521,13 @@
     clearTimeout(videoPollTimer);
     byId("edit-results").classList.add("is-hidden");
     byId("edit-analysis").classList.add("is-hidden");
-    byId("render-video").disabled = true;
+    byId("retry-video").classList.add("is-hidden");
     if (!file) {
       byId("selected-video-info").textContent = "尚未选择视频";
       byId("video-preview").classList.add("is-hidden");
       byId("analyze-video").disabled = true;
+      setEditProgress(0, "等待选择视频");
+      renderAutomationRail("upload");
       return;
     }
     const preview = byId("video-preview");
@@ -477,7 +538,8 @@
     preview.classList.remove("is-hidden");
     byId("selected-video-info").innerHTML = `<strong>${htmlEscape(file.name)}</strong><span>${formatBytes(file.size)} · ${htmlEscape(file.type || "视频文件")}</span>`;
     byId("analyze-video").disabled = !videoServiceOnline;
-    setEditProgress(0, "视频已选择，等待分析");
+    setEditProgress(0, "视频已选择，点击一次即可开始全自动处理");
+    renderAutomationRail("upload");
   }
 
   function currentEditOptions() {
@@ -486,7 +548,7 @@
       removeSilence: byId("edit-remove-silence").checked,
       captions: byId("edit-captions").checked,
       silenceDuration: Number(byId("edit-silence-duration").value),
-      aiMode: byId("edit-ai-mode").value,
+      transcriptionModel: byId("edit-transcription-model").value,
       script: shortText(currentItem)
     };
   }
@@ -494,29 +556,48 @@
   async function analyzeSelectedVideo() {
     if (!selectedVideoFile || !videoServiceOnline) return;
     byId("analyze-video").disabled = true;
-    byId("render-video").disabled = true;
-    setEditProgress(2, `正在把 ${selectedVideoFile.name} 复制到本地剪辑工作区……`);
+    setEditProgress(1, `正在把 ${selectedVideoFile.name} 复制到本地任务目录……`);
     try {
-      const options = currentEditOptions();
       const response = await fetch(`${videoApiBase}/api/jobs`, {
         method: "POST",
         headers: {
           "Content-Type": selectedVideoFile.type || "application/octet-stream",
           "X-File-Name": encodeURIComponent(selectedVideoFile.name),
           "X-Content-Id": encodeURIComponent(currentItem.id),
-          "X-Options": encodeURIComponent(JSON.stringify(options))
+          "X-Options": encodeURIComponent(JSON.stringify(currentEditOptions()))
         },
         body: selectedVideoFile
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "视频上传失败");
       currentVideoJob = payload.job;
-      setEditProgress(5, "视频已进入本地分析：正在检测停顿、音轨和画面规格……");
+      setEditProgress(4, "上传完成，工作流会自动继续，无需再次点击");
       pollVideoJob(currentVideoJob.id);
     } catch (error) {
       byId("analyze-video").disabled = false;
-      setEditProgress(0, `分析失败：${error.message}`);
+      setEditProgress(0, `启动失败：${error.message}`);
     }
+  }
+
+  function statusLabel(job) {
+    const labels = {
+      uploaded: "视频已上传", analyzing: "正在分析画面、音轨和停顿", transcribing: "正在本地逐字转录（首次可能下载模型）",
+      planning: "AI正在根据逐字稿生成剪辑决策", rendering: "正在加字幕、重点卡片、调音量并渲染",
+      revising: "正在按你的意见生成新版本", awaiting_review: "成片已完成，请你最终审核", approved: "已审核通过", error: "自动处理失败"
+    };
+    return labels[job.status] || job.status || "处理中";
+  }
+
+  function renderAutomationRail(status) {
+    const stageByStatus = { uploaded: "upload", analyzing: "upload", transcribing: "transcribe", planning: "plan", rendering: "render", revising: "render", awaiting_review: "review", approved: "review", error: "render" };
+    const order = ["upload", "transcribe", "plan", "render", "review"];
+    const current = stageByStatus[status] || status || "upload";
+    const currentIndex = Math.max(0, order.indexOf(current));
+    $$(".automation-rail [data-stage]").forEach((node, index) => {
+      node.classList.toggle("is-active", index === currentIndex);
+      node.classList.toggle("is-done", index < currentIndex || status === "approved");
+      node.classList.toggle("is-error", status === "error" && index === currentIndex);
+    });
   }
 
   async function pollVideoJob(id) {
@@ -524,92 +605,119 @@
     try {
       const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(id)}`, { cache: "no-store" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "无法读取剪辑任务");
+      if (!response.ok) throw new Error(payload.error || "任务读取失败");
       currentVideoJob = payload.job;
-      const job = currentVideoJob;
-      const labels = {
-        uploaded: "视频已上传",
-        analyzing: "正在检测停顿和素材规格……",
-        analyzed: "分析完成，可以生成成片",
-        rendering: "正在本地渲染成片……",
-        completed: "剪辑成片已完成",
-        error: `处理失败：${job.error || "未知错误"}`
-      };
-      setEditProgress(job.progress || 0, labels[job.status] || job.status);
-      if (job.analysis) renderEditAnalysis(job);
-      if (job.status === "analyzed") {
-        byId("render-video").disabled = false;
-        byId("analyze-video").disabled = false;
-        return;
+      renderVideoJob(currentVideoJob);
+      if (["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising"].includes(currentVideoJob.status)) {
+        videoPollTimer = setTimeout(() => pollVideoJob(id), 1400);
       }
-      if (job.status === "completed") {
-        byId("render-video").disabled = false;
-        byId("analyze-video").disabled = false;
-        renderEditResult(job);
-        return;
-      }
-      if (job.status === "error") {
-        byId("analyze-video").disabled = false;
-        byId("render-video").disabled = !job.analysis;
-        return;
-      }
-      videoPollTimer = setTimeout(() => pollVideoJob(id), 1000);
     } catch (error) {
-      setEditProgress(0, `读取任务失败：${error.message}`);
-      byId("analyze-video").disabled = false;
+      setEditProgress(currentVideoJob?.progress || 0, `读取任务失败：${error.message}，正在重试……`);
+      videoPollTimer = setTimeout(() => pollVideoJob(id), 2600);
     }
+  }
+
+  function renderVideoJob(job) {
+    renderAutomationRail(job.status);
+    const detail = job.revisionError ? `；最近一次返修失败：${job.revisionError}` : "";
+    setEditProgress(job.progress || 0, `${statusLabel(job)}${detail}`);
+    if (job.analysis) renderEditAnalysis(job);
+    byId("retry-video").classList.toggle("is-hidden", job.status !== "error");
+    if (job.output) renderEditResult(job);
+    if (job.status === "error") byId("analyze-video").disabled = false;
   }
 
   function renderEditAnalysis(job) {
-    const analysis = job.analysis;
+    const analysis = job.analysis || {};
     const panel = byId("edit-analysis");
-    const saved = Math.max(0, Number(analysis.removedDuration || 0));
+    const kept = job.currentPlan?.keepSegments?.reduce((sum, item) => sum + Number(item.end) - Number(item.start), 0);
     panel.innerHTML = `
       <div><span>原始时长</span><strong>${formatDuration(job.source?.duration)}</strong></div>
-      <div><span>检测到停顿</span><strong>${analysis.silences?.length || 0} 段</strong></div>
-      <div><span>预计删除</span><strong>${saved.toFixed(1)} 秒</strong></div>
-      <div><span>预计成片</span><strong>${formatDuration(analysis.estimatedDuration)}</strong></div>
-      <p>${htmlEscape(analysis.strategy || "")}</p>`;
+      <div><span>检测到长停顿</span><strong>${analysis.silences?.length || 0} 段</strong></div>
+      <div><span>预计成片</span><strong>${formatDuration(kept || (job.source?.duration - Number(analysis.removedDuration || 0)))}</strong></div>
+      <div><span>逐字转录</span><strong>${htmlEscape(job.transcriptionModel || "处理中")}</strong></div>
+      <p>${htmlEscape(job.currentPlan?.editSummary || "正在生成剪辑策略……")}</p>`;
     panel.classList.remove("is-hidden");
   }
 
-  async function renderCurrentVideoJob() {
-    if (!currentVideoJob?.id) return;
-    byId("render-video").disabled = true;
-    setEditProgress(1, "正在准备 FFmpeg 剪辑任务……");
-    try {
-      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/render`, { method: "POST" });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "无法启动渲染");
-      pollVideoJob(currentVideoJob.id);
-    } catch (error) {
-      byId("render-video").disabled = false;
-      setEditProgress(0, `渲染启动失败：${error.message}`);
-    }
+  function versionOutput(job, version) {
+    return (job.versions || []).find(item => Number(item.version) === Number(version)) || job.output;
+  }
+
+  function showVideoVersion(version) {
+    if (!currentVideoJob) return;
+    const output = versionOutput(currentVideoJob, version);
+    if (!output) return;
+    const outputUrl = `${videoApiBase}${output.url}?t=${Date.now()}`;
+    byId("final-video").src = outputUrl;
+    byId("download-final").href = outputUrl;
+    byId("download-final").download = `${currentItem.day || "koubo"}-AI剪辑-v${output.version}.mp4`;
+    byId("result-version").textContent = `版本 ${output.version}`;
+    $$("[data-video-version]", byId("version-list")).forEach(button => button.classList.toggle("is-active", Number(button.dataset.videoVersion) === Number(output.version)));
   }
 
   function renderEditResult(job) {
-    const outputUrl = `${videoApiBase}${job.output.url}?t=${Date.now()}`;
-    byId("final-video").src = outputUrl;
-    byId("download-final").href = outputUrl;
-    byId("download-final").download = `${currentItem.day || "koubo"}-AI剪辑成片.mp4`;
-    const qa = job.output.qa || {};
+    const output = job.output;
+    const qa = output.qa || {};
     byId("final-qa").innerHTML = [
-      ["H.264视频", qa.h264], ["AAC音频", qa.aac], ["yuv420p兼容", qa.yuv420p], ["时长校验", qa.durationMatches]
+      ["H.264视频", qa.h264], ["AAC音频", qa.aac], ["yuv420p兼容", qa.yuv420p], ["完整解码", qa.decodes], ["时长校验", qa.durationMatches]
     ].map(([label, pass]) => `<span class="qa-chip ${pass ? "pass" : "warn"}">${pass ? "✓" : "!"} ${label}</span>`).join("");
+    const degraded = (job.degraded || []).map(item => `<li>${htmlEscape(item)}</li>`).join("");
+    byId("edit-summary").innerHTML = `<strong>AI剪辑说明：</strong> ${htmlEscape(job.currentPlan?.editSummary || "自动剪辑完成")}${degraded ? `<ul class="degraded-list">${degraded}</ul>` : ""}`;
+    const versions = [...(job.versions || [])].sort((x, y) => Number(x.version) - Number(y.version));
+    byId("version-list").innerHTML = versions.map(item => `<button class="version-chip ${item.version === output.version ? "is-active" : ""}" data-video-version="${item.version}">版本 ${item.version}</button>`).join("");
+    byId("review-history").innerHTML = (job.reviews || []).length
+      ? `<strong>返修记录</strong>${job.reviews.map(item => `<p>版本 ${htmlEscape(item.version)}：${htmlEscape(item.feedback)}</p>`).join("")}`
+      : "";
     byId("job-folder").textContent = `任务目录：F:\\code\\koubo\\video-jobs\\${job.id}`;
+    const approved = job.status === "approved";
+    byId("video-review-feedback").disabled = approved;
+    byId("revise-video").disabled = approved;
+    byId("approve-video").disabled = approved;
+    byId("approve-video").textContent = approved ? "已审核通过" : "审核通过";
     byId("edit-results").classList.remove("is-hidden");
+    showVideoVersion(output.version);
   }
 
-  function advancedEditPrompt() {
-    if (!currentVideoJob?.id) return "";
-    return [
-      "请使用项目 Skill koubo-ai-video-editor 继续处理我刚刚在网页创建的剪辑任务。",
-      `任务目录：F:\\code\\koubo\\video-jobs\\${currentVideoJob.id}`,
-      "先读取 job.json 和 edit-plan.json，再查看关键帧与字幕。",
-      "目标：检查错句、假启动和切点，按当前口播主题增加必要的动态标题或证据卡片，并输出 final-ai.mp4。",
-      "不要覆盖原视频；任何云端上传或付费模型调用前先向我确认。"
-    ].join("\n");
+  async function submitVideoRevision() {
+    if (!currentVideoJob?.id) return;
+    const feedback = byId("video-review-feedback").value.trim();
+    if (!feedback) return toast("请先写明哪里需要修改");
+    byId("revise-video").disabled = true;
+    byId("approve-video").disabled = true;
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/revise`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "返修启动失败");
+      byId("video-review-feedback").value = "";
+      pollVideoJob(currentVideoJob.id);
+    } catch (error) {
+      toast(`返修失败：${error.message}`);
+      byId("revise-video").disabled = false;
+      byId("approve-video").disabled = false;
+    }
+  }
+
+  async function approveVideo() {
+    if (!currentVideoJob?.id) return;
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/approve`, { method: "POST" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "审核提交失败");
+      currentVideoJob = payload.job;
+      renderVideoJob(currentVideoJob);
+      toast("已审核通过，工作流不会自动发布");
+    } catch (error) { toast(`审核失败：${error.message}`); }
+  }
+
+  async function retryVideoJob() {
+    if (!currentVideoJob?.id) return;
+    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/retry`, { method: "POST" });
+    const payload = await response.json();
+    if (!response.ok) return toast(payload.error || "重试失败");
+    pollVideoJob(currentVideoJob.id);
   }
 
   function reviewSummary() {
@@ -720,14 +828,16 @@
     if (group === "risks") updateRiskProgress();
   });
 
-﻿  // AI video editing
+  // One-click content generation and automatic video workflow
+  byId("generate-content").addEventListener("click", generateNewContent);
   byId("video-file").addEventListener("change", event => handleVideoSelection(event.target.files?.[0]));
   byId("analyze-video").addEventListener("click", analyzeSelectedVideo);
-  byId("render-video").addEventListener("click", renderCurrentVideoJob);
-  byId("copy-ai-edit-prompt").addEventListener("click", () => {
-    const prompt = advancedEditPrompt();
-    if (!prompt) return toast("请先完成一次视频分析");
-    copyText(prompt, "高级AI剪辑指令已复制");
+  byId("retry-video").addEventListener("click", retryVideoJob);
+  byId("revise-video").addEventListener("click", submitVideoRevision);
+  byId("approve-video").addEventListener("click", approveVideo);
+  byId("version-list").addEventListener("click", event => {
+    const button = event.target.closest("[data-video-version]");
+    if (button) showVideoVersion(Number(button.dataset.videoVersion));
   });
 
   // Publish

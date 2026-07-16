@@ -60,11 +60,13 @@
             <div>
               <span class="start-kicker">不用找文件 · 不用运行脚本</span>
               <h2>你要拍的口播已经放在这个网页里</h2>
-              <p>以后只要双击项目根目录的 <strong>打开口播工作台.html</strong>，然后按下面 1—4 步操作。</p>
+              <p>以后只要双击项目根目录的 <strong>打开AI口播工作台.vbs</strong>，点击生成、照着拍、上传原片，最后审核成片。</p>
             </div>
             <div class="entry-path">
               <span>固定入口</span>
-              <code>F:\code\koubo\打开口播工作台.html</code>
+              <code>F:\code\koubo\打开AI口播工作台.vbs</code>
+              <button id="generate-content" class="btn btn-primary" disabled>AI生成新口播</button>
+              <small id="generation-status">正在连接本地工作流……</small>
             </div>
           </div>
 
@@ -116,13 +118,13 @@
               </div>
               <div class="location-row">
                 <span>网页查看入口</span>
-                <code>F:\code\koubo\打开口播工作台.html</code>
+                <code>F:\code\koubo\打开AI口播工作台.vbs</code>
               </div>
               <div class="location-actions">
                 <a id="open-source-package" class="btn btn-secondary" href="#" target="_blank">打开完整素材包</a>
                 <button id="copy-source-path" class="btn btn-ghost">复制文件位置</button>
               </div>
-              <p class="location-tip">以后Codex生成新内容后，会把最新稿同步到这个网页；你刷新页面就能查看。</p>
+              <p class="location-tip">以后直接点击首页“AI生成新口播”，新稿会自动进入内容列表，不需要再让Codex手动同步文件。</p>
             </article>
           </div>
 
@@ -250,46 +252,55 @@
           </div>
         </section>
 
-        <section id="view-edit" class="view" data-title="拍完AI剪辑" data-eyebrow="视频只在本机处理">
+        <section id="view-edit" class="view" data-title="拍完AI剪辑" data-eyebrow="上传后全自动处理，只在最后审核">
           <div class="edit-intro">
             <div>
-              <span class="start-kicker">拍完以后，不用自己拉时间线</span>
-              <h2>上传原视频，自动删停顿、做字幕、调音量并导出竖屏成片</h2>
-              <p>基础剪辑完全在本机运行；原视频不会上传网络。需要更高级的语义剪辑和动态卡片时，再交给 Codex 项目 Skill 继续处理。</p>
+              <span class="start-kicker">只做两件事：上传原片，最后审核</span>
+              <h2>转录、删错句、字幕、重点卡片、调音量、渲染和QA由工作流自动完成</h2>
+              <p>原视频始终留在本机。公司模型只接收脱敏后的口播稿与文字转录，用来生成剪辑决策，不会收到原视频文件。</p>
             </div>
             <div class="service-card">
-              <span id="video-service-status" class="service-status is-checking">正在检查本地剪辑服务</span>
-              <p id="video-service-detail">如果服务没有启动，请双击项目根目录的“打开AI口播工作台.vbs”。</p>
+              <span id="video-service-status" class="service-status is-checking">正在检查自动化工作流</span>
+              <p id="video-service-detail">请通过项目根目录的“打开AI口播工作台.vbs”进入。</p>
             </div>
+          </div>
+
+          <div class="automation-rail" aria-label="自动化阶段">
+            <div data-stage="upload"><b>1</b><span>上传原片</span></div>
+            <div data-stage="transcribe"><b>2</b><span>本地逐字转录</span></div>
+            <div data-stage="plan"><b>3</b><span>AI剪辑决策</span></div>
+            <div data-stage="render"><b>4</b><span>字幕包装与渲染</span></div>
+            <div data-stage="review"><b>5</b><span>你最终审核</span></div>
           </div>
 
           <div class="edit-layout-grid">
             <article class="panel upload-panel">
-              <div class="panel-head"><h3>1. 选择你拍好的原视频</h3><span class="mini-label">MP4 / MOV / WebM</span></div>
+              <div class="panel-head"><h3>1. 上传拍好的原视频</h3><span class="mini-label">MP4 / MOV / WebM</span></div>
               <label class="video-drop" for="video-file">
                 <input id="video-file" type="file" accept="video/*">
                 <span class="video-drop-icon">＋</span>
                 <strong>点击选择视频</strong>
-                <small>视频只会复制到 F:\code\koubo\video-jobs</small>
+                <small>只复制到本机 F:\code\koubo\video-jobs</small>
               </label>
               <video id="video-preview" class="video-preview is-hidden" controls playsinline></video>
               <div id="selected-video-info" class="selected-video-info">尚未选择视频</div>
             </article>
 
             <article class="panel edit-options-panel">
-              <div class="panel-head"><h3>2. 选择剪辑方式</h3><span class="mini-label">推荐选项已预设</span></div>
-              <label class="edit-option-row"><span><strong>输出画面</strong><small>抖音/小红书优先使用9:16</small></span><select id="edit-layout"><option value="vertical">9:16 竖屏</option><option value="original">保持原比例</option><option value="square">1:1 方形</option></select></label>
-              <label class="edit-option-row"><span><strong>自动删除长停顿</strong><small>保留自然呼吸，切点加入音频淡化</small></span><input id="edit-remove-silence" type="checkbox" checked></label>
-              <label class="edit-option-row"><span><strong>自动添加字幕</strong><small>优先使用当前口播稿生成本地字幕</small></span><input id="edit-captions" type="checkbox" checked></label>
-              <label class="edit-option-row"><span><strong>停顿灵敏度</strong><small>数值越小，删除的停顿越多</small></span><select id="edit-silence-duration"><option value="0.35">积极剪辑</option><option value="0.45" selected>自然剪辑</option><option value="0.65">保守剪辑</option></select></label>
-              <label class="edit-option-row"><span><strong>AI模式</strong><small>本地智能剪辑无需API Key</small></span><select id="edit-ai-mode"><option value="local-smart-cut">本地智能剪辑</option><option value="codex-semantic">生成Codex语义剪辑任务</option><option value="video-use">Video Use高级剪辑（需ElevenLabs）</option></select></label>
+              <div class="panel-head"><h3>2. 自动处理设置</h3><span class="mini-label">默认值可直接使用</span></div>
+              <label class="edit-option-row"><span><strong>输出画面</strong><small>默认生成抖音/小红书竖屏</small></span><select id="edit-layout"><option value="vertical">9:16 竖屏</option><option value="original">保持原比例</option><option value="square">1:1 方形</option></select></label>
+              <label class="edit-option-row"><span><strong>删除长停顿和明显重复</strong><small>先检测停顿，再由AI根据逐字稿保守删减</small></span><input id="edit-remove-silence" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>逐字字幕和重点卡片</strong><small>使用真实语音时间轴，不再按原稿估算</small></span><input id="edit-captions" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>剪辑节奏</strong><small>自然模式会保留必要呼吸</small></span><select id="edit-silence-duration"><option value="0.35">更紧凑</option><option value="0.45" selected>自然</option><option value="0.65">更保守</option></select></label>
+              <label class="edit-option-row"><span><strong>中文转录精度</strong><small>small 更快，medium 更准但更慢</small></span><select id="edit-transcription-model"><option value="small" selected>标准（推荐）</option><option value="medium">高精度</option></select></label>
+              <button id="analyze-video" class="btn btn-primary btn-block" disabled>上传并开始全自动剪辑</button>
             </article>
           </div>
 
           <article class="panel edit-run-panel">
             <div class="edit-run-head">
-              <div><h3>3. 分析并生成成片</h3><p>先分析停顿和时长；确认结果后再正式渲染，不覆盖原视频。</p></div>
-              <div class="inline-actions"><button id="analyze-video" class="btn btn-primary" disabled>分析原视频</button><button id="render-video" class="btn btn-dark" disabled>生成剪辑成片</button></div>
+              <div><h3>自动处理进度</h3><p>开始后无需继续点击。网页会自动等待转录、剪辑、渲染和技术检查完成。</p></div>
+              <button id="retry-video" class="btn btn-secondary is-hidden">重试任务</button>
             </div>
             <div class="job-progress"><div id="edit-progress-bar"></div></div>
             <div id="edit-job-status" class="job-status">等待选择视频</div>
@@ -297,28 +308,36 @@
           </article>
 
           <article id="edit-results" class="panel result-panel is-hidden">
-            <div class="panel-head"><h3>4. 成片结果</h3><span class="mini-label">H.264 / AAC / faststart</span></div>
+            <div class="panel-head"><h3>最终审核</h3><span id="result-version" class="mini-label">版本 1</span></div>
             <div class="result-grid">
               <video id="final-video" class="final-video" controls playsinline></video>
               <div>
                 <div id="final-qa" class="final-qa"></div>
-                <div class="inline-actions result-actions"><a id="download-final" class="btn btn-primary" href="#" download>下载最终成片</a><button id="copy-ai-edit-prompt" class="btn btn-secondary">复制高级AI剪辑指令</button></div>
+                <p id="edit-summary" class="edit-summary"></p>
+                <div id="version-list" class="version-list"></div>
+                <div class="review-box">
+                  <label for="video-review-feedback"><strong>哪里不合格，直接用自然语言告诉AI</strong><small>例如：开头重复删掉；第12秒字幕错了；重点卡片太多；这段停顿要保留。</small></label>
+                  <textarea id="video-review-feedback" rows="4" placeholder="没有问题就点击“审核通过”；有问题就写修改意见。"></textarea>
+                  <div class="inline-actions"><button id="revise-video" class="btn btn-secondary">按意见生成新版本</button><button id="approve-video" class="btn btn-primary">审核通过</button></div>
+                  <div id="review-history" class="review-history"></div>
+                </div>
+                <div class="inline-actions result-actions"><a id="download-final" class="btn btn-dark" href="#" download>下载当前成片</a></div>
                 <code id="job-folder" class="job-folder"></code>
               </div>
             </div>
           </article>
 
           <article class="panel inherited-skills-panel">
-            <div class="panel-head"><h3>已经继承到工作流的6项能力</h3><span class="mini-label">来自目标对话中的视频</span></div>
+            <div class="panel-head"><h3>工作流已自动继承的能力</h3><span class="mini-label">不再需要复制指令给Codex</span></div>
             <div class="skill-capability-grid">
-              <div><b>01</b><strong>HyperFrames</strong><span>动态标题、数据卡片和画面包装</span></div>
-              <div><b>02</b><strong>Video Use</strong><span>删除停顿、错句、字幕和切点自检</span></div>
-              <div><b>03</b><strong>Promotion</strong><span>竖屏、方形和多平台版本</span></div>
-              <div><b>04</b><strong>Generative Media</strong><span>图片、视频和音频素材扩展接口</span></div>
-              <div><b>05</b><strong>Video Cut</strong><span>根据自然语言剪辑任务生成EDL</span></div>
-              <div><b>06</b><strong>AI Video Workflow</strong><span>上传、分析、确认、渲染和QA闭环</span></div>
+              <div><b>01</b><strong>本地 Whisper</strong><span>中文逐字转录和真实字幕时间轴</span></div>
+              <div><b>02</b><strong>Video Use 原则</strong><span>删除假启动、重复、错句并保护自然情绪</span></div>
+              <div><b>03</b><strong>动态包装</strong><span>钩子、证据、结果和经验重点卡片</span></div>
+              <div><b>04</b><strong>平台画幅</strong><span>9:16、原比例和1:1安全构图</span></div>
+              <div><b>05</b><strong>声音处理</strong><span>切点淡化、基础滤波和-16 LUFS响度</span></div>
+              <div><b>06</b><strong>AI返修闭环</strong><span>自然语言反馈、版本记录、重新渲染和QA</span></div>
             </div>
-            <div class="privacy-note"><strong>隐私边界：</strong>默认只运行本地 FFmpeg。任何把原视频上传到 ElevenLabs、HeyGen、Hedra 或其他云服务的操作，都必须再次获得你的明确确认。</div>
+            <div class="privacy-note"><strong>隐私边界：</strong>原视频和音频不上传云端；只有文字稿、逐字转录和技术参数交给已配置的公司模型做剪辑决策。不会自动发布。</div>
           </article>
         </section>
 

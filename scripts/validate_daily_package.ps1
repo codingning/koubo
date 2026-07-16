@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Date = (Get-Date -Format 'yyyy-MM-dd')
 )
 
