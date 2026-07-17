@@ -44,8 +44,14 @@ if(Test-Path -LiteralPath $packagePath){
         '## 13. 实际使用的热点和资料来源','## 14. 事实、隐私、版权和夸张表达检查','## 15. 明日挑战或下一集悬念','## 16. 发布后需要回填的数据'
     )
     foreach($heading in $headings){ if(-not $text.Contains($heading)){ $errors.Add("素材包缺少章节：$heading") } }
-    foreach($banned in @('大家好','今天来分享一下','记得点赞关注')){
-        if($text.Contains($banned)){ $errors.Add("素材包包含机械表达：$banned") }
+    $scriptText = if($text -match '(?s)## 7\. 45—90秒完整版口播稿(.*?)## 9\. 5个标题'){ $Matches[1] }else{ '' }
+    foreach($banned in @('大家好','今天来分享一下','你怎么看','欢迎评论区留言','记得点赞关注','点赞收藏转发')){
+        if($scriptText.Contains($banned)){ $errors.Add("口播稿包含空泛或机械表达：$banned") }
+    }
+    if([datetime]$Date -ge [datetime]'2026-07-17'){
+        foreach($required in @('观众代入点','观众最小任务','评论问题','持续关注理由','轻松点')){
+            if(-not $text.Contains($required)){ $errors.Add("素材包缺少观众互动设计：$required") }
+        }
     }
     if($text -match '粉丝问题我来实测' -and $text -notmatch '未收到|没有真实粉丝问题|不适用'){
         $progress = if(Test-Path $progressPath){ Get-Content -LiteralPath $progressPath -Raw -Encoding utf8 }else{''}

@@ -21,7 +21,8 @@ const mime = {
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
   ".md": "text/plain; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg", ".mp4": "video/mp4", ".webm": "video/webm",
-  ".srt": "application/x-subrip; charset=utf-8", ".ass": "text/plain; charset=utf-8"
+  ".srt": "application/x-subrip; charset=utf-8", ".ass": "text/plain; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8"
 };
 
 await Promise.all([fsp.mkdir(jobsRoot, { recursive: true }), fsp.mkdir(contentRoot, { recursive: true })]);
@@ -149,6 +150,17 @@ function normalizeContent(raw, dayNumber, id, meta) {
     status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "约75秒", durationShort: value.durationShort || "约40秒",
     mainTopic: String(value.mainTopic || "今天没有足够证据生成主选题"), shortTopic: String(value.shortTopic || value.mainTopic || "待确认").slice(0, 20),
     hook: String(value.hook || ""), audienceBenefit: String(value.audienceBenefit || ""),
+    engagement: {
+      audienceMirror: String(value.engagement?.audienceMirror || value.audienceMirror || value.audienceBenefit || ""),
+      commentPrompt: String(value.engagement?.commentPrompt || value.commentPrompt || ""),
+      followPromise: String(value.engagement?.followPromise || value.followPromise || value.tomorrowChallenge || value.storyPosition?.tomorrow || ""),
+      viewerTask: String(value.engagement?.viewerTask || value.actionExperiment?.viewerTask || "")
+    },
+    creativeTone: {
+      humorBeat: String(value.creativeTone?.humorBeat || ""),
+      trendMeme: value.creativeTone?.trendMeme && typeof value.creativeTone.trendMeme === "object" ? value.creativeTone.trendMeme : { id: "", adaptedLine: "", placement: "", sourceUrl: "" }
+    },
+    actionExperiment: value.actionExperiment && typeof value.actionExperiment === "object" ? value.actionExperiment : {},
     storyPosition: value.storyPosition || { yesterday: "自动读取最近记录", today: "等待确认", tomorrow: value.tomorrowChallenge || "继续真实验证" },
     progress: Array.isArray(value.progress) ? value.progress : [], candidates: Array.isArray(value.candidates) ? value.candidates : [],
     fullSegments: Array.isArray(value.fullSegments) && value.fullSegments.length ? value.fullSegments : defaultSegments,
@@ -163,7 +175,7 @@ function normalizeContent(raw, dayNumber, id, meta) {
     sourcePackageHref: `/content-items/${id}/content.json`,
     sourcePackagePath: `F:\\code\\koubo\\content-items\\${id}\\content.json`,
     generatedAt: new Date().toISOString(),
-    generation: { model: meta.model, usage: meta.usage || {}, mode: "company-model", automatic: true }
+    generation: { model: meta.model, usage: meta.usage || {}, mode: "company-model", automatic: true, qualityRevision: meta.quality_revision || { repaired: false, initial_issues: [] } }
   };
 }
 async function generateContent() {
@@ -469,6 +481,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && approveMatch) { const job = await readJob(approveMatch[1]); if (!job.output) return json(res, 409, { error: "还没有可审核的成片" }); job.status = "approved"; job.approvedAt = new Date().toISOString(); await saveJob(job); await writeJson(path.join(confined(jobsRoot, job.id), "final-review.json"), { status: "approved", version: job.currentVersion, approvedAt: job.approvedAt }); return json(res, 200, { job }); }
     if (pathname.startsWith("/video-jobs/")) return await serveFile(req, res, confined(jobsRoot, pathname.slice("/video-jobs/".length)));
     if (pathname.startsWith("/content-items/")) return await serveFile(req, res, confined(contentRoot, pathname.slice("/content-items/".length)));
+    for (const [prefix, base] of [["/runs/", path.join(root, "runs")], ["/docs/", path.join(root, "docs")], ["/config/", path.join(root, "config")]]) {
+      if (pathname.startsWith(prefix)) return await serveFile(req, res, confined(base, pathname.slice(prefix.length)));
+    }
     let relative = pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
     return await serveFile(req, res, confined(webRoot, relative));
   } catch (error) {

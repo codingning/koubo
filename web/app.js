@@ -62,13 +62,21 @@
         notes: "",
         selectedTitle: "",
         selectedCover: "",
+        contentRevision: item.contentRevision || item.generatedAt || "base",
         editedScript: fullPlainText(item),
         broll: {},
         shoot: {},
         risks: {}
       };
     }
-    return persisted.items[item.id];
+    const state = persisted.items[item.id];
+    const revision = item.contentRevision || item.generatedAt || "base";
+    if (state.contentRevision !== revision) {
+      state.previousEditedScript = state.editedScript || "";
+      state.editedScript = fullPlainText(item);
+      state.contentRevision = revision;
+    }
+    return state;
   }
 
   function saveState(show = false) {
@@ -183,6 +191,14 @@
     byId("hero-topic").textContent = currentItem.mainTopic;
     byId("hero-hook").textContent = currentItem.hook;
     byId("hero-benefit").textContent = currentItem.audienceBenefit;
+    const engagement = currentItem.engagement || {};
+    byId("viewer-mirror").textContent = engagement.audienceMirror || currentItem.audienceBenefit || "先把个人经历翻译成观众能使用的经验。";
+    byId("viewer-task").textContent = engagement.viewerTask || currentItem.actionExperiment?.viewerTask || "给观众一个今天就能完成的最小动作。";
+    const tone = currentItem.creativeTone || {};
+    const memeLine = tone.trendMeme?.adaptedLine || "";
+    byId("humor-beat").textContent = [tone.humorBeat, memeLine].filter(Boolean).join(" · ") || "用一句自然自嘲或反差降低严肃感。";
+    byId("comment-prompt").textContent = engagement.commentPrompt || "用一个具体选择题邀请观众参与下一步实验。";
+    byId("follow-promise").textContent = engagement.followPromise || currentItem.storyPosition?.tomorrow || "说明下一集会验证什么真实结果。";
     byId("home-script-duration").textContent = currentItem.durationShort || "精简版";
     byId("home-script-preview").textContent = shortText(currentItem);
     byId("source-package-path").textContent = sourcePackagePath(currentItem);

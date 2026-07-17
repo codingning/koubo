@@ -30,7 +30,15 @@
     "requiresNextDayChallenge": true,
     "maximumRisk": 5,
     "learningDiaryOnlyIsRejected": true,
-    "missingEvidenceIsRejected": true
+    "missingEvidenceIsRejected": true,
+    "requiresAudienceMirror": true,
+    "requiresSpecificCommentPrompt": true,
+    "requiresFollowPromise": true,
+    "selfNarrationOnlyIsRejected": true,
+    "genericEngagementBaitIsRejected": true,
+    "requiresViewerTask": true,
+    "requiresLightHumanTone": true,
+    "memeSourceRequiredWhenUsed": true
   },
   "candidateDirections": [
     "今日进度型",
@@ -39,5 +47,5 @@
     "AI热点亲测型",
     "成长反思或真实粉丝共创型"
   ],
-  "note": "候选最多5个；没有真实素材的方向必须留空，不得编造。纯热点时效性不再作为核心评分维度。"
+  "note": "候选最多5个；没有真实素材的方向必须留空。个人经历只作为证据，主线必须推动观众从知道到做到；稿件需要观众最小任务、具体互动和轻松口语感，使用热梗时必须核对来源与语境。"
 }
