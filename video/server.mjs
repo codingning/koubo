@@ -145,6 +145,21 @@ async function collectEvidence() {
 function normalizeContent(raw, dayNumber, id, meta) {
   const value = raw && typeof raw === "object" ? raw : {};
   const defaultSegments = [{ time: "0—3秒", label: "直接给结果", tone: "自然", text: value.hook || value.mainTopic || "今天没有足够证据生成口播。" }];
+  const design = value.structureDesign && typeof value.structureDesign === "object" ? value.structureDesign : {};
+  const validArchetypes = new Set(["evidence-story", "saveable-map", "short-resonance"]);
+  const structureDesign = {
+    archetype: validArchetypes.has(design.archetype) ? design.archetype : "",
+    selectionReason: String(design.selectionReason || ""),
+    coreQuestion: String(design.coreQuestion || ""),
+    hookConflict: String(design.hookConflict || ""),
+    saveableFramework: (Array.isArray(design.saveableFramework) ? design.saveableFramework : []).slice(0, 5).map(item => ({
+      label: String(item?.label || ""), action: String(item?.action || ""), expectedSignal: String(item?.expectedSignal || "")
+    })),
+    personalEvidenceRole: String(design.personalEvidenceRole || ""),
+    personalVariation: String(design.personalVariation || ""),
+    boundary: String(design.boundary || ""),
+    payoff: String(design.payoff || "")
+  };
   return {
     id, kind: "growth", date: shanghaiDate(), day: `Day ${dayNumber}`, column: value.column || `普通人学AI第${dayNumber}天`,
     status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "约75秒", durationShort: value.durationShort || "约40秒",
@@ -154,8 +169,10 @@ function normalizeContent(raw, dayNumber, id, meta) {
       audienceMirror: String(value.engagement?.audienceMirror || value.audienceMirror || value.audienceBenefit || ""),
       commentPrompt: String(value.engagement?.commentPrompt || value.commentPrompt || ""),
       followPromise: String(value.engagement?.followPromise || value.followPromise || value.tomorrowChallenge || value.storyPosition?.tomorrow || ""),
-      viewerTask: String(value.engagement?.viewerTask || value.actionExperiment?.viewerTask || "")
+      viewerTask: String(value.engagement?.viewerTask || value.actionExperiment?.viewerTask || ""),
+      primaryClose: String(value.engagement?.primaryClose || "")
     },
+    structureDesign,
     creativeTone: {
       humorBeat: String(value.creativeTone?.humorBeat || ""),
       trendMeme: value.creativeTone?.trendMeme && typeof value.creativeTone.trendMeme === "object" ? value.creativeTone.trendMeme : { id: "", adaptedLine: "", placement: "", sourceUrl: "" }

@@ -192,6 +192,13 @@
     byId("hero-hook").textContent = currentItem.hook;
     byId("hero-benefit").textContent = currentItem.audienceBenefit;
     const engagement = currentItem.engagement || {};
+    const design = currentItem.structureDesign || {};
+    const archetypeNames = { "evidence-story": "证据故事", "saveable-map": "可收藏路径图", "short-resonance": "短共鸣" };
+    byId("structure-archetype").textContent = archetypeNames[design.archetype] || "旧稿未标注，生成新口播时自动选择";
+    byId("structure-question").textContent = design.coreQuestion || "围绕一个观众问题组织整条内容。";
+    byId("structure-framework").textContent = Array.isArray(design.saveableFramework) && design.saveableFramework.length
+      ? design.saveableFramework.map(item => `${item.label}：${item.action}（信号：${item.expectedSignal}）`).join("；")
+      : "新稿会为每一步同时给出动作和可观察信号。";
     byId("viewer-mirror").textContent = engagement.audienceMirror || currentItem.audienceBenefit || "先把个人经历翻译成观众能使用的经验。";
     byId("viewer-task").textContent = engagement.viewerTask || currentItem.actionExperiment?.viewerTask || "给观众一个今天就能完成的最小动作。";
     const tone = currentItem.creativeTone || {};
@@ -199,6 +206,7 @@
     byId("humor-beat").textContent = [tone.humorBeat, memeLine].filter(Boolean).join(" · ") || "用一句自然自嘲或反差降低严肃感。";
     byId("comment-prompt").textContent = engagement.commentPrompt || "用一个具体选择题邀请观众参与下一步实验。";
     byId("follow-promise").textContent = engagement.followPromise || currentItem.storyPosition?.tomorrow || "说明下一集会验证什么真实结果。";
+    byId("primary-close").textContent = engagement.primaryClose || "旧稿未标注；新稿会从评论、任务和下一次验证中只选一个主动作。";
     byId("home-script-duration").textContent = currentItem.durationShort || "精简版";
     byId("home-script-preview").textContent = shortText(currentItem);
     byId("source-package-path").textContent = sourcePackagePath(currentItem);

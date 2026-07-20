@@ -118,52 +118,67 @@ def call_json(messages: list[dict[str, str]], *, temperature: float = 0.3, max_t
     }
 
 
-def append_sentence(text: str, sentence: str) -> str:
-    base = str(text or "").strip()
-    addition = str(sentence or "").strip()
-    if not addition or addition in base:
-        return base
-    if base and base[-1] not in "。！？!?":
-        base += "。"
-    return base + addition
+ARCHETYPE_FRAMEWORK_RANGES = {
+    "evidence-story": (2, 4),
+    "saveable-map": (3, 5),
+    "short-resonance": (1, 2),
+}
 
 
-def enforce_script_contract(data: dict[str, Any]) -> list[str]:
-    engagement = data.get("engagement") if isinstance(data.get("engagement"), dict) else {}
-    creative_tone = data.get("creativeTone") if isinstance(data.get("creativeTone"), dict) else {}
-    trend_meme = creative_tone.get("trendMeme") if isinstance(creative_tone.get("trendMeme"), dict) else {}
-    required_end = [engagement.get("viewerTask"), engagement.get("commentPrompt"), engagement.get("followPromise")]
-    fixes: list[str] = []
-    short_script = str(data.get("shortScript") or "")
-    for sentence in required_end:
-        updated = append_sentence(short_script, str(sentence or ""))
-        if updated != short_script:
-            fixes.append("shortScript 补齐行动/互动契约")
-            short_script = updated
-    data["shortScript"] = short_script
+def normalize_spoken_text(value: Any) -> str:
+    return re.sub(r"[，。！？、；：,.!?;:\s]", "", str(value or ""))
+
+
+def spoken_text_contains(script: str, sentence: str) -> bool:
+    needle = normalize_spoken_text(sentence)
+    return bool(needle) and needle in normalize_spoken_text(script)
+
+
+def script_texts(data: dict[str, Any]) -> tuple[str, str, str]:
+    short_script = str(data.get("shortScript") or "").strip()
     segments = data.get("fullSegments") if isinstance(data.get("fullSegments"), list) else []
-    if segments and isinstance(segments[-1], dict):
-        last_text = str(segments[-1].get("text") or "")
-        for sentence in required_end:
-            updated = append_sentence(last_text, str(sentence or ""))
-            if updated != last_text:
-                fixes.append("完整版结尾补齐行动/互动契约")
-                last_text = updated
-        segments[-1]["text"] = last_text
-    humor_beat = str(creative_tone.get("humorBeat") or "").strip()
     full_text = "".join(str(item.get("text") or "") for item in segments if isinstance(item, dict))
-    if humor_beat and humor_beat not in short_script + full_text and segments:
-        target = segments[1] if len(segments) > 1 and isinstance(segments[1], dict) else segments[0]
-        target["text"] = append_sentence(str(target.get("text") or ""), humor_beat)
-        fixes.append("完整版补入轻松点")
-    adapted_line = str(trend_meme.get("adaptedLine") or "").strip()
-    full_text = "".join(str(item.get("text") or "") for item in segments if isinstance(item, dict))
-    if trend_meme.get("id") and adapted_line and adapted_line not in short_script + full_text and segments:
-        first = segments[0] if isinstance(segments[0], dict) else None
-        if first is not None:
-            first["text"] = append_sentence(str(first.get("text") or ""), adapted_line)
-            fixes.append("完整版补入已选热梗")
-    return sorted(set(fixes))
+    full_close = str(segments[-1].get("text") or "").strip() if segments and isinstance(segments[-1], dict) else ""
+    return short_script, full_text, full_close
+
+
+def structure_issues(data: dict[str, Any]) -> list[str]:
+    design = data.get("structureDesign") if isinstance(data.get("structureDesign"), dict) else {}
+    archetype = str(design.get("archetype") or "").strip()
+    issues: list[str] = []
+    if archetype not in ARCHETYPE_FRAMEWORK_RANGES:
+        issues.append("structureDesign.archetype 必须是 evidence-story、saveable-map 或 short-resonance")
+        return issues
+
+    required_text = {
+        "selectionReason": (12, "没有说明为什么本题适合所选结构"),
+        "coreQuestion": (10, "没有锁定本集唯一核心问题"),
+        "hookConflict": (10, "缺少精准矛盾或反差钩子"),
+        "personalEvidenceRole": (8, "没有说明个人证据在本集承担什么作用"),
+        "personalVariation": (10, "没有加入本账号真实场景或优势形成的变化"),
+        "boundary": (8, "没有说明方法的适用边界"),
+        "payoff": (10, "没有写清观众看完能完成什么判断或动作"),
+    }
+    for field, (minimum, message) in required_text.items():
+        if len(str(design.get(field) or "").strip()) < minimum:
+            issues.append(f"structureDesign.{field} {message}")
+
+    framework = design.get("saveableFramework") if isinstance(design.get("saveableFramework"), list) else []
+    minimum, maximum = ARCHETYPE_FRAMEWORK_RANGES[archetype]
+    if not minimum <= len(framework) <= maximum:
+        issues.append(f"{archetype} 的 saveableFramework 必须有 {minimum}—{maximum} 项")
+    for index, item in enumerate(framework, start=1):
+        if not isinstance(item, dict):
+            issues.append(f"saveableFramework 第{index}项必须是对象")
+            continue
+        for field, minimum_length, label in (
+            ("label", 2, "名称"),
+            ("action", 6, "可执行动作"),
+            ("expectedSignal", 5, "完成后的可观察信号"),
+        ):
+            if len(str(item.get(field) or "").strip()) < minimum_length:
+                issues.append(f"saveableFramework 第{index}项缺少{label}")
+    return issues
 
 
 def engagement_issues(data: dict[str, Any], content_style: dict[str, Any]) -> list[str]:
@@ -172,9 +187,8 @@ def engagement_issues(data: dict[str, Any], content_style: dict[str, Any]) -> li
     comment_prompt = str(engagement.get("commentPrompt") or "").strip()
     follow_promise = str(engagement.get("followPromise") or "").strip()
     viewer_task = str(engagement.get("viewerTask") or "").strip()
-    short_script = str(data.get("shortScript") or "").strip()
-    segments = data.get("fullSegments") if isinstance(data.get("fullSegments"), list) else []
-    full_text = "".join(str(item.get("text") or "") for item in segments if isinstance(item, dict))
+    primary_close = str(engagement.get("primaryClose") or "").strip()
+    short_script, full_text, full_close = script_texts(data)
     combined = short_script + full_text
     creative_tone = data.get("creativeTone") if isinstance(data.get("creativeTone"), dict) else {}
     humor_beat = str(creative_tone.get("humorBeat") or "").strip()
@@ -188,22 +202,25 @@ def engagement_issues(data: dict[str, Any], content_style: dict[str, Any]) -> li
         issues.append("engagement.followPromise 没有说明下次回来能看到什么")
     if len(viewer_task) < 10:
         issues.append("engagement.viewerTask 缺少观众今天可执行的最小动作")
+    if len(primary_close) < 10:
+        issues.append("engagement.primaryClose 缺少自然的单一主收束")
+    elif not spoken_text_contains(short_script, primary_close) or not spoken_text_contains(full_close, primary_close):
+        issues.append("engagement.primaryClose 必须自然进入精简稿和完整版最后一段")
     if len(humor_beat) < 6:
         issues.append("creativeTone.humorBeat 缺少自然的轻松点")
-    if humor_beat and humor_beat not in combined:
+    if humor_beat and not spoken_text_contains(combined, humor_beat):
         issues.append("creativeTone.humorBeat 必须自然进入至少一个口播版本")
-    if trend_meme.get("id") and str(trend_meme.get("adaptedLine") or "") not in combined:
+    if trend_meme.get("id") and not spoken_text_contains(combined, str(trend_meme.get("adaptedLine") or "")):
         issues.append("选择热梗后 adaptedLine 必须进入口播正文")
     if short_script.startswith("我") or short_script.startswith("今天我"):
         issues.append("shortScript 仍以创作者自我汇报开场")
     if combined.count("你") + combined.count("你的") < 3:
         issues.append("正文没有持续把经历翻译成观众视角")
-    if comment_prompt and (comment_prompt not in short_script or comment_prompt not in full_text):
-        issues.append("commentPrompt 必须原样自然进入完整版和精简版")
-    if follow_promise and (follow_promise not in short_script or follow_promise not in full_text):
-        issues.append("followPromise 必须原样自然进入完整版和精简版")
-    if viewer_task and (viewer_task not in short_script or viewer_task not in full_text):
-        issues.append("viewerTask 必须原样自然进入完整版和精简版")
+    planning_lines = [comment_prompt, follow_promise, viewer_task]
+    for name, ending in (("精简稿", short_script), ("完整版结尾", full_close)):
+        included = sum(spoken_text_contains(ending, line) for line in planning_lines if line)
+        if included == 3:
+            issues.append(f"{name}机械连入了评论问题、追更承诺和观众任务，请只保留一个主收束")
     for banned in content_style.get("bannedCallsToAction", []):
         if str(banned) and str(banned) in combined:
             issues.append(f"口播包含禁用空泛话术：{banned}")
@@ -266,6 +283,20 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
             "commentPrompt": "低门槛、具体、与下一集相关的评论问题",
             "followPromise": "观众下一次回来能看到的真实验证或结果",
             "viewerTask": "观众今天就能完成、无需完美也不强迫公开的最小动作",
+            "primaryClose": "从以上互动意图中选择一个主动作，改写成自然进入两个版本结尾的一句话",
+        },
+        "structureDesign": {
+            "archetype": "evidence-story|saveable-map|short-resonance",
+            "selectionReason": "为什么本题适合这套结构",
+            "coreQuestion": "整条视频只解决的一个问题",
+            "hookConflict": "精准矛盾、反差或观众正在付出的代价",
+            "saveableFramework": [
+                {"label": "步骤或阶段名称", "action": "观众可以执行的动作", "expectedSignal": "完成后可以观察到的信号"}
+            ],
+            "personalEvidenceRole": "个人经历或结果在本集只负责证明什么",
+            "personalVariation": "结合本账号真实项目、优势或限制做出的变化",
+            "boundary": "方法在哪些情况下不适用或还未经验证",
+            "payoff": "观众看完能做出的判断或最小行动",
         },
         "creativeTone": {
             "humorBeat": "自然进入稿件的一句轻松自嘲或反差表达",
@@ -292,13 +323,42 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
         "risks": [{"text": "风险检查", "done": False}],
         "tomorrowChallenge": "下一集挑战",
     }
-    system = """你是个人AI实践成长账号的总编和短视频口播编导。你的首要任务不是汇报创作者今天做了什么，而是把真实经历改写成观众能代入、能参与、愿意继续追看的公开实验。只根据提供的真实证据写内容，不得虚构完成项、错误、数据、热点、粉丝反馈、评论或投票结果。输出必须是单个JSON对象，不要Markdown。语言自然、口语化，像和一个具体的人对话，不用新闻播音腔。个人经历只能作为证明观众问题的案例，不能让整篇稿件变成“我做了什么”的流水账。"""
-    user = f"""日期：{today}\n成长天数：Day {day_number}\n\n内容风格规则：\n{json.dumps(content_style, ensure_ascii=False, indent=2)}\n\n当前已核对、可按相关性选用的热梗：\n{json.dumps(active_memes, ensure_ascii=False, indent=2)}\n\n真实证据：\n{json.dumps(evidence, ensure_ascii=False, indent=2)}\n\n已有内容标题（避免重复）：\n{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}\n\n请生成完整口播拍摄包。必须严格包含以下JSON字段结构，可增加字段但不能缺字段：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n硬性要求：\n1. fullSegments 5-7段，总时长45-90秒；shortScript 30-45秒；titles 3个；covers 3个；candidates 最多5个。\n2. 开头优先从观众的困境、选择、损失或反常识切入；除非必要，前20字不要以“我”开头。\n3. 核心转变统一为“从知道到做到”，正文按旧状态、当前冲突、真实行动、结果证据、得出的认识、观众最小任务推进。\n4. 个人经历只作为真实案例，整篇至少三次把经验翻译成“你可以怎么判断/怎么做”。\n5. fullSegments 最后一段和 shortScript 都必须自然包含 engagement.commentPrompt、engagement.followPromise 与 engagement.viewerTask。\n6. commentPrompt 必须是具体的A/B选择、真实经历或下一步实验选择，不能只问“你怎么看”，不能虚构已有观众反馈。\n7. followPromise 要说明下一集能看到的真实测试、结果或翻车，不使用“记得点赞关注”等空泛口号。\n8. viewerTask 必须是观众今天就能完成的最小动作，不要求完美，也不强迫发布。\n9. 语气不能像项目汇报或课程讲解；45—90秒稿件自然放1—2个轻松点，优先自嘲、反差或一个与主题高度相关的已核对热梗。\n10. 热梗只在确实贴合冲突时使用，写入 creativeTone.trendMeme；不得大段照搬、不得虚构来源、不得把热度数字写入口播。\n11. 不得自行增加证据中没有的拍摄遍数、耗时、播放量、结果或“明天一定发布”等承诺。证据写着尚未拍摄/发布时，只能把本条视频描述为准备执行的行动或使用条件句，不能声称已经录了几条、重拍几次或已经发出。
-12. 证据不足时明确写“今天不建议发布”，不要编造。"""
+    system = """你是个人AI实践成长账号的总编和短视频口播编导。你的首要任务不是汇报创作者今天做了什么，而是把真实经历改写成观众能代入、能执行、愿意收藏或继续验证的内容。只根据提供的真实证据写内容，不得虚构完成项、错误、数据、热点、粉丝反馈、评论或投票结果。输出必须是单个JSON对象，不要Markdown。语言自然、口语化，像和一个具体的人对话，不用新闻播音腔。个人经历只能作为证明观众问题的案例，不能让整篇稿件变成“我做了什么”的流水账。可以复用高表现内容的问题顺序、证据位置和信息交付方式，但绝不能复刻别人的措辞、案例、标题或人设。"""
+    user = f"""日期：{today}
+成长天数：Day {day_number}
+
+内容风格规则：
+{json.dumps(content_style, ensure_ascii=False, indent=2)}
+
+当前已核对、可按相关性选用的热梗：
+{json.dumps(active_memes, ensure_ascii=False, indent=2)}
+
+真实证据：
+{json.dumps(evidence, ensure_ascii=False, indent=2)}
+
+已有内容标题（避免重复）：
+{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}
+
+请生成完整口播拍摄包。必须严格包含以下JSON字段结构，可增加字段但不能缺字段：
+{json.dumps(schema, ensure_ascii=False, indent=2)}
+
+硬性要求：
+1. 先锁定一个 coreQuestion，再只选一种结构。有失败、干预和结果证据用 evidence-story；需要梳理先后顺序或阶段判断用 saveable-map；只有一个强共鸣和一个最小动作时用 short-resonance。不要为了显得完整强行写成长稿。
+2. evidence-story 的 saveableFramework 写2—4项，完整版5—7段、45—90秒；saveable-map 写3—5项，完整版5—8段、45—120秒；short-resonance 写1—2项，完整版3—5段、20—45秒。shortScript 必须比完整版更短且信息闭环。
+3. saveableFramework 每项必须包含具体 action 与执行后可观察的 expectedSignal。禁止写“提升认知、保持坚持、拥抱AI”这类无法验证的口号。
+4. 开头优先从观众的困境、选择、损失或反常识切入；身份信息并非必要时，前20字不要以“我”开头。
+5. evidence-story 用个人经历证明方法；saveable-map 让观众定位当前阶段；short-resonance 用一句判断完成自我识别。三种结构都要写清 personalVariation 和 boundary。
+6. 个人经历只作为真实案例，至少三次把经验翻译成观众可以执行的判断或动作。
+7. engagement.commentPrompt、followPromise、viewerTask 都要写清策划意图。选择其中最适合本集的一个主动作，改写成 engagement.primaryClose，并让 primaryClose 自然进入 fullSegments 最后一段和 shortScript。不要把三个字段逐句原样连在结尾。
+8. commentPrompt 必须是容易回答的具体问题；followPromise 只承诺已有计划支持的下一次验证；viewerTask 必须今天能做、不要求完美或公开。
+9. 45秒以上稿件自然放1—2个轻松点。短共鸣结构不必为了幽默破坏节奏，但仍需给出自然的 humorBeat 备选。
+10. 热梗只在确实贴合冲突时使用，写入 creativeTone.trendMeme；不得大段照搬、不得虚构来源、不得把热度数字写入口播。
+11. 不得自行增加证据中没有的拍摄遍数、耗时、播放量、结果或“明天一定发布”等承诺。证据写着尚未拍摄/发布时，只能把本条视频描述为准备执行的行动或使用条件句，不能声称已经录了几条、重拍几次或已经发出。
+12. titles 3个；covers 3个；candidates 最多5个。证据不足时明确写“今天不建议发布”，不要编造。
+"""
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     result = call_json(messages, temperature=0.4, max_tokens=10000)
-    structural_fixes = enforce_script_contract(result.get("data", {}))
-    issues = engagement_issues(result.get("data", {}), content_style) + factual_issues(result.get("data", {}), evidence)
+    issues = structure_issues(result.get("data", {})) + engagement_issues(result.get("data", {}), content_style) + factual_issues(result.get("data", {}), evidence)
     initial_issues = list(issues)
     repair_attempts = 0
     while issues and repair_attempts < 2:
@@ -312,17 +372,16 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 上一版JSON：
 {json.dumps(result.get('data', {}), ensure_ascii=False, indent=2)}
 
-请在不增加任何新事实的前提下重写完整JSON。证据写着尚未拍摄或发布时，绝对不能改写成已经拍完、录了几条、重录几次或已经发布。把观众问题放在主线，严格让 engagement.commentPrompt、engagement.followPromise 和 engagement.viewerTask 原样自然出现在完整版最后一段与 shortScript 中；creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
+请在不增加任何新事实的前提下重写完整JSON。证据写着尚未拍摄或发布时，绝对不能改写成已经拍完、录了几条、重录几次或已经发布。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
         result = call_json(messages + [{"role": "assistant", "content": json.dumps(result.get("data", {}), ensure_ascii=False)}, {"role": "user", "content": repair}], temperature=0.15, max_tokens=10000)
-        structural_fixes.extend(enforce_script_contract(result.get("data", {})))
-        issues = engagement_issues(result.get("data", {}), content_style) + factual_issues(result.get("data", {}), evidence)
+        issues = structure_issues(result.get("data", {})) + engagement_issues(result.get("data", {}), content_style) + factual_issues(result.get("data", {}), evidence)
     if issues:
         raise RuntimeError("内容质量与事实一致性门禁未通过：" + "；".join(issues))
     result["quality_revision"] = {
         "repaired": repair_attempts > 0,
         "repair_attempts": repair_attempts,
         "initial_issues": initial_issues,
-        "structural_fixes": sorted(set(structural_fixes)),
+        "structural_fixes": [],
     }
     return result
 
