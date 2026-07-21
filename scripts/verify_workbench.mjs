@@ -20,6 +20,34 @@ for (const file of ["video/server.mjs", "scripts/collect_douyin_references.mjs",
   assert(result.status === 0, `${file} 语法检查失败：${result.stderr.trim()}`);
 }
 
+process.env.KOUBO_NO_LISTEN = "1";
+const mediaPolicy = await import(`${new URL("../video/server.mjs", import.meta.url).href}?policy-test=${Date.now()}`);
+const existingFixture = path.join(root, "README.md");
+const externalFixture = {
+  id: "external-test",
+  sourceType: "external-creator",
+  mediaKind: "video",
+  path: existingFixture,
+  reviewStatus: "approved",
+  placement: { start: 0, end: 2, mode: "broll" },
+  creatorName: "TestCreator",
+  workTitle: "Test Work",
+  sourceUrl: "https://example.com/work",
+  usagePurpose: "分析该视频的开场结构",
+  licenseBasis: "explicit-authorization",
+  attributionText: "来源：TestCreator｜Test Work",
+  clipStart: 0,
+  clipEnd: 2,
+  clipDuration: 2
+};
+assert(mediaPolicy.assetComplianceIssues(externalFixture, { script: "本段采用 TestCreator 的视频作分析" }, 8).length === 0, "完整外部素材元数据被错误拒绝");
+assert(mediaPolicy.assetComplianceIssues(externalFixture, { script: "稿件没有创作者名称" }, 8).some(issue => issue.includes("口播稿")), "外部素材缺少稿件披露时未被拦截");
+assert(mediaPolicy.assetComplianceIssues({ ...externalFixture, clipEnd: null }, { script: "TestCreator" }, 8).some(issue => issue.includes("截取结束时间")), "外部素材缺少截取结束时间时未被拦截");
+assert(mediaPolicy.assetComplianceIssues({ ...externalFixture, licenseBasis: "commentary-quotation", clipEnd: 11, clipDuration: 11 }, { script: "TestCreator" }, 20).some(issue => issue.includes("10秒以内")), "未授权评论性引用超过产品时长限制时未被拦截");
+assert(mediaPolicy.assetComplianceIssues({ id: "paid-test", sourceType: "paid-stock", mediaKind: "image", path: existingFixture, reviewStatus: "approved", placement: { start: 0, end: 2, mode: "broll" }, paymentConfirmed: false }, { script: "" }, 8).some(issue => issue.includes("费用确认")), "付费素材未确认费用时未被拦截");
+const placementA = mediaPolicy.candidatePlacement(0, 4, 8), placementB = mediaPolicy.candidatePlacement(1, 4, 8);
+assert(placementA.end <= placementB.start, "自动视觉候选时间段发生不必要重叠");
+
 const serverSource = read("video/server.mjs");
 const bridgeSource = read("video/ai_bridge.py");
 for (const capability of [
@@ -30,6 +58,10 @@ for (const capability of [
   "renderVariants",
   "runQa",
   "ensureMediaManifest",
+  "prepareAssetCandidates",
+  "assetComplianceIssues",
+  "buildMediaRenderPlan",
+  "finalizeMediaManifest",
   "videoColorPipeline",
   "rerenderJob",
   "renderCover",
@@ -38,6 +70,7 @@ for (const capability of [
 for (const route of ["/replan", "/rerender", "/cover", "/assets", "/approve"]) {
   assert(serverSource.includes(route), `Missing workflow endpoint: ${route}`);
 }
+assert(serverSource.includes("assetRenderMatch") && serverSource.includes("renderReviewedAssets"), "Missing reviewed-assets render endpoint");
 for (const artifact of ["timeline-v", "timeline-v${version}.edl", "qa-report-v", "media-manifest-v", "captions-v", "filter-v", "cover-design-v"]) {
   assert(serverSource.includes(artifact), `Missing auditable artifact: ${artifact}`);
 }
@@ -171,7 +204,7 @@ const app = read("web/app.js");
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
 const referenced = new Set([...app.matchAll(/byId\("([^"]+)"\)/g)].map(match => match[1]));
 for (const id of referenced) assert(ids.has(id), `app.js 引用了不存在的 #${id}`);
-assert(!app.includes("/render`"), "网页仍引用旧的手动 render 接口");
+assert(!/\/api\/jobs\/\$\{encodeURIComponent\(currentVideoJob\.id\)\}\/render`/.test(app), "网页仍引用旧的手动 render 接口");
 assert(!app.includes("copy-ai-edit-prompt"), "网页仍保留复制高级剪辑指令的旧流程");
 assert(app.includes("/api/contents/generate"), "网页未接入口播生成接口");
 assert(app.includes("/revise`"), "网页未接入自然语言返修接口");
@@ -180,6 +213,11 @@ assert(ids.has("edit-caption-style") && ids.has("edit-information-panels"), "网
 assert(app.includes("captionStyle") && app.includes("informationPanels"), "网页未把字幕包装选项发送给服务端");
 assert(ids.has("edit-generate-cover") && ids.has("edit-cover-title") && ids.has("regenerate-cover"), "网页缺少自动封面开关、标题覆盖或单独重做入口");
 assert(app.includes("generateCover") && app.includes("coverWide16x9") && app.includes("coverLandscape4x3"), "网页未完整接入四画幅封面流程");
+assert(ids.has("asset-review-panel") && ids.has("render-with-assets") && ids.has("asset-review-summary"), "网页缺少素材审核板或审核后渲染入口");
+assert(app.includes("commentary-quotation") && app.includes("data-attribution-text") && app.includes("data-reject-media"), "素材审核板缺少评论性引用、来源署名或拒绝操作");
+assert(serverSource.includes("口播稿没有自然说明所采用的创作者名称"), "外部素材未检查稿件中的创作者披露");
+assert(serverSource.includes("paidGenerationRequiresConfirmation") && serverSource.includes("paymentConfirmed"), "付费素材缺少费用确认门禁");
+assert(serverSource.includes("asset.composited = rendered.has(asset.id)"), "批准素材没有在成功渲染后写入实际合成状态");
 
 const sandbox = { window: {} };
 vm.runInNewContext(read("web/data/content-data.js"), sandbox, { filename: "content-data.js" });
@@ -230,7 +268,7 @@ if (urlArg) {
   const base = urlArg.slice(6).replace(/\/$/, "");
   const health = await fetch(`${base}/api/health`).then(async response => ({ response, data: await response.json() }));
   assert(health.response.ok && health.data.ok, "健康检查失败");
-  assert(health.data.version === 2, `服务版本不是 v2：${health.data.version}`);
+  assert(health.data.version === 3, `服务版本不是 v3：${health.data.version}`);
   assert(health.data.localOnlyVideo === true, "服务未声明原视频本地处理边界");
   assert(health.data.ffmpeg === true, "FFmpeg 不可用");
   const contents = await fetch(`${base}/api/contents`).then(async response => ({ response, data: await response.json() }));
@@ -247,4 +285,4 @@ if (failures.length) {
   console.error(failures.map(item => `- ${item}`).join("\n"));
   process.exit(1);
 }
-console.log(`工作台验证通过：${referenced.size} 个页面控件引用有效${urlArg ? "，v2 服务在线" : ""}。`);
+console.log(`工作台验证通过：${referenced.size} 个页面控件引用有效${urlArg ? "，v3 服务在线" : ""}。`);

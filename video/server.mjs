@@ -17,6 +17,8 @@ const runtimePython = path.join(root, ".runtime", "Scripts", "python.exe");
 const runtimeFfmpeg = path.join(root, ".runtime", "ffmpeg", "bin");
 const aiBridge = path.join(here, "ai_bridge.py");
 const referenceCollector = path.join(root, "scripts", "collect_douyin_references.mjs");
+const referenceLibraryFile = path.join(root, "config", "reference_video_library.json");
+const referenceCreatorsFile = path.join(root, "config", "reference_creators.json");
 const host = "127.0.0.1";
 const port = Number(process.env.KOUBO_PORT || 8787);
 if (fs.existsSync(runtimeFfmpeg)) process.env.PATH = `${runtimeFfmpeg}${path.delimiter}${process.env.PATH || ""}`;
@@ -143,9 +145,29 @@ async function contentDirectionFor(contentId) {
       audienceBenefit: String(content.audienceBenefit || ""),
       resultFirstProof: content.resultFirstProof || {},
       shooting: content.shooting || {},
-      structureDesign: content.structureDesign || {}
+      structureDesign: content.structureDesign || {},
+      referenceResearch: content.referenceResearch || {},
+      fullSegments: Array.isArray(content.fullSegments) ? content.fullSegments : []
     };
   } catch { return null; }
+}
+
+async function referenceCatalog() {
+  try {
+    const [library, creators] = await Promise.all([readJsonFile(referenceLibraryFile), readJsonFile(referenceCreatorsFile)]);
+    const creatorByVideo = new Map();
+    for (const creator of creators.creators || []) {
+      for (const videoId of creator.pinnedVideoIds || []) creatorByVideo.set(String(videoId), creator);
+    }
+    return (library.items || []).map(item => {
+      const creator = creatorByVideo.get(String(item.videoId || "")) || {};
+      return {
+        ...item,
+        creatorName: String(creator.creatorName || creator.label || "").trim(),
+        creatorProfileUrl: String(creator.profileUrl || "").trim()
+      };
+    });
+  } catch { return []; }
 }
 async function collectEvidence() {
   const runRoot = path.join(root, "runs");
@@ -825,24 +847,347 @@ async function writeTimelineArtifacts(jobDir, timeline, version) {
   });
   await fsp.writeFile(path.join(jobDir, `timeline-v${version}.edl`), edl.join("\r\n"), "utf8");
 }
+
+const EXTERNAL_SOURCE_TYPES = new Set(["external-creator", "licensed-external"]);
+const PAID_SOURCE_TYPES = new Set(["paid-stock", "paid-generated"]);
+const APPROVABLE_LICENSE_BASES = new Set(["explicit-authorization", "creator-permission", "platform-license", "commentary-quotation"]);
+function mediaKindFor(fileName = "") {
+  const extension = path.extname(String(fileName)).toLowerCase();
+  if ([".png", ".jpg", ".jpeg", ".webp", ".bmp"].includes(extension)) return "image";
+  if ([".mp4", ".mov", ".mkv", ".webm", ".m4v"].includes(extension)) return "video";
+  return "unknown";
+}
+function normalizePlacement(value) {
+  const start = Number(value?.start), end = Number(value?.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return null;
+  const validModes = new Set(["broll", "pip", "comparison-left", "comparison-right"]);
+  return { start, end, mode: validModes.has(value?.mode) ? value.mode : "broll" };
+}
+function normalizeAssetRecord(asset = {}) {
+  const reviewStatus = ["pending", "approved", "rejected"].includes(asset.reviewStatus)
+    ? asset.reviewStatus
+    : asset.approved === true ? "approved" : "pending";
+  const sourceType = String(asset.sourceType || (asset.source === "local-upload" ? "local-upload" : "local-upload"));
+  const clipStart = Number(asset.clipStart), clipEnd = Number(asset.clipEnd);
+  const placement = normalizePlacement(asset.placement);
+  return {
+    ...asset,
+    sourceType,
+    mediaKind: asset.mediaKind || mediaKindFor(asset.fileName),
+    reviewStatus,
+    approved: reviewStatus === "approved",
+    placement,
+    creatorName: String(asset.creatorName || "").trim(),
+    workTitle: String(asset.workTitle || "").trim(),
+    sourceUrl: String(asset.sourceUrl || "").trim(),
+    usagePurpose: String(asset.usagePurpose || "").trim(),
+    licenseBasis: String(asset.licenseBasis || asset.license || "").trim(),
+    attributionText: String(asset.attributionText || "").trim(),
+    clipStart: Number.isFinite(clipStart) && clipStart >= 0 ? clipStart : 0,
+    clipEnd: Number.isFinite(clipEnd) && clipEnd > 0 ? clipEnd : null,
+    clipDuration: Number.isFinite(Number(asset.clipDuration)) && Number(asset.clipDuration) > 0
+      ? Number(asset.clipDuration)
+      : Number.isFinite(clipEnd) && clipEnd > Math.max(0, clipStart) ? clipEnd - Math.max(0, clipStart) : placement ? placement.end - placement.start : null,
+    paymentRequired: asset.paymentRequired === true || PAID_SOURCE_TYPES.has(sourceType),
+    paymentConfirmed: asset.paymentConfirmed === true,
+    generatedLocally: asset.generatedLocally === true,
+    discoveredAutomatically: asset.discoveredAutomatically === true
+  };
+}
+function creatorNameIsUsable(value) {
+  const name = String(value || "").trim();
+  return !!name && !/(待填写|待确认|用户指定参考账号)/.test(name);
+}
+function assetComplianceIssues(rawAsset, job, outputDuration = null) {
+  const asset = normalizeAssetRecord(rawAsset);
+  const issues = [];
+  if (asset.reviewStatus !== "approved") return issues;
+  if (!asset.placement) issues.push("缺少有效的成片使用时间段");
+  if (asset.placement && Number.isFinite(outputDuration) && asset.placement.end > outputDuration + 0.05) issues.push("使用结束时间超过预计成片时长");
+  if (!asset.path || !fs.existsSync(asset.path)) issues.push("缺少可渲染的本地素材文件");
+  if (!['image', 'video'].includes(asset.mediaKind)) issues.push("素材必须是图片或视频");
+  if (PAID_SOURCE_TYPES.has(asset.sourceType) && !asset.paymentConfirmed) issues.push("付费素材尚未完成费用确认");
+  if (EXTERNAL_SOURCE_TYPES.has(asset.sourceType)) {
+    if (!creatorNameIsUsable(asset.creatorName)) issues.push("外部素材缺少创作者公开名称");
+    if (!asset.workTitle) issues.push("外部素材缺少作品标题");
+    if (!/^https?:\/\//i.test(asset.sourceUrl)) issues.push("外部素材缺少有效原链接");
+    if (!asset.usagePurpose) issues.push("外部素材缺少具体使用目的");
+    if (!APPROVABLE_LICENSE_BASES.has(asset.licenseBasis)) issues.push("外部素材缺少可接受的授权或引用依据");
+    if (!asset.attributionText || (asset.creatorName && !asset.attributionText.includes(asset.creatorName))) issues.push("画面署名必须包含创作者名称");
+    if (!Number.isFinite(Number(asset.clipStart)) || Number(asset.clipStart) < 0) issues.push("外部素材缺少有效截取开始时间");
+    if (!Number.isFinite(Number(asset.clipEnd)) || Number(asset.clipEnd) <= Number(asset.clipStart)) issues.push("外部素材缺少有效截取结束时间");
+    if (!Number.isFinite(asset.clipDuration) || asset.clipDuration <= 0) issues.push("外部素材缺少引用片段时长");
+    if (Number.isFinite(Number(asset.clipEnd)) && Number.isFinite(asset.clipDuration) && Math.abs((Number(asset.clipEnd) - Number(asset.clipStart)) - Number(asset.clipDuration)) > 0.15) issues.push("引用片段时长与截取起止时间不一致");
+    if (asset.mediaKind === "video" && asset.placement && Number.isFinite(asset.clipDuration) && Number(asset.clipDuration) + 0.05 < asset.placement.end - asset.placement.start) issues.push("引用片段短于成片中的使用时长");
+    if (!creatorNameIsUsable(asset.creatorName) || !String(job.script || "").includes(asset.creatorName)) issues.push("口播稿没有自然说明所采用的创作者名称");
+    if (asset.licenseBasis === "commentary-quotation") {
+      if (!/(介绍|评论|分析|说明|拆解)/.test(asset.usagePurpose)) issues.push("评论性引用必须写明介绍、评论、分析、说明或拆解目的");
+      if (Number(asset.clipDuration) > 10.01) issues.push("本工作流将未明确授权的评论性引用限制为单段10秒以内");
+    }
+  }
+  return [...new Set(issues)];
+}
+function assetReviewSummary(job, outputDuration = null) {
+  const assets = (job.assets || []).map(normalizeAssetRecord);
+  const pending = assets.filter(asset => asset.reviewStatus === "pending");
+  const approved = assets.filter(asset => asset.reviewStatus === "approved");
+  const rejected = assets.filter(asset => asset.reviewStatus === "rejected");
+  const complianceIssues = approved.flatMap(asset => assetComplianceIssues(asset, job, outputDuration).map(issue => ({ assetId: asset.id, issue })));
+  return {
+    total: assets.length,
+    pending: pending.length,
+    approved: approved.length,
+    rejected: rejected.length,
+    reviewComplete: assets.length > 0 && pending.length === 0,
+    renderReady: assets.length > 0 && pending.length === 0 && complianceIssues.length === 0,
+    complianceIssues
+  };
+}
+function candidatePlacement(index, count, duration) {
+  const safeDuration = Math.max(1, Number(duration || 1));
+  const slot = safeDuration / Math.max(1, count);
+  const start = Math.min(Math.max(0, safeDuration - 0.5), slot * index);
+  const visible = Math.max(0.5, Math.min(4, slot));
+  return { start: Number(start.toFixed(2)), end: Number(Math.min(safeDuration, start + visible).toFixed(2)), mode: "broll" };
+}
+function wrapCardText(value, width, maxLines) {
+  const chars = [...String(value || "").trim()];
+  const lines = [];
+  while (chars.length && lines.length < maxLines) lines.push(chars.splice(0, width).join(""));
+  if (chars.length && lines.length) lines[lines.length - 1] = `${[...lines[lines.length - 1]].slice(0, Math.max(1, width - 1)).join("")}…`;
+  return lines.join("\n");
+}
+async function writeGeneratedCandidateCard(job, asset, title, purpose) {
+  const dir = path.join(confined(jobsRoot, job.id), "assets", "generated");
+  await fsp.mkdir(dir, { recursive: true });
+  const assFile = path.join(dir, `${asset.id}.ass`), output = path.join(dir, `${asset.id}.png`);
+  const lines = [
+    "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1080", "PlayResY: 1920", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
+    "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+    "Style: Tag,Microsoft YaHei,34,&H00101820,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,0,0,7,90,90,0,1",
+    "Style: Title,Microsoft YaHei,76,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,2,0,7,90,90,0,1",
+    "Style: Body,Microsoft YaHei,42,&H00D9E7EF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,1,0,1,0,0,7,90,90,0,1", "",
+    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+    `Dialogue: 1,0:00:00.00,0:00:01.00,Tag,,0,0,0,,{\\pos(95,315)}AI 自动准备 · 本地零费用`,
+    `Dialogue: 1,0:00:00.00,0:00:01.00,Title,,0,0,0,,{\\pos(95,455)}${assEscape(wrapCardText(title, 12, 2))}`,
+    `Dialogue: 1,0:00:00.00,0:00:01.00,Body,,0,0,0,,{\\pos(95,690)}${assEscape(wrapCardText(purpose, 18, 3))}`
+  ];
+  await fsp.writeFile(assFile, lines.join("\r\n"), "utf8");
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=0x07131D:s=1080x1920:d=1", "-vf", `drawbox=x=70:y=270:w=940:h=650:color=0x0D2635@1:t=fill,drawbox=x=70:y=270:w=10:h=650:color=0x2ED6C4@1:t=fill,drawbox=x=90:y=300:w=455:h=62:color=0xFFAA3C@1:t=fill,ass=filename='${path.basename(assFile)}'`, "-frames:v", "1", "-update", "1", output], { cwd: dir });
+  asset.path = output;
+  asset.url = `/video-jobs/${job.id}/assets/generated/${asset.id}.png`;
+  asset.fileName = `${asset.id}.png`;
+  asset.mediaKind = "image";
+  asset.previewUrl = asset.url;
+}
+async function discoverLocalProjectAssets(job) {
+  if (!job.contentId) return [];
+  const dir = confined(contentRoot, safeName(job.contentId));
+  let entries = [];
+  try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return []; }
+  return entries.filter(entry => entry.isFile() && ["image", "video"].includes(mediaKindFor(entry.name))).slice(0, 6).map((entry, index) => ({
+    id: `local-${crypto.randomBytes(4).toString("hex")}`,
+    fileName: entry.name,
+    path: path.join(dir, entry.name),
+    url: `/content-items/${safeName(job.contentId)}/${encodeURIComponent(entry.name)}`,
+    previewUrl: `/content-items/${safeName(job.contentId)}/${encodeURIComponent(entry.name)}`,
+    sourceType: "local-derived",
+    sourceLabel: "当前内容包本地素材",
+    mediaKind: mediaKindFor(entry.name),
+    title: `本地证据素材 ${index + 1}`,
+    usagePurpose: "展示本次口播对应的真实项目证据",
+    licenseBasis: "user-owned-local",
+    ownership: "user-owned-local",
+    reviewStatus: "pending",
+    approved: false,
+    discoveredAutomatically: true,
+    placement: null,
+    createdAt: new Date().toISOString()
+  }));
+}
+async function prepareAssetCandidates(job) {
+  if (job.assetDiscovery?.preparedAt) return job.assetDiscovery;
+  const duration = (job.currentPlan?.keepSegments || []).reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+  const beats = (job.contentDirection?.shooting?.visualBeats || []).filter(item => item && (item.asset || item.purpose)).slice(0, 6);
+  const assets = [];
+  const visualNodes = (beats.length ? beats : (job.currentPlan?.overlayCards || []).map(card => ({ segment: card.text, asset: card.text, purpose: "强化当前口播重点" }))).slice(0, 6);
+  if (!visualNodes.length) visualNodes.push({ segment: "开头结果", asset: "本次口播的核心结果信息卡", purpose: "让观众先看到本条视频要交付的结果" });
+  for (const [index, beat] of visualNodes.entries()) {
+    const asset = {
+      id: `generated-${crypto.randomBytes(4).toString("hex")}`,
+      sourceType: "ai-generated-free",
+      sourceLabel: "本地规则生成信息卡",
+      title: String(beat.segment || `视觉节点 ${index + 1}`),
+      usagePurpose: String(beat.purpose || beat.asset || "强化当前口播内容"),
+      requestedAsset: String(beat.asset || "本地信息卡"),
+      licenseBasis: "locally-generated",
+      ownership: "project-generated",
+      reviewStatus: "pending",
+      approved: false,
+      generatedLocally: true,
+      discoveredAutomatically: true,
+      paymentRequired: false,
+      paymentConfirmed: true,
+      placement: candidatePlacement(index, visualNodes.length, duration),
+      createdAt: new Date().toISOString()
+    };
+    await writeGeneratedCandidateCard(job, asset, asset.title, asset.usagePurpose);
+    assets.push(asset);
+  }
+  assets.push(...await discoverLocalProjectAssets(job));
+  const sourceIds = new Set((job.contentDirection?.referenceResearch?.sourceIds || []).map(String));
+  const catalog = await referenceCatalog();
+  for (const item of catalog.filter(entry => sourceIds.has(String(entry.sourceId))).slice(0, 3)) {
+    const creatorName = String(item.creatorName || "待填写创作者公开名称");
+    const placement = candidatePlacement(Math.min(assets.length, Math.max(1, visualNodes.length - 1)), Math.max(visualNodes.length, 2), duration);
+    assets.push({
+      id: `external-${crypto.randomBytes(4).toString("hex")}`,
+      fileName: "待附加已获授权或必要引用片段",
+      path: null,
+      url: null,
+      previewUrl: null,
+      sourceType: "external-creator",
+      sourceLabel: "口播稿参考视频候选",
+      mediaKind: "video",
+      title: item.topic || "外部参考视频",
+      creatorName,
+      workTitle: item.topic || "",
+      sourceUrl: item.url || "",
+      creatorProfileUrl: item.creatorProfileUrl || "",
+      usagePurpose: "",
+      licenseBasis: "",
+      attributionText: creatorNameIsUsable(creatorName) ? `来源：${creatorName}｜${item.topic || "原视频"}` : "",
+      clipStart: 0,
+      clipEnd: null,
+      clipDuration: null,
+      reviewStatus: "pending",
+      approved: false,
+      discoveredAutomatically: true,
+      paymentRequired: false,
+      paymentConfirmed: true,
+      placement,
+      createdAt: new Date().toISOString()
+    });
+  }
+  job.assets = [...(job.assets || []), ...assets].map(normalizeAssetRecord);
+  job.assetDiscovery = {
+    preparedAt: new Date().toISOString(),
+    visualNodes: visualNodes.map((beat, index) => ({ id: `visual-node-${index + 1}`, segment: String(beat.segment || ""), requestedAsset: String(beat.asset || ""), purpose: String(beat.purpose || ""), placement: candidatePlacement(index, visualNodes.length, duration) })),
+    sourcePriority: ["local-derived", "licensed-free", "authorized-external", "commentary-quotation", "paid-with-confirmation"],
+    localCandidates: assets.filter(asset => !EXTERNAL_SOURCE_TYPES.has(asset.sourceType)).length,
+    externalCandidates: assets.filter(asset => EXTERNAL_SOURCE_TYPES.has(asset.sourceType)).length,
+    freeStockConnector: "not-configured",
+    paidGeneration: { enabled: false, requiresExplicitCostConfirmation: true },
+    note: "免费图库连接器尚未配置；本次已优先生成本地零费用卡片并登记参考视频候选。"
+  };
+  job.assetReview = assetReviewSummary(job, duration);
+  await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
+  await saveJob(job);
+  return job.assetDiscovery;
+}
 async function ensureMediaManifest(job, version) {
   const jobDir = confined(jobsRoot, job.id);
-  const assets = (job.assets || []).map(asset => ({
-    id: asset.id,
-    fileName: asset.fileName,
-    path: asset.path,
-    url: asset.url,
-    source: "local-upload",
-    ownership: asset.ownership || "user-provided",
-    license: asset.license || "user-confirmed",
-    approved: asset.approved === true,
-    placement: asset.placement || null,
-    eligibleForRender: asset.approved === true && !!asset.placement,
-    composited: false
-  }));
-  const manifest = { version, policy: "local-approved-only", cloudGenerationEnabled: false, externalUploadEnabled: false, assets, generatedAt: new Date().toISOString() };
+  const outputDuration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || null;
+  const assets = (job.assets || []).map(raw => {
+    const asset = normalizeAssetRecord(raw);
+    const complianceIssues = assetComplianceIssues(asset, job, outputDuration);
+    return {
+      id: asset.id,
+      fileName: asset.fileName,
+      path: asset.path,
+      url: asset.url,
+      sourceType: asset.sourceType,
+      sourceLabel: asset.sourceLabel || "",
+      mediaKind: asset.mediaKind,
+      ownership: asset.ownership || "",
+      creatorName: asset.creatorName,
+      workTitle: asset.workTitle,
+      sourceUrl: asset.sourceUrl,
+      clipStart: asset.clipStart,
+      clipEnd: asset.clipEnd,
+      clipDuration: asset.clipDuration,
+      usagePurpose: asset.usagePurpose,
+      licenseBasis: asset.licenseBasis,
+      attributionText: asset.attributionText,
+      paymentRequired: asset.paymentRequired,
+      paymentConfirmed: asset.paymentConfirmed,
+      reviewStatus: asset.reviewStatus,
+      approved: asset.reviewStatus === "approved",
+      placement: asset.placement,
+      complianceIssues,
+      eligibleForRender: asset.reviewStatus === "approved" && complianceIssues.length === 0,
+      composited: false
+    };
+  });
+  const review = assetReviewSummary(job, outputDuration);
+  const manifest = { version, policy: "priority-sourced-user-approved", cloudGenerationEnabled: false, paidGenerationRequiresConfirmation: true, externalUploadEnabled: false, review, assets, generatedAt: new Date().toISOString() };
   await writeJson(path.join(jobDir, `media-manifest-v${version}.json`), manifest);
   return manifest;
+}
+function masterDimensions(job) {
+  if (job.options?.layout === "square") return { width: 1080, height: 1080 };
+  if (job.options?.layout === "original") return { width: Math.max(2, Math.floor(Number(job.source?.width || 1080) / 2) * 2), height: Math.max(2, Math.floor(Number(job.source?.height || 1920) / 2) * 2) };
+  return { width: 1080, height: 1920 };
+}
+async function buildMediaRenderPlan(job, version, manifest, firstInputIndex) {
+  const renderable = manifest.assets.filter(asset => asset.eligibleForRender);
+  const dimensions = masterDimensions(job);
+  const inputArgs = [], filters = [], attributions = [];
+  let inputIndex = firstInputIndex;
+  for (const asset of renderable) {
+    const placementDuration = asset.placement.end - asset.placement.start;
+    if (asset.mediaKind === "image") inputArgs.push("-loop", "1", "-framerate", "30", "-t", placementDuration.toFixed(3), "-i", asset.path);
+    else {
+      const sourceStart = Math.max(0, Number(asset.clipStart || 0));
+      const metadata = await probe(asset.path);
+      if (!metadata.videoCodec || sourceStart + placementDuration > metadata.duration + 0.1) throw new Error(`素材 ${asset.id} 的截取区间超过本地视频时长`);
+      asset.renderSourceMetadata = { duration: metadata.duration, width: metadata.width, height: metadata.height, videoCodec: metadata.videoCodec };
+      inputArgs.push("-ss", sourceStart.toFixed(3), "-t", placementDuration.toFixed(3), "-i", asset.path);
+    }
+    const mode = asset.placement.mode || "broll";
+    const targetWidthRaw = mode.startsWith("comparison-") ? Math.floor(dimensions.width / 2) : mode === "pip" ? Math.floor(dimensions.width * 0.42) : dimensions.width;
+    const targetHeightRaw = mode.startsWith("comparison-") ? dimensions.height : mode === "pip" ? Math.floor(dimensions.height * 0.42) : dimensions.height;
+    const targetWidth = Math.max(2, Math.floor(targetWidthRaw / 2) * 2), targetHeight = Math.max(2, Math.floor(targetHeightRaw / 2) * 2);
+    filters.push(`[${inputIndex}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=0x07131D,setsar=1,trim=duration=${placementDuration.toFixed(3)},setpts=PTS-STARTPTS+${asset.placement.start.toFixed(3)}/TB[media${inputIndex}]`);
+    const x = mode === "comparison-right" ? dimensions.width - targetWidth : mode === "pip" ? dimensions.width - targetWidth - 42 : 0;
+    const y = mode === "pip" ? Math.round(dimensions.height * 0.14) : 0;
+    filters.push(`[__MEDIA_BASE__][media${inputIndex}]overlay=x=${x}:y=${y}:eof_action=pass:shortest=0[__MEDIA_OUT__]`);
+    if (EXTERNAL_SOURCE_TYPES.has(asset.sourceType)) attributions.push({ start: asset.placement.start, end: asset.placement.end, text: asset.attributionText });
+    asset.scheduledForComposite = true;
+    inputIndex += 1;
+  }
+  const attributionFile = attributions.length ? await writeMediaAttributionAss(confined(jobsRoot, job.id), attributions, version, dimensions) : null;
+  manifest.review = assetReviewSummary(job, manifest.review?.outputDuration || null);
+  manifest.renderedAssetIds = renderable.map(asset => asset.id);
+  manifest.attributionTrack = attributionFile ? path.basename(attributionFile) : null;
+  manifest.generatedAt = new Date().toISOString();
+  await writeJson(path.join(confined(jobsRoot, job.id), `media-manifest-v${version}.json`), manifest);
+  return { inputArgs, filters, attributions, attributionFile, renderable, nextInputIndex: inputIndex, dimensions };
+}
+async function finalizeMediaManifest(job, version, manifest, mediaPlan) {
+  const rendered = new Set(mediaPlan.renderable.map(asset => asset.id));
+  for (const asset of manifest.assets) {
+    asset.composited = rendered.has(asset.id);
+    asset.scheduledForComposite = false;
+  }
+  manifest.renderedAssetIds = [...rendered];
+  manifest.renderCompletedAt = new Date().toISOString();
+  await writeJson(path.join(confined(jobsRoot, job.id), `media-manifest-v${version}.json`), manifest);
+  return manifest;
+}
+async function writeMediaAttributionAss(jobDir, attributions, version, dimensions) {
+  const fontSize = dimensions.height <= 1080 ? 30 : 36;
+  const margin = dimensions.height <= 1080 ? 44 : 92;
+  const lines = [
+    "[Script Info]", "ScriptType: v4.00+", `PlayResX: ${dimensions.width}`, `PlayResY: ${dimensions.height}`, "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
+    "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+    `Style: Source,Microsoft YaHei,${fontSize},&H00FFFFFF,&H000000FF,&H00101010,&H9007131D,0,0,0,0,100,100,0,0,3,2,0,1,${margin},${margin},${margin},1`, "",
+    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
+  ];
+  for (const item of attributions) lines.push(`Dialogue: 3,${assTime(item.start)},${assTime(item.end)},Source,,0,0,0,,{\\fad(120,120)}${assEscape(item.text)}`);
+  const file = path.join(jobDir, `media-attribution-v${version}.ass`);
+  await fsp.writeFile(file, lines.join("\r\n"), "utf8");
+  return file;
 }
 function informationPanelItems(card) {
   const explicit = (Array.isArray(card?.items) ? card.items : []).map(value => String(value || "").trim().slice(0, 14)).filter(Boolean).slice(0, 4);
@@ -944,9 +1289,20 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
     && coverPackaging.wide16x9?.metadata?.width === 1920 && coverPackaging.wide16x9?.metadata?.height === 1080
     && coverPackaging.landscape4x3?.metadata?.width === 1440 && coverPackaging.landscape4x3?.metadata?.height === 1080
   );
+  const approvedMedia = mediaManifest.assets.filter(asset => asset.approved);
+  const externalMedia = approvedMedia.filter(asset => EXTERNAL_SOURCE_TYPES.has(asset.sourceType));
+  const mediaCompliance = {
+    reviewComplete: mediaManifest.review?.reviewComplete === true,
+    approvedAssetsValid: approvedMedia.every(asset => (asset.complianceIssues || []).length === 0),
+    approvedAssetsComposited: approvedMedia.every(asset => asset.composited === true),
+    externalMetadataComplete: externalMedia.every(asset => creatorNameIsUsable(asset.creatorName) && asset.workTitle && asset.sourceUrl && asset.usagePurpose && asset.licenseBasis),
+    externalAttributionRendered: externalMedia.every(asset => asset.composited === true && asset.attributionText && mediaManifest.attributionTrack),
+    externalScriptDisclosure: externalMedia.every(asset => String(job.script || "").includes(asset.creatorName))
+  };
+  const mediaPass = Object.values(mediaCompliance).every(Boolean);
   const report = {
     version,
-    pass: metadata.videoCodec === "h264" && metadata.audioCodec === "aac" && metadata.pixelFormat === "yuv420p" && Math.abs(metadata.duration - expectedDuration) < 1.6 && sdrBt709 && captionSafeArea && coverDimensions,
+    pass: metadata.videoCodec === "h264" && metadata.audioCodec === "aac" && metadata.pixelFormat === "yuv420p" && Math.abs(metadata.duration - expectedDuration) < 1.6 && sdrBt709 && captionSafeArea && coverDimensions && mediaPass,
     checks: {
       decodes: true,
       h264: metadata.videoCodec === "h264",
@@ -964,14 +1320,20 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
       cutDensityPerMinute: Number((timeline.clips.length / Math.max(metadata.duration / 60, 0.01)).toFixed(2)),
       transcriptBoundaryCrossings: 0,
       variantDimensions,
-      coverDimensions
+      coverDimensions,
+      mediaReviewComplete: mediaCompliance.reviewComplete,
+      mediaApprovedAssetsValid: mediaCompliance.approvedAssetsValid,
+      mediaApprovedAssetsComposited: mediaCompliance.approvedAssetsComposited,
+      externalMetadataComplete: mediaCompliance.externalMetadataComplete,
+      externalAttributionRendered: mediaCompliance.externalAttributionRendered,
+      externalScriptDisclosure: mediaCompliance.externalScriptDisclosure
     },
     metrics: { expectedDuration, actualDuration: metadata.duration, minimumSegmentDuration: minimumSegment, integratedLufs: detection.integratedLufs, blackFrames: detection.blackFrames, freezeFrames: detection.freezeFrames, colorMetadata: { range: metadata.colorRange, space: metadata.colorSpace, transfer: metadata.colorTransfer, primaries: metadata.colorPrimaries } },
     colorManagement,
     packaging,
     captionPackaging,
     coverPackaging,
-    media: { policy: mediaManifest.policy, approvedAssets: mediaManifest.assets.filter(asset => asset.approved).length, renderedAssets: mediaManifest.assets.filter(asset => asset.composited).length },
+    media: { policy: mediaManifest.policy, approvedAssets: approvedMedia.length, renderedAssets: mediaManifest.assets.filter(asset => asset.composited).length, externalAssets: externalMedia.length, compliance: mediaCompliance, issues: mediaManifest.review?.complianceIssues || [] },
     limitations: ["未执行人脸构图质量判断", "跳切观感仍需最终人工审核", "平台变体由审核母版转换，不改变剪辑时间线"],
     generatedAt: new Date().toISOString()
   };
@@ -1016,6 +1378,8 @@ async function renderVersion(job, version) {
       }
     }
   }
+  const captionInputCount = captionPackaging.engine === "hyperframes" ? 1 : 0;
+  const mediaPlan = await buildMediaRenderPlan(job, version, mediaManifest, 1 + hyperframes.clips.length + captionInputCount);
   segments.forEach((segment, i) => {
     const d = segment.end - segment.start;
     filters.push(`[0:v]trim=start=${segment.start.toFixed(3)}:end=${segment.end.toFixed(3)},setpts=PTS-STARTPTS[v${i}]`);
@@ -1025,6 +1389,16 @@ async function renderVersion(job, version) {
   filters.push(`[vcat]${colorManagement.filter}[vcolor]`);
   filters.push(`[vcolor]${videoLayoutFilter(job.options.layout || "vertical")}[vbase]`);
   let videoLabel = "vbase";
+  for (let index = 0; index < mediaPlan.filters.length; index += 2) {
+    filters.push(mediaPlan.filters[index]);
+    const nextLabel = `vmedia${index / 2}`;
+    filters.push(mediaPlan.filters[index + 1].replace("__MEDIA_BASE__", videoLabel).replace("__MEDIA_OUT__", nextLabel));
+    videoLabel = nextLabel;
+  }
+  if (mediaPlan.attributionFile) {
+    filters.push(`[${videoLabel}]ass=filename='${path.basename(mediaPlan.attributionFile)}'[vattribution]`);
+    videoLabel = "vattribution";
+  }
   hyperframes.clips.forEach((card, index) => {
     const cardDuration = Math.max(0.5, card.outputEnd - card.outputStart);
     filters.push(`[${index + 1}:v]trim=duration=${cardDuration.toFixed(3)},setpts=PTS-STARTPTS+${card.outputStart.toFixed(3)}/TB[card${index}]`);
@@ -1035,15 +1409,15 @@ async function renderVersion(job, version) {
     const captionInputIndex = hyperframes.clips.length + 1;
     filters.push(`[${captionInputIndex}:v]trim=duration=${duration.toFixed(3)},setpts=PTS-STARTPTS[captiontrack]`);
     filters.push(`[${videoLabel}][captiontrack]overlay=0:0:eof_action=pass:shortest=0[vsub]`);
-    filters.push("[vsub]fps=30,format=yuv420p[vout]");
+    filters.push("[vsub]fps=30,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709[vout]");
   } else if (captionsEnabled) {
     filters.push(`[${videoLabel}]ass=filename='captions-v${version}.ass'[vsub]`);
-    filters.push("[vsub]fps=30,format=yuv420p[vout]");
-  } else filters.push(`[${videoLabel}]fps=30,format=yuv420p[vout]`);
+    filters.push("[vsub]fps=30,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709[vout]");
+  } else filters.push(`[${videoLabel}]fps=30,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709[vout]`);
   filters.push("[acat]highpass=f=80,lowpass=f=15000,loudnorm=I=-16:TP=-1.5:LRA=11[aout]");
   const filterFile = path.join(jobDir, `filter-v${version}.ffscript`); await fsp.writeFile(filterFile, filters.join(";\r\n") + ";\r\n", "utf8");
   const outputPath = path.join(jobDir, `final-v${version}.mp4`); let progressBuffer = "", stderr = "";
-  const inputs = ["-i", job.sourcePath, ...hyperframes.clips.flatMap(card => ["-c:v", "libvpx-vp9", "-i", card.path]), ...(captionPackaging.engine === "hyperframes" ? ["-c:v", "libvpx-vp9", "-i", captionPackaging.path] : [])];
+  const inputs = ["-i", job.sourcePath, ...hyperframes.clips.flatMap(card => ["-c:v", "libvpx-vp9", "-i", card.path]), ...(captionPackaging.engine === "hyperframes" ? ["-c:v", "libvpx-vp9", "-i", captionPackaging.path] : []), ...mediaPlan.inputArgs];
   const child = spawn("ffmpeg", ["-y", "-hide_banner", ...inputs, "-/filter_complex", filterFile, "-map", "[vout]", "-map", "[aout]", "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", outputPath], { cwd: jobDir, windowsHide: true });
   child.stdout.on("data", async chunk => {
     progressBuffer += String(chunk); const lines = progressBuffer.split(/\r?\n/); progressBuffer = lines.pop() || "";
@@ -1053,6 +1427,7 @@ async function renderVersion(job, version) {
   const code = await new Promise((resolve, reject) => { child.on("error", reject); child.on("close", resolve); });
   if (code !== 0) throw Object.assign(new Error(`ffmpeg 渲染失败（退出码 ${code}）`), { stderr });
   await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
+  await finalizeMediaManifest(job, version, mediaManifest, mediaPlan);
   const output = await probe(outputPath), thumbnail = path.join(jobDir, `thumbnail-v${version}.jpg`);
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(1.2, output.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnail]);
   await fsp.copyFile(outputPath, path.join(jobDir, "final.mp4"));
@@ -1146,7 +1521,11 @@ async function processJob(job) {
     job.currentPlan = { version: 1, ...validation, editSummary: aiPlan?.editSummary || "本地停顿剪辑", removedReasons: aiPlan?.removedReasons || [], createdAt: new Date().toISOString() };
     await writeJson(path.join(jobDir, "edit-plan-v1.json"), job.currentPlan);
     await saveJob(job);
-    await renderVersion(job, 1);
+    await prepareAssetCandidates(job);
+    job.status = "awaiting_asset_review";
+    job.progress = 60;
+    job.assetReview = assetReviewSummary(job, job.currentPlan.keepSegments.reduce((sum, segment) => sum + segment.end - segment.start, 0));
+    await saveJob(job);
   } catch (error) {
     job.status = "error"; job.error = error.message; job.errorDetail = String(error.stderr || "").slice(-8000); await saveJob(job);
   } finally { running.delete(job.id); }
@@ -1209,11 +1588,50 @@ async function replanJob(job, feedback = "") {
     job.currentPlan = { version, ...validation, editSummary: result.data?.editSummary || "重新生成语义剪辑计划", removedReasons: result.data?.removedReasons || [], feedback: feedback || null, createdAt: new Date().toISOString() };
     await writeJson(path.join(dir, `edit-plan-v${version}.json`), job.currentPlan);
     await saveJob(job);
+    const duration = job.currentPlan.keepSegments.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0);
+    job.assetReview = assetReviewSummary(job, duration);
+    if (!job.output || !job.assetReview.renderReady) {
+      job.status = "awaiting_asset_review";
+      job.progress = 60;
+      await saveJob(job);
+      return;
+    }
     await renderVersion(job, version);
   } catch (error) {
     Object.assign(job, previous);
     job.status = previous.status === "approved" ? "approved" : "awaiting_review";
     job.revisionError = error.message;
+    job.errorDetail = String(error.stderr || "").slice(-8000);
+    await saveJob(job);
+  } finally { running.delete(job.id); }
+}
+async function renderReviewedAssets(job, reason = "素材审核完成") {
+  if (running.has(job.id)) return;
+  const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+  const review = assetReviewSummary(job, duration);
+  if (!review.reviewComplete) throw Object.assign(new Error("仍有素材未批准或拒绝，不能开始最终渲染"), { statusCode: 409 });
+  if (!review.renderReady) throw Object.assign(new Error(review.complianceIssues.map(item => `${item.assetId}：${item.issue}`).join("；") || "素材合规检查未通过"), { statusCode: 409 });
+  running.set(job.id, true);
+  try {
+    if (!job.source || !job.transcript || !job.currentPlan?.keepSegments?.length) throw new Error("任务缺少源视频、逐字稿或当前剪辑计划");
+    const previousVersions = job.versions || [];
+    const highestRendered = Math.max(0, ...previousVersions.map(item => Number(item.version) || 0));
+    const version = highestRendered > 0 ? Math.max(highestRendered, Number(job.currentVersion) || 0) + 1 : Math.max(1, Number(job.currentVersion) || 1);
+    job.currentVersion = version;
+    job.currentPlan = { ...job.currentPlan, version, feedback: reason, createdAt: new Date().toISOString() };
+    job.status = "rendering";
+    job.progress = 62;
+    job.assetReview = review;
+    delete job.error;
+    delete job.errorDetail;
+    delete job.approvedAt;
+    delete job.revisionError;
+    await writeJson(path.join(confined(jobsRoot, job.id), `edit-plan-v${version}.json`), job.currentPlan);
+    await saveJob(job);
+    await renderVersion(job, version);
+  } catch (error) {
+    job.status = "error";
+    job.error = error.message;
     job.errorDetail = String(error.stderr || "").slice(-8000);
     await saveJob(job);
   } finally { running.delete(job.id); }
@@ -1323,7 +1741,7 @@ const server = http.createServer(async (req, res) => {
       try { await run("ffmpeg", ["-version"]); ffmpeg = true; } catch {}
       try { await run("npx", ["-y", "hyperframes", "--version"], { shell: true }); hyperframes = true; } catch {}
       try { ai = await runAi({ operation: "config" }, contentRoot, "model-config"); } catch (error) { ai = { success: false, error: error.message }; }
-      return json(res, 200, { ok: true, service: "koubo-ai-workflow", version: 2, localOnlyVideo: true, ffmpeg, hyperframes, ai: { configured: !!ai?.success, model: ai?.model || null, transcriptionModel: ai?.transcription_model || "faster-whisper/small" }, jobsRoot, contentRoot });
+      return json(res, 200, { ok: true, service: "koubo-ai-workflow", version: 3, localOnlyVideo: true, ffmpeg, hyperframes, ai: { configured: !!ai?.success, model: ai?.model || null, transcriptionModel: ai?.transcription_model || "faster-whisper/small" }, jobsRoot, contentRoot });
     }
     if (req.method === "GET" && pathname === "/api/contents") return json(res, 200, { items: await listGeneratedContents() });
     if (req.method === "POST" && pathname === "/api/contents/generate") {
@@ -1369,7 +1787,14 @@ const server = http.createServer(async (req, res) => {
       return json(res, 202, { job });
     }
     const reviseMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/revise$/);
-    if (req.method === "POST" && reviseMatch) { const body = await readBodyJson(req); const feedback = String(body.feedback || "").trim(); if (!feedback) return json(res, 400, { error: "请填写修改意见" }); const job = await readJob(reviseMatch[1]); reviseJob(job, feedback); return json(res, 202, { job }); }
+    if (req.method === "POST" && reviseMatch) {
+      const body = await readBodyJson(req); const feedback = String(body.feedback || "").trim();
+      if (!feedback) return json(res, 400, { error: "请填写修改意见" });
+      const job = await readJob(reviseMatch[1]);
+      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+      if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行成片返修" });
+      reviseJob(job, feedback); return json(res, 202, { job });
+    }
     const replanMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/replan$/);
     if (req.method === "POST" && replanMatch) {
       const body = await readBodyJson(req);
@@ -1383,6 +1808,8 @@ const server = http.createServer(async (req, res) => {
       const body = await readBodyJson(req);
       const job = await readJob(rerenderMatch[1]);
       if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
+      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+      if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行本地重渲染" });
       rerenderJob(job, String(body.reason || ""), body);
       return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
     }
@@ -1401,24 +1828,106 @@ const server = http.createServer(async (req, res) => {
       const assetsDir = path.join(confined(jobsRoot, job.id), "assets"); await fsp.mkdir(assetsDir, { recursive: true });
       const assetPath = path.join(assetsDir, `${assetId}-${fileName}`);
       const sizeBytes = await receiveUpload(req, assetPath);
-      const asset = { id: assetId, fileName, path: assetPath, url: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, sizeBytes, ownership: "user-provided", license: "pending-confirmation", approved: false, placement: null, createdAt: new Date().toISOString() };
-      job.assets = [...(job.assets || []), asset]; await saveJob(job);
+      const asset = normalizeAssetRecord({ id: assetId, fileName, path: assetPath, url: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, previewUrl: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, sizeBytes, sourceType: "local-upload", sourceLabel: "用户本地上传", mediaKind: mediaKindFor(fileName), ownership: "user-provided", licenseBasis: "pending-confirmation", reviewStatus: "pending", approved: false, placement: null, discoveredAutomatically: false, paymentRequired: false, paymentConfirmed: true, createdAt: new Date().toISOString() });
+      job.assets = [...(job.assets || []), asset];
+      job.status = "awaiting_asset_review";
+      job.assetReview = assetReviewSummary(job);
+      await saveJob(job);
       return json(res, 201, { job, asset });
+    }
+    const assetFileMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/([^/]+)\/file$/);
+    if (req.method === "POST" && assetFileMatch) {
+      const job = await readJob(assetFileMatch[1]);
+      const asset = (job.assets || []).find(item => item.id === assetFileMatch[2]);
+      if (!asset) return json(res, 404, { error: "素材不存在" });
+      const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
+      const kind = mediaKindFor(fileName);
+      if (!["image", "video"].includes(kind)) return json(res, 400, { error: "替换文件必须是图片或视频" });
+      const assetsDir = path.join(confined(jobsRoot, job.id), "assets", "replacements");
+      await fsp.mkdir(assetsDir, { recursive: true });
+      const revision = (asset.fileVersions || []).length + 1;
+      const target = path.join(assetsDir, `${asset.id}-r${revision}-${fileName}`);
+      const sizeBytes = await receiveUpload(req, target);
+      asset.fileVersions = [...(asset.fileVersions || []), { path: asset.path || null, url: asset.url || null, fileName: asset.fileName || null, replacedAt: new Date().toISOString() }];
+      asset.path = target;
+      asset.url = `/video-jobs/${job.id}/assets/replacements/${asset.id}-r${revision}-${fileName}`;
+      asset.previewUrl = asset.url;
+      asset.fileName = fileName;
+      asset.mediaKind = kind;
+      asset.sizeBytes = sizeBytes;
+      asset.reviewStatus = "pending";
+      asset.approved = false;
+      asset.updatedAt = new Date().toISOString();
+      job.status = "awaiting_asset_review";
+      job.assetReview = assetReviewSummary(job);
+      await saveJob(job);
+      return json(res, 200, { job, asset });
     }
     const assetApprovalMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/([^/]+)\/approve$/);
     if (req.method === "POST" && assetApprovalMatch) {
       const body = await readBodyJson(req), job = await readJob(assetApprovalMatch[1]);
       const asset = (job.assets || []).find(item => item.id === assetApprovalMatch[2]);
       if (!asset) return json(res, 404, { error: "素材不存在" });
-      asset.approved = body.approved === true;
-      asset.ownership = String(body.ownership || asset.ownership || "user-provided").slice(0, 80);
-      asset.license = String(body.license || (asset.approved ? "user-confirmed" : "pending-confirmation")).slice(0, 80);
-      asset.placement = body.placement && Number.isFinite(Number(body.placement.start)) && Number.isFinite(Number(body.placement.end)) ? { start: Number(body.placement.start), end: Number(body.placement.end), mode: String(body.placement.mode || "broll") } : null;
-      asset.updatedAt = new Date().toISOString(); await saveJob(job);
+      const before = JSON.parse(JSON.stringify(asset));
+      const reviewStatus = body.reviewStatus === "rejected" || body.approved === false ? "rejected" : body.approved === true ? "approved" : "pending";
+      const nextSourceType = String(body.sourceType || asset.sourceType || "local-upload").slice(0, 80);
+      Object.assign(asset, {
+        reviewStatus,
+        approved: reviewStatus === "approved",
+        ownership: String(body.ownership || asset.ownership || "user-provided").slice(0, 120),
+        sourceType: nextSourceType,
+        creatorName: String(body.creatorName ?? asset.creatorName ?? "").trim().slice(0, 120),
+        workTitle: String(body.workTitle ?? asset.workTitle ?? "").trim().slice(0, 180),
+        sourceUrl: String(body.sourceUrl ?? asset.sourceUrl ?? "").trim().slice(0, 1000),
+        usagePurpose: String(body.usagePurpose ?? asset.usagePurpose ?? "").trim().slice(0, 500),
+        licenseBasis: String(body.licenseBasis || body.license || asset.licenseBasis || "").trim().slice(0, 120),
+        attributionText: String(body.attributionText ?? asset.attributionText ?? "").trim().slice(0, 240),
+        clipStart: Number.isFinite(Number(body.clipStart)) ? Math.max(0, Number(body.clipStart)) : Number(asset.clipStart || 0),
+        clipEnd: Number.isFinite(Number(body.clipEnd)) && Number(body.clipEnd) > 0 ? Number(body.clipEnd) : asset.clipEnd,
+        clipDuration: Number.isFinite(Number(body.clipDuration)) && Number(body.clipDuration) > 0 ? Number(body.clipDuration) : asset.clipDuration,
+        paymentConfirmed: PAID_SOURCE_TYPES.has(nextSourceType) ? body.paymentConfirmed === true : body.paymentConfirmed === undefined ? asset.paymentConfirmed === true : body.paymentConfirmed === true,
+        placement: body.placement ? normalizePlacement(body.placement) : asset.placement,
+        updatedAt: new Date().toISOString()
+      });
+      const normalized = normalizeAssetRecord(asset);
+      Object.assign(asset, normalized);
+      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+      const issues = assetComplianceIssues(asset, job, duration);
+      if (reviewStatus === "approved" && issues.length) {
+        Object.keys(asset).forEach(key => delete asset[key]);
+        Object.assign(asset, before);
+        return json(res, 409, { error: issues.join("；"), issues });
+      }
+      job.assetDecisions = [...(job.assetDecisions || []), { assetId: asset.id, reviewStatus, placement: asset.placement, licenseBasis: asset.licenseBasis, usagePurpose: asset.usagePurpose, decidedAt: new Date().toISOString() }];
+      job.assetReview = assetReviewSummary(job, duration);
+      job.status = "awaiting_asset_review";
+      delete job.approvedAt;
+      await writeJson(path.join(confined(jobsRoot, job.id), "asset-decisions.json"), job.assetDecisions);
+      await saveJob(job);
       return json(res, 200, { job, asset });
     }
+    const assetRenderMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/render$/);
+    if (req.method === "POST" && assetRenderMatch) {
+      const job = await readJob(assetRenderMatch[1]);
+      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
+      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+      const review = assetReviewSummary(job, duration);
+      if (!review.reviewComplete) return json(res, 409, { error: "仍有素材未批准或拒绝", review });
+      if (!review.renderReady) return json(res, 409, { error: review.complianceIssues.map(item => `${item.assetId}：${item.issue}`).join("；"), review });
+      renderReviewedAssets(job);
+      return json(res, 202, { job, review });
+    }
     const approveMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/approve$/);
-    if (req.method === "POST" && approveMatch) { const job = await readJob(approveMatch[1]); if (!job.output) return json(res, 409, { error: "还没有可审核的成片" }); job.status = "approved"; job.approvedAt = new Date().toISOString(); await saveJob(job); await writeJson(path.join(confined(jobsRoot, job.id), "final-review.json"), { status: "approved", version: job.currentVersion, approvedAt: job.approvedAt }); return json(res, 200, { job }); }
+    if (req.method === "POST" && approveMatch) {
+      const job = await readJob(approveMatch[1]);
+      if (!job.output) return json(res, 409, { error: "还没有可审核的成片" });
+      if (job.output.qaPass !== true) return json(res, 409, { error: "当前成片QA未通过，不能最终审核" });
+      const manifest = await readJsonFile(path.join(confined(jobsRoot, job.id), `media-manifest-v${job.output.version}.json`));
+      if (manifest.review?.reviewComplete !== true || manifest.assets.some(asset => asset.approved && asset.composited !== true)) return json(res, 409, { error: "素材审核或实际合成状态不完整，不能最终审核" });
+      job.status = "approved"; job.approvedAt = new Date().toISOString(); await saveJob(job);
+      await writeJson(path.join(confined(jobsRoot, job.id), "final-review.json"), { status: "approved", version: job.currentVersion, qaPass: true, mediaReview: manifest.review, renderedAssetIds: manifest.renderedAssetIds || [], approvedAt: job.approvedAt, autoPublish: false });
+      return json(res, 200, { job });
+    }
     if (pathname.startsWith("/video-jobs/")) return await serveFile(req, res, confined(jobsRoot, pathname.slice("/video-jobs/".length)));
     if (pathname.startsWith("/content-items/")) return await serveFile(req, res, confined(contentRoot, pathname.slice("/content-items/".length)));
     for (const [prefix, base] of [["/runs/", path.join(root, "runs")], ["/docs/", path.join(root, "docs")], ["/config/", path.join(root, "config")]]) {
@@ -1431,4 +1940,6 @@ const server = http.createServer(async (req, res) => {
   }
 });
 server.on("error", error => { if (error.code === "EADDRINUSE") process.exit(0); console.error(error); process.exit(1); });
-server.listen(port, host, () => console.log(`AI口播工作台：http://${host}:${port}/`));
+if (process.env.KOUBO_NO_LISTEN !== "1") server.listen(port, host, () => console.log(`AI口播工作台：http://${host}:${port}/`));
+
+export { normalizeAssetRecord, assetComplianceIssues, assetReviewSummary, candidatePlacement };

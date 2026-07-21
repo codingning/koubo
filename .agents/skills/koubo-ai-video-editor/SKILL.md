@@ -18,6 +18,7 @@ node .agents\skills\koubo-ai-video-editor\scripts\inspect_job.mjs "<任务目录
 ```
 
 4. 读取 `job.json`、`edit-plan.json`、`ai-brief.md`；如果已有 `final.mp4`，先把它当作基础版，不覆盖原片。
+5. 若任务状态是 `awaiting_asset_review`，先检查 `asset-candidates.json` 和网页素材审核板；所有候选必须逐条批准或拒绝，不能绕过审核直接渲染。
 
 ## 路由
 
@@ -56,6 +57,9 @@ node .agents\skills\koubo-ai-video-editor\scripts\inspect_job.mjs "<任务目录
 - 卡片必须对应正在说的内容；落地帧与关键词时间对齐。
 - 动态素材和 B-roll 不得改变事实，不得把计划包装成已完成。
 - 需要外部素材时先确认版权和公开边界。
+- 标注来源不等于授权。外部创作者素材必须记录创作者、作品、原链接、片段时长、用途、授权/引用依据和画面署名；未明确授权时只能为介绍、评论或说明原作品使用短且必要的片段。
+- 外部视频只有在口播稿自然说明创作者、网页逐条批准且本地文件已附加后才能进入渲染；纯装饰性搬运不得批准。
+- 付费素材或付费生成调用前必须展示用途和预计费用并获得当次确认。
 
 ### 4. 输出与QA
 
@@ -75,6 +79,7 @@ ffmpeg -v error -i "<成片>" -f null -
 ```
 
 确认 H.264、AAC、yuv420p、完整解码、时长合理、无明显黑帧/冻结、字幕未越界、切点无爆音。
+同时检查 `media-manifest-vN.json`：审核是否完成、批准素材是否 `composited: true`、外部来源署名是否渲染、稿件是否披露创作者；任一失败不得最终审核。
 
 ## 隐私与费用门禁
 

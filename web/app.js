@@ -623,14 +623,14 @@
     const labels = {
       uploaded: "视频已上传", analyzing: "正在分析画面、音轨和停顿", transcribing: "正在本地逐字转录（首次可能下载模型）",
       planning: "AI正在根据逐字稿生成剪辑决策", rendering: "正在加字幕、重点卡片、调音量并渲染",
-      revising: "正在按你的意见生成新版本", awaiting_review: "成片已完成，请你最终审核", approved: "已审核通过", error: "自动处理失败"
+      awaiting_asset_review: "素材候选已准备，请逐条批准或拒绝", revising: "正在按你的意见生成新版本", awaiting_review: "成片已完成，请你最终审核", approved: "已审核通过", error: "自动处理失败"
     };
     return labels[job.status] || job.status || "处理中";
   }
 
   function renderAutomationRail(status) {
-    const stageByStatus = { uploaded: "upload", analyzing: "upload", transcribing: "transcribe", planning: "plan", rendering: "render", revising: "render", awaiting_review: "review", approved: "review", error: "render" };
-    const order = ["upload", "transcribe", "plan", "render", "review"];
+    const stageByStatus = { uploaded: "upload", analyzing: "upload", transcribing: "transcribe", planning: "plan", awaiting_asset_review: "assets", rendering: "render", revising: "render", awaiting_review: "review", approved: "review", error: "render" };
+    const order = ["upload", "transcribe", "plan", "assets", "render", "review"];
     const current = stageByStatus[status] || status || "upload";
     const currentIndex = Math.max(0, order.indexOf(current));
     $$(".automation-rail [data-stage]").forEach((node, index) => {
@@ -664,6 +664,7 @@
     if (job.analysis) renderEditAnalysis(job);
     byId("retry-video").classList.toggle("is-hidden", job.status !== "error");
     byId("replan-video").classList.toggle("is-hidden", !(job.transcript && !["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising"].includes(job.status)));
+    renderMediaAssets(job);
     if (job.output) renderEditResult(job);
     if (job.status === "error") byId("analyze-video").disabled = false;
   }
@@ -699,8 +700,9 @@
       ? [["动态字幕轨", qa.dynamicCaptionTrack], ["字幕安全区", qa.captionSafeArea]]
       : [];
     const coverQa = output.cover?.requested ? [["封面四画幅", qa.coverDimensions ?? output.cover.available]] : [];
+    const mediaQa = [["素材审核完成", qa.mediaReviewComplete], ["批准素材已合成", qa.mediaApprovedAssetsComposited], ["外部来源署名", qa.externalAttributionRendered], ["稿件说明创作者", qa.externalScriptDisclosure]];
     byId("final-qa").innerHTML = [
-      ["H.264视频", qa.h264], ["AAC音频", qa.aac], ["yuv420p兼容", qa.yuv420p], ["BT.709 SDR", qa.sdrBt709], ["完整解码", qa.decodes], ["时长校验", qa.durationMatches], ["无长黑帧", qa.noLongBlackFrames !== false], ["无长冻结", qa.noLongFreezeFrames !== false], ...dynamicCaptionQa, ...coverQa
+      ["H.264视频", qa.h264], ["AAC音频", qa.aac], ["yuv420p兼容", qa.yuv420p], ["BT.709 SDR", qa.sdrBt709], ["完整解码", qa.decodes], ["时长校验", qa.durationMatches], ["无长黑帧", qa.noLongBlackFrames !== false], ["无长冻结", qa.noLongFreezeFrames !== false], ...dynamicCaptionQa, ...coverQa, ...mediaQa
     ].map(([label, pass]) => `<span class="qa-chip ${pass ? "pass" : "warn"}">${pass ? "✓" : "!"} ${label}</span>`).join("");
     const provenance = output.provenance === "silence-fallback" ? "停顿降级" : "语义剪辑";
     const packaging = output.packaging?.engine === "hyperframes" ? "HyperFrames" : output.packaging?.engine === "ass-fallback" ? "ASS 降级" : "无动态卡片";
@@ -845,7 +847,53 @@
 
   function renderMediaAssets(job) {
     const assets = job.assets || [];
-    byId("media-assets").innerHTML = assets.length ? assets.map(asset => `<div class="media-asset" data-asset-id="${htmlEscape(asset.id)}"><div><strong>${htmlEscape(asset.fileName)}</strong><small>${asset.approved ? "已确认权属并批准" : "待确认，默认不进入成片"}</small></div><input data-media-start type="number" min="0" step="0.1" placeholder="开始秒" value="${htmlEscape(asset.placement?.start ?? "")}"><input data-media-end type="number" min="0" step="0.1" placeholder="结束秒" value="${htmlEscape(asset.placement?.end ?? "")}"><button class="btn btn-secondary" data-approve-media>${asset.approved ? "更新位置" : "确认并批准"}</button></div>`).join("") : "<p class=\"empty-media\">尚未加入补充素材。素材只保存在当前任务目录，默认不批准、不上传云端。</p>";
+    const panel = byId("asset-review-panel");
+    panel.classList.toggle("is-hidden", !assets.length && !job.assetDiscovery);
+    const review = job.assetReview || {};
+    byId("asset-review-summary").textContent = `${Number(review.approved || 0)} 已批准 · ${Number(review.rejected || 0)} 已拒绝 · ${Number(review.pending ?? assets.filter(asset => !asset.reviewStatus || asset.reviewStatus === "pending").length)} 待决定`;
+    byId("asset-discovery-note").textContent = job.assetDiscovery?.note || "本地上传的素材也必须先审核，未批准不会进入成片。";
+    const canRender = review.reviewComplete === true && review.renderReady === true && !["rendering", "revising"].includes(job.status);
+    byId("render-with-assets").disabled = !canRender;
+    byId("render-with-assets").textContent = job.output ? "按当前素材生成新版本" : "全部决定后开始渲染";
+    const sourceLabels = {
+      "local-derived": "本地项目证据", "local-upload": "本地上传", "ai-generated-free": "本地零费用生成",
+      "licensed-free": "免费许可素材", "external-creator": "外部创作者视频", "licensed-external": "已授权外部素材",
+      "paid-stock": "付费素材", "paid-generated": "付费AI生成"
+    };
+    const licenseOptions = [
+      ["", "请选择授权/引用依据"], ["explicit-authorization", "已取得明确授权"], ["creator-permission", "创作者明确允许"],
+      ["platform-license", "平台许可允许使用"], ["commentary-quotation", "为介绍/评论作必要短引用"],
+      ["user-owned-local", "本人所有的本地素材"], ["locally-generated", "本地生成素材"]
+    ];
+    byId("media-assets").innerHTML = assets.length ? assets.map(asset => {
+      const external = ["external-creator", "licensed-external"].includes(asset.sourceType);
+      const status = asset.reviewStatus || (asset.approved ? "approved" : "pending");
+      const preview = asset.previewUrl || asset.url;
+      const previewHtml = preview
+        ? asset.mediaKind === "video" ? `<video src="${videoApiBase}${htmlEscape(preview)}" muted preload="metadata"></video>` : `<img src="${videoApiBase}${htmlEscape(preview)}" alt="素材预览">`
+        : `<div class="asset-missing">尚未附加可渲染文件</div>`;
+      const sourceLink = asset.sourceUrl ? `<a href="${htmlEscape(asset.sourceUrl)}" target="_blank" rel="noreferrer">打开原来源</a>` : "";
+      const externalFields = external ? `<div class="asset-metadata-grid">
+        <label>创作者公开名称<input data-creator-name value="${htmlEscape(asset.creatorName || "")}" placeholder="不能写待确认账号"></label>
+        <label>作品标题<input data-work-title value="${htmlEscape(asset.workTitle || "")}" placeholder="原作品标题"></label>
+        <label class="wide">原视频链接<input data-source-url value="${htmlEscape(asset.sourceUrl || "")}" placeholder="https://..."></label>
+        <label class="wide">使用目的<input data-usage-purpose value="${htmlEscape(asset.usagePurpose || "")}" placeholder="例如：分析该视频如何用结果开场"></label>
+        <label>授权/引用依据<select data-license-basis>${licenseOptions.map(([value, label]) => `<option value="${value}" ${asset.licenseBasis === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+        <label>原片截取开始秒<input data-clip-start type="number" min="0" step="0.1" value="${htmlEscape(asset.clipStart ?? 0)}"></label>
+        <label>原片截取结束秒<input data-clip-end type="number" min="0.1" step="0.1" value="${htmlEscape(asset.clipEnd ?? "")}"></label>
+        <label>引用时长（秒）<input data-clip-duration type="number" min="0.1" step="0.1" value="${htmlEscape(asset.clipDuration ?? "")}"></label>
+        <label class="wide">画面署名<input data-attribution-text value="${htmlEscape(asset.attributionText || "")}" placeholder="来源：创作者｜作品标题"></label>
+      </div>` : "";
+      return `<article class="media-asset status-${status}" data-asset-id="${htmlEscape(asset.id)}">
+        <div class="asset-preview">${previewHtml}<span>${htmlEscape(sourceLabels[asset.sourceType] || asset.sourceType || "素材")}</span></div>
+        <div class="asset-detail"><div class="asset-title"><div><strong>${htmlEscape(asset.title || asset.fileName || "补充素材")}</strong><small>${status === "approved" ? "已批准，下一次渲染会使用" : status === "rejected" ? "已拒绝，不会进入成片" : "待审核，尚不会进入成片"}</small></div>${sourceLink}</div>
+          <p>${htmlEscape(asset.requestedAsset || asset.usagePurpose || asset.sourceLabel || "")}</p>
+          <div class="asset-placement"><label>成片开始秒<input data-media-start type="number" min="0" step="0.1" value="${htmlEscape(asset.placement?.start ?? "")}"></label><label>成片结束秒<input data-media-end type="number" min="0" step="0.1" value="${htmlEscape(asset.placement?.end ?? "")}"></label><label>画面方式<select data-media-mode><option value="broll" ${asset.placement?.mode === "broll" ? "selected" : ""}>全屏B-roll</option><option value="pip" ${asset.placement?.mode === "pip" ? "selected" : ""}>右上画中画</option><option value="comparison-left" ${asset.placement?.mode === "comparison-left" ? "selected" : ""}>前后对比左侧</option><option value="comparison-right" ${asset.placement?.mode === "comparison-right" ? "selected" : ""}>前后对比右侧</option></select></label></div>
+          ${externalFields}
+          ${asset.paymentRequired ? `<label class="payment-confirm"><input data-payment-confirmed type="checkbox" ${asset.paymentConfirmed ? "checked" : ""}> 我已看到预计费用并确认本次付费调用</label>` : ""}
+          <div class="asset-actions"><label class="btn btn-secondary file-replace">${preview ? "替换文件" : "附加片段"}<input data-asset-replacement type="file" accept="image/*,video/*"></label><button class="btn btn-secondary" data-reject-media>拒绝</button><button class="btn btn-primary" data-approve-media>${status === "approved" ? "更新并保持批准" : "确认并批准"}</button></div>
+        </div></article>`;
+    }).join("") : "<p class=\"empty-media\">还没有素材候选。</p>";
   }
 
   async function uploadMediaAsset() {
@@ -855,17 +903,48 @@
     try {
       const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets`, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) }, body: file });
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "素材加入失败");
-      currentVideoJob = payload.job; renderMediaAssets(currentVideoJob); byId("media-file").value = ""; toast("素材已本地入库，尚未批准");
+      currentVideoJob = payload.job; renderVideoJob(currentVideoJob); byId("media-file").value = ""; toast("素材已本地入库，尚未批准");
     } catch (error) { toast(error.message); } finally { byId("upload-media").disabled = !byId("media-file").files?.length; }
   }
 
-  async function approveMediaAsset(row) {
+  async function decideMediaAsset(row, decision) {
     const start = Number(row.querySelector("[data-media-start]").value), end = Number(row.querySelector("[data-media-end]").value);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return toast("请填写有效的素材开始和结束秒数");
+    if (decision === "approved" && (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)) return toast("请填写有效的素材开始和结束秒数");
     const id = row.dataset.assetId;
-    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approved: true, ownership: "user-confirmed", license: "user-confirmed", placement: { start, end, mode: "broll" } }) });
+    const value = selector => row.querySelector(selector)?.value?.trim() || "";
+    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      approved: decision === "approved", reviewStatus: decision, ownership: "user-confirmed",
+      creatorName: value("[data-creator-name]"), workTitle: value("[data-work-title]"), sourceUrl: value("[data-source-url]"),
+      usagePurpose: value("[data-usage-purpose]"), licenseBasis: value("[data-license-basis]"), attributionText: value("[data-attribution-text]"),
+      clipStart: Number(value("[data-clip-start]")) || 0, clipEnd: Number(value("[data-clip-end]")) || undefined,
+      clipDuration: Number(value("[data-clip-duration]")) || undefined,
+      paymentConfirmed: row.querySelector("[data-payment-confirmed]")?.checked === true,
+      placement: Number.isFinite(start) && Number.isFinite(end) ? { start, end, mode: value("[data-media-mode]") || "broll" } : null
+    }) });
     const payload = await response.json(); if (!response.ok) return toast(payload.error || "素材批准失败");
-    currentVideoJob = payload.job; renderMediaAssets(currentVideoJob); toast("已记录权属、批准状态和时间线位置");
+    currentVideoJob = payload.job; renderVideoJob(currentVideoJob); toast(decision === "approved" ? "素材已批准并通过合规检查" : "素材已拒绝，不会进入成片");
+  }
+
+  async function replaceMediaAsset(row, file) {
+    if (!file || !currentVideoJob?.id) return;
+    const id = row.dataset.assetId;
+    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/file`, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) }, body: file });
+    const payload = await response.json();
+    if (!response.ok) return toast(payload.error || "替换素材失败");
+    currentVideoJob = payload.job;
+    renderVideoJob(currentVideoJob);
+    toast("文件已附加，素材恢复为待审核状态");
+  }
+
+  async function renderWithApprovedAssets() {
+    if (!currentVideoJob?.id) return;
+    byId("render-with-assets").disabled = true;
+    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/render`, { method: "POST" });
+    const payload = await response.json();
+    if (!response.ok) { renderMediaAssets(currentVideoJob); return toast(payload.error || "素材渲染启动失败"); }
+    currentVideoJob = payload.job;
+    renderVideoJob(currentVideoJob);
+    pollVideoJob(currentVideoJob.id);
   }
 
   function reviewSummary() {
@@ -987,7 +1066,17 @@
   byId("regenerate-cover").addEventListener("click", regenerateVideoCover);
   byId("media-file").addEventListener("change", event => { byId("upload-media").disabled = !event.target.files?.length || !currentVideoJob?.id; });
   byId("upload-media").addEventListener("click", uploadMediaAsset);
-  byId("media-assets").addEventListener("click", event => { const button = event.target.closest("[data-approve-media]"); if (button) approveMediaAsset(button.closest("[data-asset-id]")); });
+  byId("render-with-assets").addEventListener("click", renderWithApprovedAssets);
+  byId("media-assets").addEventListener("click", event => {
+    const approve = event.target.closest("[data-approve-media]");
+    const reject = event.target.closest("[data-reject-media]");
+    if (approve) decideMediaAsset(approve.closest("[data-asset-id]"), "approved");
+    if (reject) decideMediaAsset(reject.closest("[data-asset-id]"), "rejected");
+  });
+  byId("media-assets").addEventListener("change", event => {
+    const input = event.target.closest("[data-asset-replacement]");
+    if (input?.files?.[0]) replaceMediaAsset(input.closest("[data-asset-id]"), input.files[0]);
+  });
   byId("version-list").addEventListener("click", event => {
     const button = event.target.closest("[data-video-version]");
     if (button) showVideoVersion(Number(button.dataset.videoVersion));
