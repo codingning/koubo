@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+from difflib import SequenceMatcher
 import json
 import os
 import re
@@ -204,6 +205,18 @@ def spoken_text_contains(script: str, sentence: str) -> bool:
     return bool(needle) and needle in normalize_spoken_text(script)
 
 
+def spoken_text_matches(script: str, sentence: str) -> bool:
+    """Allow a close to be spoken naturally instead of requiring mechanical verbatim reuse."""
+    haystack = normalize_spoken_text(script)
+    needle = normalize_spoken_text(sentence)
+    if not needle or not haystack:
+        return False
+    if needle in haystack:
+        return True
+    longest = SequenceMatcher(None, needle, haystack, autojunk=False).find_longest_match().size
+    return longest >= min(10, max(6, round(len(needle) * 0.45)))
+
+
 def script_texts(data: dict[str, Any]) -> tuple[str, str, str]:
     short_script = str(data.get("shortScript") or "").strip()
     segments = data.get("fullSegments") if isinstance(data.get("fullSegments"), list) else []
@@ -274,7 +287,7 @@ def engagement_issues(data: dict[str, Any], content_style: dict[str, Any]) -> li
         issues.append("engagement.viewerTask 缺少观众今天可执行的最小动作")
     if len(primary_close) < 10:
         issues.append("engagement.primaryClose 缺少自然的单一主收束")
-    elif not spoken_text_contains(short_script, primary_close) or not spoken_text_contains(full_close, primary_close):
+    elif not spoken_text_matches(short_script, primary_close) or not spoken_text_matches(full_close, primary_close):
         issues.append("engagement.primaryClose 必须自然进入精简稿和完整版最后一段")
     if len(humor_beat) < 6:
         issues.append("creativeTone.humorBeat 缺少自然的轻松点")
@@ -336,6 +349,12 @@ AI_TOPIC_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+DEVELOPER_LOG_PATTERN = re.compile(
+    r"\.py\b|server(?:-v?\d+)?\b|git\s*(?:status|log)?|commit\b|__pycache__|\.mjs\b|"
+    r"版本管理|接口文件|端点|代码量|\d+\s*(?:KB|MB)\s*代码",
+    re.IGNORECASE,
+)
+
 
 def compact_script_length(value: str) -> int:
     return len(re.sub(r"[\s，。！？、；：,.!?;:‘’“”\"'（）()《》【】\[\]—…·]", "", value))
@@ -374,7 +393,44 @@ def ai_relevance_issues(data: dict[str, Any], topic_plan: dict[str, Any]) -> lis
     return issues
 
 
-def reference_issues(data: dict[str, Any], research: dict[str, Any]) -> list[str]:
+def viewer_use_case_issues(data: dict[str, Any], topic_plan: dict[str, Any]) -> list[str]:
+    """Keep the story on using AI to create a visible result, not on implementing software."""
+    _, full_text, _ = script_texts(data)
+    segments = data.get("fullSegments") if isinstance(data.get("fullSegments"), list) else []
+    opening_text = "".join(str(item.get("text") or "") for item in segments[:2] if isinstance(item, dict))
+    proof = data.get("resultFirstProof") if isinstance(data.get("resultFirstProof"), dict) else {}
+    shooting = data.get("shooting") if isinstance(data.get("shooting"), dict) else {}
+    opening_proof = shooting.get("openingProof") if isinstance(shooting.get("openingProof"), dict) else {}
+    issues: list[str] = []
+    if len(str(topic_plan.get("viewerUseCase") or "").strip()) < 10:
+        issues.append("topicPlan.viewerUseCase 没有写清普通观众如何使用AI解决问题")
+    for field, minimum, message in (
+        ("before", 8, "没有说明使用AI前的旧结果或限制"),
+        ("after", 8, "没有说明使用AI后的可见变化"),
+        ("proofAsset", 8, "没有指定可以展示的结果证据"),
+        ("truthfulBoundary", 8, "没有说明结果仍需人工判断或真实验证的边界"),
+    ):
+        if len(str(proof.get(field) or "").strip()) < minimum:
+            issues.append(f"resultFirstProof.{field} {message}")
+    if str(topic_plan.get("productionMode") or "") == "self-demonstrating-final-video" and len(str(proof.get("publicationCondition") or "").strip()) < 16:
+        issues.append("自证型成片必须在 resultFirstProof.publicationCondition 写清发布前的真实效果验收条件")
+    if len(str(opening_proof.get("asset") or "").strip()) < 8 or len(str(opening_proof.get("edit") or "").strip()) < 8:
+        issues.append("shooting.openingProof 必须写清开头0—8秒展示什么成片效果、如何剪出来")
+    visual_beats = shooting.get("visualBeats") if isinstance(shooting.get("visualBeats"), list) else []
+    if len([item for item in visual_beats if isinstance(item, dict) and str(item.get("asset") or "").strip()]) < 4:
+        issues.append("shooting.visualBeats 至少需要4个与口播步骤对应的可见证据画面")
+    if not re.search(r"效果|结果|前后|字幕|画面|成片|剪辑", opening_text):
+        issues.append("开头两段没有先让观众看到或听懂最终AI效果")
+    developer_detail_count = len(DEVELOPER_LOG_PATTERN.findall(full_text)) + full_text.count("代码") + full_text.count("编程实现")
+    if developer_detail_count > 2:
+        issues.append("正文出现过多文件名、Git或内部实现细节，仍像开发日志而不是AI使用分享")
+    method_markers = sum(marker in full_text for marker in ("素材", "告诉AI", "自然语言", "第一版", "修改", "返修", "结果", "效果"))
+    if method_markers < 3:
+        issues.append("正文缺少普通创作者能复用的AI输入、生成、检查和返修方法")
+    return issues
+
+
+def reference_issues(data: dict[str, Any], research: dict[str, Any], topic_plan: dict[str, Any] | None = None) -> list[str]:
     synthesis = data.get("referenceResearch") if isinstance(data.get("referenceResearch"), dict) else {}
     full_sources = research.get("fullContentSources") if isinstance(research.get("fullContentSources"), list) else []
     available_ids = {str(item.get("sourceId") or "") for item in full_sources if isinstance(item, dict)}
@@ -386,6 +442,11 @@ def reference_issues(data: dict[str, Any], research: dict[str, Any]) -> list[str
         issues.append("referenceResearch.sourceIds 没有记录实际使用的参考视频")
     elif not used_ids.issubset(available_ids):
         issues.append("referenceResearch.sourceIds 引用了未完成全文核验的来源")
+    required_ids = {
+        str(item) for item in (topic_plan or {}).get("requiredSourceIds", []) if str(item)
+    } if isinstance((topic_plan or {}).get("requiredSourceIds"), list) else set()
+    if required_ids and not required_ids.issubset(used_ids):
+        issues.append("referenceResearch.sourceIds 没有使用用户本次明确指定且已全文核验的参考视频")
     for field, minimum, label in (
         ("borrowedKnowledge", 2, "从参考视频核验并重新组织的知识点"),
         ("structuralChoices", 2, "借鉴的结构选择"),
@@ -407,19 +468,32 @@ def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
         "shortTopic": "12字以内且能看出AI话题",
         "coreQuestion": "观众看完只解决的一个问题",
         "aiAngle": "本集具体讲哪项AI能力、方法、工具、限制或实践",
+        "viewerUseCase": "普通观众如何使用AI完成一个具体结果，而不是创作者如何写代码",
+        "visibleTransformation": "使用AI前后可以直接展示的变化",
+        "proofOpening": "开头0—8秒先展示什么结果证据",
+        "methodPromise": "观众继续看能学会的2—4步方法",
+        "productionMode": "normal|self-demonstrating-final-video；若成片本身承担结果证据则用后者",
+        "requiredSourceIds": ["用户明确要求使用的完整参考来源sourceId"],
         "personalEvidenceRole": "个人进度只负责证明什么",
         "searchQueries": ["抖音同题搜索词1", "搜索词2", "搜索词3"],
         "keywords": ["用于匹配参考视频的关键词"],
         "whyNow": "为什么今天的真实进度适合讲这个AI题目",
     }
-    system = """你是AI内容选题编辑。先根据创作者的真实进度锁定一个明确AI话题，再让个人经历只承担案例和证据角色。不要选纯生活感悟、泛成长、职业自由或项目进度汇报。输出单个JSON对象，不要Markdown。"""
-    user = f"""真实证据：\n{json.dumps(evidence, ensure_ascii=False, indent=2)}\n\n内容定位：\n{json.dumps(content_style, ensure_ascii=False, indent=2)}\n\n已有标题：\n{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n要求：topic、shortTopic和aiAngle都要让普通观众一眼看出在讲AI；searchQueries写2—3个适合抖音检索的具体同题词；keywords写5—10个可用于匹配参考视频的短词；不要把Day编号、代码量或Git状态当成选题。"""
+    system = """你是AI使用案例内容编辑。选题必须回答“普通人怎样使用AI得到一个具体结果”，而不是“创作者怎样开发了一套软件”。优先选择能展示使用前、使用后、给AI的输入、第一版问题、具体返修和最终边界的案例。个人项目只承担真实试验场和证据角色；代码、文件名、Git、接口、安装过程默认不进入主题。不要选纯生活感悟、泛成长、职业自由或项目进度汇报。输出单个JSON对象，不要Markdown。"""
+    user = f"""真实证据：\n{json.dumps(evidence, ensure_ascii=False, indent=2)}\n\n用户本次明确要求：\n{json.dumps(payload.get('editorial_brief', {}), ensure_ascii=False, indent=2)}\n\n内容定位：\n{json.dumps(content_style, ensure_ascii=False, indent=2)}\n\n已有标题：\n{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n要求：topic、shortTopic和aiAngle都要让普通观众一眼看出在讲AI；viewerUseCase必须描述观众可复用的AI用法；visibleTransformation和proofOpening必须能拍成画面；methodPromise给2—4步人话方法。searchQueries写2—3个适合抖音检索的具体同题词；keywords写5—10个可用于匹配参考视频的短词；不要把Day编号、代码量、文件名、安装命令或Git状态当成选题。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=3000)
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
     if not AI_TOPIC_PATTERN.search(str(data.get("topic") or "") + str(data.get("aiAngle") or "")):
         raise RuntimeError("选题规划偏离AI主线")
     if not 2 <= len(data.get("searchQueries") or []) <= 3:
         raise RuntimeError("选题规划没有给出2—3个同题视频搜索词")
+    if len(str(data.get("viewerUseCase") or "").strip()) < 10 or len(str(data.get("proofOpening") or "").strip()) < 8:
+        raise RuntimeError("选题规划没有锁定观众可复用的AI用法和结果先行开场")
+    requested_source = str((payload.get("editorial_brief") or {}).get("requiredReference") or "").strip()
+    if requested_source:
+        data["requiredSourceIds"] = [requested_source]
+    if str((payload.get("editorial_brief") or {}).get("productionMode") or "").strip():
+        data["productionMode"] = str(payload["editorial_brief"]["productionMode"])
     result["data"] = data
     return result
 
@@ -464,6 +538,13 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
         "durationShort": "约60—90秒衍生版",
         "hook": "0-3秒开场",
         "audienceBenefit": "观众能带走的一句话",
+        "resultFirstProof": {
+            "before": "使用AI前能看到的旧结果或限制",
+            "after": "使用AI后能看到的具体变化",
+            "proofAsset": "成片、前后对比、界面或测试结果中的哪一项承担证据",
+            "truthfulBoundary": "当前结果没有证明什么、仍需什么人工判断或真实验证",
+            "publicationCondition": "若成片本身承担证据，必须满足什么可验证条件后才允许发布",
+        },
         "engagement": {
             "audienceMirror": "观众可能也遇到的具体场景或矛盾",
             "commentPrompt": "低门槛、具体、与下一集相关的评论问题",
@@ -510,13 +591,19 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
         "shortScript": "60—90秒衍生短版，不作为默认拍摄稿",
         "titles": [{"type": "结果型", "text": "标题"}],
         "covers": [{"id": "cover-a", "name": "方案A", "copy": "封面大字", "expression": "表情", "composition": "构图", "color": "颜色", "reason": "理由"}],
-        "shooting": {"broll": ["画面"], "highlights": ["字幕高亮词"], "guide": {"机位": "正面半身", "语速": "自然"}},
+        "shooting": {
+            "openingProof": {"asset": "0—8秒先展示的最终效果或前后对比", "edit": "快切、动态图卡、画面切换等具体剪法", "onScreenText": "开头大字"},
+            "visualBeats": [{"segment": "对应口播段落", "asset": "真实界面、成片或前后对比", "purpose": "这张画面证明什么"}],
+            "broll": ["画面"],
+            "highlights": ["字幕高亮词"],
+            "guide": {"机位": "正面半身", "语速": "自然"},
+        },
         "platformCopy": {"douyin": "抖音文案", "xiaohongshu": "小红书文案", "weibo": "微博文案"},
         "evidence": [{"name": "证据", "proof": "能证明什么", "path": "本地相对路径", "public": True}],
         "risks": [{"text": "风险检查", "done": False}],
         "tomorrowChallenge": "下一集挑战",
     }
-    system = """你是个人AI实践成长账号的总编和短视频口播编导。你的首要任务不是汇报创作者今天做了什么，而是把真实经历改写成观众能代入、能执行、愿意收藏或继续验证的内容。只根据提供的真实证据写内容，不得虚构完成项、错误、数据、热点、粉丝反馈、评论或投票结果。输出必须是单个JSON对象，不要Markdown。语言自然、口语化，像和一个具体的人对话，不用新闻播音腔。个人经历只能作为证明观众问题的案例，不能让整篇稿件变成“我做了什么”的流水账。可以复用高表现内容的问题顺序、证据位置和信息交付方式，但绝不能复刻别人的措辞、案例、标题或人设。"""
+    system = """你是个人AI实践账号的总编和短视频口播编导。观众来听的是“普通人怎样使用AI得到一个具体结果”，不是创作者写代码、建接口、看Git或汇报项目进度。每条内容先用最终效果、前后对比或真实结果建立观看理由，再解释给AI什么输入、AI第一版做成什么、哪里有问题、如何用自然语言具体返修，以及什么仍需人工判断。代码和系统开发只能作为幕后证据，除非本集受众明确要学编程。只根据提供的真实证据写内容，不得虚构完成项、错误、数据、热点、粉丝反馈、评论或投票结果。输出必须是单个JSON对象，不要Markdown。语言自然、口语化，像和一个具体的人对话，不用新闻播音腔。可以复用高表现内容的问题顺序、证据位置、视觉节奏和信息交付方式，但绝不能复刻别人的措辞、案例、标题、画面或人设。"""
     user = f"""日期：{today}
 成长天数：Day {day_number}
 
@@ -543,19 +630,21 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 
 硬性要求：
 1. 主选题必须明确属于AI工具、AI方法、AI项目、AI工作流、AI学习或AI能力边界。topic_plan 是主线，个人进度只能作为案例和证据，不能把Day编号、代码量、Git状态或泛成长感悟当成主题。
-2. 完整版固定为2—3分钟、550—950个有效字符、7—12段；默认拍摄完整版。只选 evidence-story 或 saveable-map：前者写2—4个框架项，后者写3—5个框架项。shortScript 是60—90秒衍生稿，必须比完整版短且信息闭环。
-3. saveableFramework 每项必须包含具体 action 与执行后可观察的 expectedSignal。禁止写“提升认知、保持坚持、拥抱AI”这类无法验证的口号。
-4. 开头优先从观众的困境、选择、损失或反常识切入；身份信息并非必要时，前20字不要以“我”开头。
-5. 完整稿只使用 evidence-story 或 saveable-map：前者用个人经历证明方法，后者让观众定位当前阶段；两种结构都要写清 personalVariation 和 boundary。
-6. 个人经历只作为真实案例，至少三次把经验翻译成观众可以执行的判断或动作。
-7. engagement.commentPrompt、followPromise、viewerTask 都要写清策划意图。选择其中最适合本集的一个主动作，改写成 engagement.primaryClose，并让 primaryClose 自然进入 fullSegments 最后一段和 shortScript。不要把三个字段逐句原样连在结尾。
-8. commentPrompt 必须是容易回答的具体问题；followPromise 只承诺已有计划支持的下一次验证；viewerTask 必须今天能做、不要求完美或公开。
-9. 2—3分钟稿件自然放2—3个轻松点或反差，但只能有一个主热梗，不能连续抖包袱。
-10. 热梗只在确实贴合冲突时使用，写入 creativeTone.trendMeme；不得大段照搬、不得虚构来源、不得把热度数字写入口播。
-11. 不得自行增加证据中没有的拍摄遍数、耗时、播放量、结果或“明天一定发布”等承诺。证据写着尚未拍摄/发布时，只能把本条视频描述为准备执行的行动或使用条件句，不能声称已经录了几条、重拍几次或已经发出。
-12. titles 3个；covers 3个；candidates 最多5个。证据不足时明确写“今天不建议发布”，不要编造。
-13. 只能使用 reference_research.fullContentSources 中完成全文核验的来源来概括视频结构和知识。metadataOnlySources 只能用于发现选题和评论问题，不能假装看过完整视频。
-14. referenceResearch.sourceIds 至少记录1条实际使用的完整来源；至少提炼2条知识、2个结构选择和1个互动/收藏设计。全部用自己的话重组，并用本人的真实进度、证据和限制形成原创版本。
+2. 选题必须从普通人的AI使用场景出发：原来做不到或效果普通 → 给AI什么素材与目标 → 第一版结果 → 具体反馈和迭代 → 可见结果与边界。不得把开发文件、代码实现、Git记录、接口或安装过程写成正文主线。
+3. 完整版固定为2—3分钟、550—950个有效字符、7—12段；默认拍摄完整版。只选 evidence-story 或 saveable-map：前者写2—4个框架项，后者写3—5个框架项。shortScript 是60—90秒衍生稿，必须比完整版短且信息闭环。
+4. 开头0—8秒必须先展示成片效果、前后对比或其他真实结果证据，再承诺本集会拆解如何用AI做到；不能先自我介绍、解释项目背景或罗列工具。resultFirstProof 和 shooting.openingProof 必须可实际拍摄/剪辑。若 topic_plan.productionMode 是 self-demonstrating-final-video，可以把“观众正在看的最终成片”作为证据并按成片状态说话，不要在开头插入“测试素材、尚未验证”削弱钩子；但 resultFirstProof.publicationCondition 必须规定只有实际渲染出所述效果并人工审核后才能发布。
+5. shooting.visualBeats 至少4项，每个关键步骤都对应真实界面、输入、第一版结果、修改前后或最终成片，不允许整条视频只有口播和字幕。
+6. saveableFramework 每项必须包含具体 action 与执行后可观察的 expectedSignal。禁止写“提升认知、保持坚持、拥抱AI”这类无法验证的口号。
+7. 完整稿只使用 evidence-story 或 saveable-map：前者用个人经历证明方法，后者让观众定位当前阶段；两种结构都要写清 personalVariation 和 boundary。
+8. 个人经历只作为真实案例，至少三次把经验翻译成观众可以执行的判断或动作。工具可以用“指挥、理解视频、生成动效”等角色化人话解释，不讲源码和内部文件。
+9. engagement.commentPrompt、followPromise、viewerTask 都要写清策划意图。选择其中最适合本集的一个主动作，改写成 engagement.primaryClose，并让 primaryClose 自然进入 fullSegments 最后一段和 shortScript。不要把三个字段逐句原样连在结尾。
+10. commentPrompt 必须是容易回答的具体问题；followPromise 只承诺已有计划支持的下一次验证；viewerTask 必须今天能做、不要求完美或公开。
+11. 2—3分钟稿件自然放2—3个轻松点或反差，但只能有一个主热梗，不能连续抖包袱。
+12. 热梗只在确实贴合冲突时使用，写入 creativeTone.trendMeme；不得大段照搬、不得虚构来源、不得把热度数字写入口播。
+13. 不得自行增加证据中没有的拍摄遍数、耗时、播放量、结果或“明天一定发布”等承诺。self-demonstrating-final-video 模式允许使用“你现在看到的效果就是AI剪的”这类只有在最终成片中才成立的自证表达，但必须附带可执行的发布条件；如果最终成片没有真实呈现这些效果，就禁止发布或必须改稿，不能靠口头声称成功。
+14. titles 3个；covers 3个；candidates 最多5个。证据不足时明确写“今天不建议发布”，不要编造。
+15. 只能使用 reference_research.fullContentSources 中完成全文核验的来源来概括视频结构和知识。metadataOnlySources 只能用于发现选题和评论问题，不能假装看过完整视频。
+16. referenceResearch.sourceIds 至少记录1条实际使用的完整来源，并必须包含 topic_plan.requiredSourceIds 中用户明确指定的来源；至少提炼2条知识、2个结构选择和1个互动/收藏设计。全部用自己的话重组，并用本人的真实进度、证据和限制形成原创版本。
 """
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     result = call_json(messages, temperature=0.4, max_tokens=10000)
@@ -563,7 +652,8 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
         structure_issues(result.get("data", {}))
         + duration_issues(result.get("data", {}))
         + ai_relevance_issues(result.get("data", {}), topic_plan)
-        + reference_issues(result.get("data", {}), reference_research)
+        + viewer_use_case_issues(result.get("data", {}), topic_plan)
+        + reference_issues(result.get("data", {}), reference_research, topic_plan)
         + engagement_issues(result.get("data", {}), content_style)
         + factual_issues(result.get("data", {}), evidence)
     )
@@ -580,13 +670,14 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 上一版JSON：
 {json.dumps(result.get('data', {}), ensure_ascii=False, indent=2)}
 
-        请在不增加任何新事实的前提下重写完整JSON。主线必须是topic_plan中的明确AI话题，完整版必须达到2—3分钟、550—950个有效字符并拆成7—12段。证据写着尚未拍摄或发布时，绝对不能改写成已经拍完、录了几条、重录几次或已经发布。只能把reference_research.fullContentSources中的全文核验来源写入referenceResearch.sourceIds；外部知识和结构全部重新组织，不复制原句。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
+        请在不增加任何新事实的前提下重写完整JSON。主线必须是普通观众如何使用AI得到具体结果，开头0—8秒先展示成片效果或前后对比，然后再解释输入、第一版、具体返修、结果和边界；删除文件名、Git、代码量和内部实现汇报。若topic_plan.productionMode为self-demonstrating-final-video，让最终Day 2成片本身承担结果证据，不要用“测试素材、真人待验证”拆掉开头钩子；改为填写严格的publicationCondition，只有最终渲染和人工审核确认画面真实具备所述效果时才允许发布。完整版必须达到2—3分钟、550—950个有效字符并拆成7—12段。证据写着尚未拍摄或发布时，不能虚构拍摄遍数、耗时或发布结果。只能把reference_research.fullContentSources中的全文核验来源写入referenceResearch.sourceIds，并包含topic_plan.requiredSourceIds；外部知识和结构全部重新组织，不复制原句或画面。resultFirstProof与shooting.openingProof必须具体，shooting.visualBeats至少4项。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
         result = call_json(messages + [{"role": "assistant", "content": json.dumps(result.get("data", {}), ensure_ascii=False)}, {"role": "user", "content": repair}], temperature=0.15, max_tokens=10000)
         issues = (
             structure_issues(result.get("data", {}))
             + duration_issues(result.get("data", {}))
             + ai_relevance_issues(result.get("data", {}), topic_plan)
-            + reference_issues(result.get("data", {}), reference_research)
+            + viewer_use_case_issues(result.get("data", {}), topic_plan)
+            + reference_issues(result.get("data", {}), reference_research, topic_plan)
             + engagement_issues(result.get("data", {}), content_style)
             + factual_issues(result.get("data", {}), evidence)
         )
@@ -617,17 +708,18 @@ def edit_plan(payload: dict[str, Any], feedback: str | None = None) -> dict[str,
             if isinstance(item, dict) and float(item.get("probability") or 0) < 0.62
         ],
     }
-    system = """你是短视频口播剪辑导演。根据逐字转录、停顿检测、原口播目标和用户反馈生成保守、可执行的剪辑JSON。不得改动事实，不得凭空添加说过的话。优先删除假启动、重复、口头禅和明显错句；保留自然情绪和必要停顿。所有时间必须引用源视频秒数。只输出JSON。"""
+    system = """你是短视频口播剪辑导演。根据逐字转录、停顿检测、原口播目标、内容包中的结果先行视觉设计和用户反馈，生成保守但有明确视觉节奏的剪辑JSON。不得改动事实，不得凭空添加说过的话。优先删除假启动、重复、口头禅和明显错句；保留自然情绪和必要停顿。开头0—8秒优先用最强动态标题或结果卡证明最终效果，正文只在关键步骤、证据、第一版问题和结论处加卡片，不能把每句话都包装成特效。所有时间必须引用源视频秒数。只输出JSON。"""
     schema = {
         "keepSegments": [{"start": 0.0, "end": 5.0, "reason": "保留原因"}],
         "overlayCards": [{"start": 1.0, "end": 3.5, "text": "不超过14字", "kind": "hook|evidence|result|lesson", "items": ["最多4条短要点"], "display": "banner|side-panel"}],
         "coverDesign": {"eyebrow": "身份或场景，不超过12字", "lines": ["2到3行具体主题大字"], "highlights": ["需要黄色强调的原文片段"], "features": ["2到4个能力词"]},
+        "visualStrategy": {"opening": "开头结果证明策略", "rhythm": "正文视觉节奏", "boundary": "不该过度包装的部分"},
         "subtitleStyle": "bold-clean",
         "editSummary": "剪辑策略摘要",
         "removedReasons": ["删除原因"],
         "confidence": 0.8,
     }
-    user = f"""目标口播稿：\n{payload.get('script', '')}\n\n源视频信息：\n{json.dumps(payload.get('source', {}), ensure_ascii=False)}\n\n停顿检测与基础保留区间：\n{json.dumps(base_plan, ensure_ascii=False)}\n\n逐字转录（按句时间轴，另列低置信词）：\n{json.dumps(compact_transcript, ensure_ascii=False)}\n\n用户最终审核反馈：\n{feedback or '无，这是第一次自动剪辑'}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n约束：keepSegments 按时间升序、不重叠，每段至少0.35秒；除非存在大量重复，不得删除超过原片55%；overlayCards 0-5个，只放最重要的钩子/证据/结果/经验。只有出现步骤、清单或并列结构时才填写 2-4 条 items 并使用 side-panel，其余卡片使用 banner 且 items 为空；每条 item 不超过14字。coverDesign 必须让用户在主页缩略图上一眼看懂视频讲什么：lines 只写具体主题，不写“快来看”“太强了”等空泛钩子，共2到3行、单行尽量不超过9个汉字；highlights 必须是 lines 中的原文；features 只列视频明确展示的能力。结尾出现导演交流、现场提示或重复补录时，应只保留完整且自然的一版。"""
+    user = f"""目标口播稿：\n{payload.get('script', '')}\n\n内容包中的结果证明与视觉设计：\n{json.dumps(payload.get('content_direction', {}), ensure_ascii=False, indent=2)}\n\n源视频信息：\n{json.dumps(payload.get('source', {}), ensure_ascii=False)}\n\n停顿检测与基础保留区间：\n{json.dumps(base_plan, ensure_ascii=False)}\n\n逐字转录（按句时间轴，另列低置信词）：\n{json.dumps(compact_transcript, ensure_ascii=False)}\n\n用户最终审核反馈：\n{feedback or '无，这是第一次自动剪辑'}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n约束：keepSegments 按时间升序、不重叠，每段至少0.35秒；除非存在大量重复，不得删除超过原片55%；overlayCards 使用3—6个，只放最重要的结果钩子、工具分工、关键步骤、第一版问题和最终经验，优先保证开头8秒内有一张 hook 或 result 卡。只有出现步骤、清单或并列结构时才填写2—4条 items并使用side-panel，其余卡片使用banner且items为空；每条item不超过14字。不要照抄参考博主的画面，应根据当前口播和content_direction重新设计。coverDesign 必须让用户在主页缩略图上一眼看懂视频讲什么：lines 只写具体主题，不写“快来看”“太强了”等空泛钩子，共2到3行、单行尽量不超过9个汉字；highlights 必须是 lines 中的原文；features 只列视频明确展示的能力。结尾出现导演交流、现场提示或重复补录时，应只保留完整且自然的一版。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=10000)
     plan = result.get("data")
     if not isinstance(plan, dict) or not isinstance(plan.get("keepSegments"), list):

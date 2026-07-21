@@ -1,5 +1,5 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "updatedAt": "2026-07-21",
   "platform": "douyin",
   "creators": [
@@ -18,6 +18,14 @@
       "secUid": "MS4wLjABAAAACqJi0ISN_iKeH5JhOhbmqnf6WLx0Zt8MAa_h_DKUIVo",
       "pinnedVideoIds": ["7662756855256562067"],
       "referenceFor": ["AI实践", "AI剪辑", "真实过程", "翻车修正", "结果展示"]
+    },
+    {
+      "id": "douyin-reference-creator-3",
+      "label": "用户指定参考账号三",
+      "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAAmFoTYey47ziOWM54H5p-khhj_L1Ev7Oht91hmX1ssDs0tcCVYjF1TaSvvj_ojFOa",
+      "secUid": "MS4wLjABAAAAmFoTYey47ziOWM54H5p-khhj_L1Ev7Oht91hmX1ssDs0tcCVYjF1TaSvvj_ojFOa",
+      "pinnedVideoIds": ["7641901934210813234"],
+      "referenceFor": ["AI剪辑", "结果先行", "工具分工", "实操教程", "动态视觉", "自然语言返修"]
     }
   ],
   "policy": {

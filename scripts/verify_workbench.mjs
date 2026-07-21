@@ -204,14 +204,22 @@ assert(contentStyle.tone?.spokenLanguage, "内容风格配置缺少口语化规�
 assert(contentStyle.engagement?.commentPrompt?.includes("具体的问题"), "内容风格配置缺少真实问题互动规则");
 assert(contentStyle.engagement?.followPromise?.includes("不固定承诺未来多少天"), "内容风格配置仍缺少非倒计时追更规则");
 assert(contentStyle.engagement?.primaryClose?.includes("自然"), "内容风格配置缺少单一自然收束规则");
-assert(contentStyle.version?.includes("medium-video-research"), "内容风格尚未升级为AI中视频研究模式");
+assert(contentStyle.version?.includes("ai-use-case-result-first"), "内容风格尚未升级为AI使用结果优先模式");
+assert(contentStyle.storyPriority?.requiredSequence?.length >= 6, "内容风格缺少AI输入、第一版、返修和结果顺序");
+assert(contentStyle.storyPriority?.selfDemonstratingMode?.includes("人工审核"), "内容风格缺少自证型成片发布门禁");
 assert(contentStyle.structureDesign?.archetypes?.["evidence-story"]?.recommendedDuration === "120—180秒", "证据故事默认时长不是2—3分钟");
 for (const archetype of ["evidence-story", "saveable-map", "short-resonance"]) {
   assert(Boolean(contentStyle.structureDesign?.archetypes?.[archetype]), `内容风格配置缺少 ${archetype} 结构`);
 }
 assert(serverSource.includes("structureDesign"), "服务端没有保存结构设计字段");
 assert(serverSource.includes("referenceResearch"), "服务端没有保存参考视频研究字段");
+assert(serverSource.includes("contentDirectionFor") && serverSource.includes("content_direction"), "拍后AI剪辑没有继承内容包中的结果证明与视觉设计");
 assert(bridgeSource.includes("structure_issues"), "生成器没有接入结构质量门禁");
+assert(bridgeSource.includes("viewer_use_case_issues") && bridgeSource.includes("DEVELOPER_LOG_PATTERN"), "生成器缺少AI使用结果与开发日志降权门禁");
+const referenceCreators = JSON.parse(read("config/reference_creators.json"));
+const referenceLibrary = JSON.parse(read("config/reference_video_library.json"));
+assert(referenceCreators.creators?.some(item => item.pinnedVideoIds?.includes("7641901934210813234")), "缺少用户新指定的AI剪辑参考账号");
+assert(referenceLibrary.items?.some(item => item.sourceId === "douyin-7641901934210813234" && item.visualLanguage?.length >= 4), "缺少新参考视频的全文与视觉结构摘要");
 assert(!bridgeSource.includes("def enforce_script_contract"), "生成器仍在机械拼接口播结尾");
 assert(fs.existsSync(path.join(root, "docs", "CONTENT_STRUCTURE_RESEARCH_2026-07-20.md")), "缺少本轮内容结构调研报告");
 const memePool = JSON.parse(read("config/meme_pool.json"));

@@ -126,7 +126,26 @@ async function listGeneratedContents() {
       items.push(item);
     } catch {}
   }
-  return items.sort((a, b) => String(b.generatedAt || b.date).localeCompare(String(a.generatedAt || a.date)));
+  const replacedIds = new Set(items.map(item => String(item.replacesContentId || "")).filter(Boolean));
+  return items
+    .filter(item => !replacedIds.has(String(item.id || "")))
+    .sort((a, b) => String(b.generatedAt || b.date).localeCompare(String(a.generatedAt || a.date)));
+}
+async function contentDirectionFor(contentId) {
+  if (!contentId) return null;
+  const id = safeName(contentId);
+  try {
+    const content = await readJsonFile(path.join(confined(contentRoot, id), "content.json"));
+    return {
+      id,
+      mainTopic: String(content.mainTopic || ""),
+      hook: String(content.hook || ""),
+      audienceBenefit: String(content.audienceBenefit || ""),
+      resultFirstProof: content.resultFirstProof || {},
+      shooting: content.shooting || {},
+      structureDesign: content.structureDesign || {}
+    };
+  } catch { return null; }
 }
 async function collectEvidence() {
   const runRoot = path.join(root, "runs");
@@ -196,6 +215,7 @@ function normalizeContent(raw, dayNumber, id, meta) {
     status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "约2—3分钟", durationShort: value.durationShort || "约60—90秒衍生版",
     mainTopic: String(value.mainTopic || "今天没有足够证据生成主选题"), shortTopic: String(value.shortTopic || value.mainTopic || "待确认").slice(0, 20),
     hook: String(value.hook || ""), audienceBenefit: String(value.audienceBenefit || ""),
+    resultFirstProof: value.resultFirstProof && typeof value.resultFirstProof === "object" ? value.resultFirstProof : {},
     engagement: {
       audienceMirror: String(value.engagement?.audienceMirror || value.audienceMirror || value.audienceBenefit || ""),
       commentPrompt: String(value.engagement?.commentPrompt || value.commentPrompt || ""),
@@ -251,7 +271,8 @@ async function generateContent(options = {}) {
     const existingTopics = [...baseTopics, ...existing.map(x => x.mainTopic)];
     let contentStyle = {};
     try { contentStyle = await readJsonFile(path.join(root, "config", "content_style.json")); } catch {}
-    const topicResult = await runAi({ operation: "plan_topic", date: shanghaiDate(), day_number: dayNumber, evidence, content_style: contentStyle, existing_topics: existingTopics }, dir, "topic-plan");
+    const editorialBrief = options.editorialBrief && typeof options.editorialBrief === "object" ? options.editorialBrief : {};
+    const topicResult = await runAi({ operation: "plan_topic", date: shanghaiDate(), day_number: dayNumber, evidence, content_style: contentStyle, editorial_brief: editorialBrief, existing_topics: existingTopics }, dir, "topic-plan");
     const topicPlan = topicResult.data;
     await writeJson(path.join(dir, "topic-plan.json"), topicPlan);
     const referenceFile = path.join(dir, "reference-research.json");
@@ -371,7 +392,7 @@ function validatePlan(raw, duration, fallback, provenance = "semantic") {
     const items = (Array.isArray(item?.items) ? item.items : []).map(value => String(value || "").trim().slice(0, 14)).filter(Boolean).slice(0, 4);
     const display = item?.display === "side-panel" && items.length >= 2 ? "side-panel" : "banner";
     return { id: `overlay-${index + 1}`, start, end: boundedEnd, text: String(item?.text || "").trim().slice(0, 24), kind: ["hook", "evidence", "result", "lesson"].includes(item?.kind) ? item.kind : "evidence", items, display };
-  }).filter(item => item?.text).slice(0, 3);
+  }).filter(item => item?.text).slice(0, 6);
   if (requestedOverlays.length > overlayCards.length) warnings.push(`动态卡片已从 ${requestedOverlays.length} 张约束为 ${overlayCards.length} 张有效卡片`);
 
   const confidence = Number(raw?.confidence);
@@ -391,7 +412,7 @@ function normalizeOverlays(raw, duration) {
   return (Array.isArray(raw) ? raw : []).map((x, i) => {
     const items = (Array.isArray(x?.items) ? x.items : []).map(value => String(value || "").trim().slice(0, 14)).filter(Boolean).slice(0, 4);
     return { id: `overlay-${i + 1}`, start: Math.max(0, Number(x.start)), end: Math.min(duration, Number(x.end)), text: String(x.text || "").slice(0, 24), kind: String(x.kind || "evidence"), items, display: x?.display === "side-panel" && items.length >= 2 ? "side-panel" : "banner" };
-  }).filter(x => x.text && x.end - x.start >= 0.5).slice(0, 3);
+  }).filter(x => x.text && x.end - x.start >= 0.5).slice(0, 6);
 }
 function feedbackOverlayLimit(feedback) {
   const match = String(feedback || "").match(/(?:卡片|图卡)[^。；;\n]{0,16}(?:只|最多)?(?:保留|要)?([零一二三四五六0-6])张/);
@@ -1117,7 +1138,7 @@ async function processJob(job) {
     job.status = "planning"; job.progress = 45; await saveJob(job);
     let aiPlan = null;
     try {
-      const result = await runAi({ operation: "edit_plan", script: job.script, source: job.source, transcript: job.transcript, base_plan: { silences, keepSegments: fallback } }, jobDir, "edit-plan-v1");
+      const result = await runAi({ operation: "edit_plan", script: job.script, content_direction: job.contentDirection, source: job.source, transcript: job.transcript, base_plan: { silences, keepSegments: fallback } }, jobDir, "edit-plan-v1");
       aiPlan = result.data; job.planModel = result.model; job.modelUsage = result.usage;
     } catch (error) { job.degraded = [...(job.degraded || []), `AI剪辑决策失败，使用停顿剪辑：${error.message}`]; }
     job.currentVersion = 1;
@@ -1146,7 +1167,7 @@ async function reviseJob(job, feedback) {
   try {
     const version = Number(job.currentVersion || 1) + 1;
     job.status = "revising"; job.progress = 5; job.reviews = [...(job.reviews || []), { version: job.currentVersion, feedback, createdAt: new Date().toISOString() }]; await saveJob(job);
-    const result = await runAi({ operation: "revise_plan", feedback, script: job.script, source: job.source, transcript: job.transcript, base_plan: job.currentPlan }, dir, `edit-plan-v${version}`);
+    const result = await runAi({ operation: "revise_plan", feedback, script: job.script, content_direction: job.contentDirection, source: job.source, transcript: job.transcript, base_plan: job.currentPlan }, dir, `edit-plan-v${version}`);
     const fallback = job.currentPlan.keepSegments;
     job.currentVersion = version; job.planModel = result.model; job.modelUsage = result.usage;
     let revisedOverlays = normalizeOverlays(result.data?.overlayCards, job.source.duration);
@@ -1181,7 +1202,7 @@ async function replanJob(job, feedback = "") {
     const version = Math.max(1, ...(job.versions || []).map(item => Number(item.version) || 0), Number(job.currentVersion) || 0) + 1;
     job.status = "planning"; job.progress = 8; delete job.revisionError; await saveJob(job);
     const operation = feedback.trim() ? "revise_plan" : "edit_plan";
-    const result = await runAi({ operation, script: job.script, source: job.source, transcript: job.transcript, base_plan: { silences: job.analysis?.silences || [], keepSegments: job.analysis?.baseKeepSegments || job.currentPlan?.keepSegments || [] }, feedback }, dir, `edit-plan-v${version}`);
+    const result = await runAi({ operation, script: job.script, content_direction: job.contentDirection, source: job.source, transcript: job.transcript, base_plan: { silences: job.analysis?.silences || [], keepSegments: job.analysis?.baseKeepSegments || job.currentPlan?.keepSegments || [] }, feedback }, dir, `edit-plan-v${version}`);
     const fallback = job.analysis?.baseKeepSegments || job.currentPlan?.keepSegments || [{ start: 0, end: job.source.duration, reason: "完整保留" }];
     const validation = validatePlan(result.data, job.source.duration, fallback, "semantic");
     job.currentVersion = version; job.planModel = result.model; job.modelUsage = result.usage;
@@ -1320,7 +1341,21 @@ const server = http.createServer(async (req, res) => {
       const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "video.mp4")), sourcePath = path.join(dir, fileName);
       let options = {}; try { options = JSON.parse(decodeURIComponent(req.headers["x-options"] || "%7B%7D")); } catch {}
       const sizeBytes = await receiveUpload(req, sourcePath);
-      const job = { id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "uploaded", progress: 0, fileName, sizeBytes, sourcePath, contentId: decodeURIComponent(req.headers["x-content-id"] || ""), script: String(options.script || ""), options: { removeSilence: options.removeSilence !== false, captions: options.captions !== false, captionStyle: normalizeCaptionStyle(options.captionStyle), informationPanels: options.informationPanels !== false, layout: ["original", "vertical", "square"].includes(options.layout) ? options.layout : "vertical", generateVariants: options.generateVariants !== false, generateCover: options.generateCover !== false, coverTitle: cleanCoverCopy(options.coverTitle, 42), contentTitle: cleanCoverCopy(options.contentTitle, 42), silenceDb: Number(options.silenceDb ?? -36), silenceDuration: Number(options.silenceDuration ?? 0.45), pauseKeep: Number(options.pauseKeep ?? 0.12), transcriptionModel: options.transcriptionModel || "small", aiMode: "full-auto" }, versions: [], reviews: [], assets: [], jobDir: dir };
+      const contentId = decodeURIComponent(req.headers["x-content-id"] || "");
+      const job = {
+        id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "uploaded", progress: 0,
+        fileName, sizeBytes, sourcePath, contentId, contentDirection: await contentDirectionFor(contentId), script: String(options.script || ""),
+        options: {
+          removeSilence: options.removeSilence !== false, captions: options.captions !== false,
+          captionStyle: normalizeCaptionStyle(options.captionStyle), informationPanels: options.informationPanels !== false,
+          layout: ["original", "vertical", "square"].includes(options.layout) ? options.layout : "vertical",
+          generateVariants: options.generateVariants !== false, generateCover: options.generateCover !== false,
+          coverTitle: cleanCoverCopy(options.coverTitle, 42), contentTitle: cleanCoverCopy(options.contentTitle, 42),
+          silenceDb: Number(options.silenceDb ?? -36), silenceDuration: Number(options.silenceDuration ?? 0.45),
+          pauseKeep: Number(options.pauseKeep ?? 0.12), transcriptionModel: options.transcriptionModel || "small", aiMode: "full-auto"
+        },
+        versions: [], reviews: [], assets: [], jobDir: dir
+      };
       await saveJob(job); processJob(job); return json(res, 202, { job });
     }
     const jobMatch = pathname.match(/^\/api\/jobs\/([^/]+)$/);
