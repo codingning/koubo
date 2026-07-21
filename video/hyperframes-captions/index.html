@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN" data-composition-variables='[
+  {"id":"captionsJson","type":"string","label":"Caption cues","default":"[{\"start\":0,\"end\":2,\"text\":\"动态字幕\",\"keyword\":\"动态\"}]"},
+  {"id":"duration","type":"number","label":"Timeline duration","default":3},
+  {"id":"style","type":"string","label":"Caption style","default":"keyword-pop"}
+]'>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1080, height=1920">
+    <script src="./gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Microsoft YaHei"; src: local("Microsoft YaHei"); }
+      * { box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; margin: 0; overflow: hidden; background: transparent; }
+      body { font-family: "Microsoft YaHei", sans-serif; }
+      #root { position: relative; width: 1080px; height: 1920px; background: transparent; }
+      #caption-stage { position: absolute; inset: 0; pointer-events: none; }
+      .caption-cue {
+        position: absolute;
+        left: 70px;
+        right: 70px;
+        bottom: 188px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        text-align: center;
+        color: #fff;
+        font-size: 62px;
+        font-weight: 900;
+        line-height: 1.18;
+        letter-spacing: -1px;
+        opacity: 0;
+        transform-origin: 50% 100%;
+        filter: drop-shadow(0 5px 8px rgba(0, 0, 0, .28));
+      }
+      .caption-cue.compact { font-size: 54px; }
+      .caption-line {
+        display: inline;
+        max-width: 940px;
+        padding: 5px 12px 8px;
+        -webkit-text-stroke: 6px rgba(8, 10, 14, .96);
+        paint-order: stroke fill;
+        text-shadow: 0 3px 0 rgba(0, 0, 0, .28);
+      }
+      .caption-keyword { color: #ffd21f; }
+      .caption-cue.clean-card .caption-line {
+        padding: 13px 24px 16px;
+        border-radius: 18px;
+        background: rgba(6, 12, 18, .72);
+        -webkit-text-stroke: 0 transparent;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, .24);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="3" data-width="1080" data-height="1920" data-fps="30">
+      <div id="caption-stage"></div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const variables = window.__hyperframes.getVariables();
+      const root = document.querySelector("#root");
+      const stage = document.querySelector("#caption-stage");
+      const totalDuration = Math.max(0.5, Number(variables.duration) || 3);
+      const style = String(variables.style || "keyword-pop");
+      let cues = [];
+      try { cues = JSON.parse(String(variables.captionsJson || "[]")); } catch { cues = []; }
+      root.dataset.duration = totalDuration.toFixed(3);
+
+      function appendText(parent, value, className = "") {
+        if (!value) return;
+        const span = document.createElement("span");
+        span.textContent = value;
+        if (className) span.className = className;
+        parent.appendChild(span);
+      }
+
+      const timeline = gsap.timeline({ paused: true });
+      for (const [index, cue] of cues.entries()) {
+        const start = Math.max(0, Number(cue.start) || 0);
+        const end = Math.min(totalDuration, Math.max(start + .35, Number(cue.end) || start + .35));
+        const text = String(cue.text || "").trim();
+        if (!text || end <= start) continue;
+        const keyword = String(cue.keyword || "").trim();
+        const keywordIndex = keyword ? text.toLowerCase().indexOf(keyword.toLowerCase()) : -1;
+        const element = document.createElement("div");
+        element.className = `caption-cue clip ${text.length > 16 ? "compact" : ""} ${style === "clean-card" ? "clean-card" : ""}`;
+        element.dataset.start = start.toFixed(3);
+        element.dataset.duration = (end - start).toFixed(3);
+        element.dataset.trackIndex = "8";
+        element.dataset.cueIndex = String(index);
+        const line = document.createElement("span");
+        line.className = "caption-line";
+        if (keywordIndex >= 0) {
+          appendText(line, text.slice(0, keywordIndex));
+          appendText(line, text.slice(keywordIndex, keywordIndex + keyword.length), "caption-keyword");
+          appendText(line, text.slice(keywordIndex + keyword.length));
+        } else appendText(line, text);
+        element.appendChild(line);
+        stage.appendChild(element);
+
+        const enterDuration = Math.min(.2, Math.max(.12, (end - start) * .24));
+        const exitDuration = Math.min(.14, Math.max(.08, (end - start) * .16));
+        const exitAt = Math.max(start + enterDuration, end - exitDuration);
+        timeline.fromTo(element, { autoAlpha: 0, y: 28, scale: .95 }, { autoAlpha: 1, y: 0, scale: 1, duration: enterDuration, ease: "back.out(1.35)" }, start);
+        timeline.to(element, { autoAlpha: 0, y: -16, scale: .985, duration: exitDuration, ease: "power2.in" }, exitAt);
+      }
+      timeline.to({}, { duration: Math.max(0, totalDuration - timeline.duration()) });
+      window.__timelines.main = timeline;
+    </script>
+  </body>
+</html>

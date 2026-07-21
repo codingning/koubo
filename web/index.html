@@ -64,7 +64,7 @@
             </div>
             <div class="entry-path">
               <span>固定入口</span>
-              <code>F:\code\koubo\打开AI口播工作台.vbs</code>
+              <code>项目根目录\打开AI口播工作台.vbs</code>
               <button id="generate-content" class="btn btn-primary" disabled>AI生成新口播</button>
               <small id="generation-status">正在连接本地工作流……</small>
             </div>
@@ -118,7 +118,7 @@
               </div>
               <div class="location-row">
                 <span>网页查看入口</span>
-                <code>F:\code\koubo\打开AI口播工作台.vbs</code>
+                <code>项目根目录\打开AI口播工作台.vbs</code>
               </div>
               <div class="location-actions">
                 <a id="open-source-package" class="btn btn-secondary" href="#" target="_blank">打开完整素材包</a>
@@ -272,7 +272,7 @@
             <div>
               <span class="start-kicker">只做两件事：上传原片，最后审核</span>
               <h2>转录、删错句、字幕、重点卡片、调音量、渲染和QA由工作流自动完成</h2>
-              <p>原视频始终留在本机。公司模型只接收脱敏后的口播稿与文字转录，用来生成剪辑决策，不会收到原视频文件。</p>
+              <p>原视频始终留在本机。文本模型只接收脱敏后的口播稿与文字转录，用来生成剪辑决策，不会收到原视频文件。</p>
             </div>
             <div class="service-card">
               <span id="video-service-status" class="service-status is-checking">正在检查自动化工作流</span>
@@ -295,7 +295,7 @@
                 <input id="video-file" type="file" accept="video/*">
                 <span class="video-drop-icon">＋</span>
                 <strong>点击选择视频</strong>
-                <small>只复制到本机 F:\code\koubo\video-jobs</small>
+                <small>只复制到本项目的 video-jobs 目录</small>
               </label>
               <video id="video-preview" class="video-preview is-hidden" controls playsinline></video>
               <div id="selected-video-info" class="selected-video-info">尚未选择视频</div>
@@ -305,7 +305,12 @@
               <div class="panel-head"><h3>2. 自动处理设置</h3><span class="mini-label">默认值可直接使用</span></div>
               <label class="edit-option-row"><span><strong>输出画面</strong><small>默认生成抖音/小红书竖屏</small></span><select id="edit-layout"><option value="vertical">9:16 竖屏</option><option value="original">保持原比例</option><option value="square">1:1 方形</option></select></label>
               <label class="edit-option-row"><span><strong>删除长停顿和明显重复</strong><small>先检测停顿，再由AI根据逐字稿保守删减</small></span><input id="edit-remove-silence" type="checkbox" checked></label>
-              <label class="edit-option-row"><span><strong>逐字字幕和重点卡片</strong><small>使用真实语音时间轴，不再按原稿估算</small></span><input id="edit-captions" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>动态逐字字幕</strong><small>按真实语音时间轴切短句，重点词自动高亮</small></span><input id="edit-captions" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>字幕包装</strong><small>关键词弹入接近参考视频的节奏，失败会自动降级</small></span><select id="edit-caption-style"><option value="keyword-pop" selected>关键词弹入（推荐）</option><option value="clean-card">卡片字幕</option><option value="static">简洁静态</option></select></label>
+              <label class="edit-option-row"><span><strong>结构化分屏信息板</strong><small>只在步骤、清单等关键段落出现，条目依次滑入</small></span><input id="edit-information-panels" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>生成三种平台画幅</strong><small>竖屏、方形和原比例均从同一审核母版派生</small></span><input id="edit-generate-variants" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>生成醒目文字封面</strong><small>自动独立排版 9:16、3:4、16:9 横版和 4:3 横版</small></span><input id="edit-generate-cover" type="checkbox" checked></label>
+              <label class="edit-option-row"><span><strong>封面主标题（可选）</strong><small>用“/”分行；留空时由 AI 从口播稿提炼</small></span><input id="edit-cover-title" type="text" maxlength="42" placeholder="例如：我用 Codex / 做了一个 / AI口播工作台"></label>
               <label class="edit-option-row"><span><strong>剪辑节奏</strong><small>自然模式会保留必要呼吸</small></span><select id="edit-silence-duration"><option value="0.35">更紧凑</option><option value="0.45" selected>自然</option><option value="0.65">更保守</option></select></label>
               <label class="edit-option-row"><span><strong>中文转录精度</strong><small>small 更快，medium 更准但更慢</small></span><select id="edit-transcription-model"><option value="small" selected>标准（推荐）</option><option value="medium">高精度</option></select></label>
               <button id="analyze-video" class="btn btn-primary btn-block" disabled>上传并开始全自动剪辑</button>
@@ -315,7 +320,7 @@
           <article class="panel edit-run-panel">
             <div class="edit-run-head">
               <div><h3>自动处理进度</h3><p>开始后无需继续点击。网页会自动等待转录、剪辑、渲染和技术检查完成。</p></div>
-              <button id="retry-video" class="btn btn-secondary is-hidden">重试任务</button>
+              <div class="inline-actions"><button id="replan-video" class="btn btn-secondary is-hidden">复用逐字稿重新规划</button><button id="retry-video" class="btn btn-secondary is-hidden">重试任务</button></div>
             </div>
             <div class="job-progress"><div id="edit-progress-bar"></div></div>
             <div id="edit-job-status" class="job-status">等待选择视频</div>
@@ -328,6 +333,15 @@
               <video id="final-video" class="final-video" controls playsinline></video>
               <div>
                 <div id="final-qa" class="final-qa"></div>
+                <div id="capability-status" class="capability-status"></div>
+                <section id="cover-result" class="cover-result is-hidden">
+                  <div class="cover-result-head"><div><strong>发布封面</strong><small id="cover-copy">自动生成四种画幅</small></div><span class="mini-label">本地生成</span></div>
+                  <img id="cover-preview" class="cover-preview" alt="当前视频封面预览">
+                  <label for="result-cover-title"><strong>调整封面大字</strong><small>用“/”控制分行，不会重新渲染视频</small></label>
+                  <input id="result-cover-title" type="text" maxlength="42" placeholder="输入封面大字">
+                  <button id="regenerate-cover" class="btn btn-secondary btn-block">只重做四张封面</button>
+                  <div id="cover-downloads" class="artifact-links cover-downloads"></div>
+                </section>
                 <p id="edit-summary" class="edit-summary"></p>
                 <div id="version-list" class="version-list"></div>
                 <div class="review-box">
@@ -336,23 +350,30 @@
                   <div class="inline-actions"><button id="revise-video" class="btn btn-secondary">按意见生成新版本</button><button id="approve-video" class="btn btn-primary">审核通过</button></div>
                   <div id="review-history" class="review-history"></div>
                 </div>
+                <div id="variant-downloads" class="artifact-links"></div>
+                <div id="version-artifacts" class="artifact-links"></div>
                 <div class="inline-actions result-actions"><a id="download-final" class="btn btn-dark" href="#" download>下载当前成片</a></div>
                 <code id="job-folder" class="job-folder"></code>
               </div>
             </div>
+            <div class="local-media-panel">
+              <div class="panel-head"><h4>本地补充素材</h4><span class="mini-label">默认不进入成片</span></div>
+              <div class="inline-actions"><input id="media-file" type="file" accept="image/*,video/*,audio/*"><button id="upload-media" class="btn btn-secondary" disabled>加入当前任务</button></div>
+              <div id="media-assets" class="media-assets"></div>
+            </div>
           </article>
 
           <article class="panel inherited-skills-panel">
-            <div class="panel-head"><h3>工作流已自动继承的能力</h3><span class="mini-label">不再需要复制指令给Codex</span></div>
+            <div class="panel-head"><h3>六项能力的实际落点</h3><span class="mini-label">每个版本都有可核对产物</span></div>
             <div class="skill-capability-grid">
-              <div><b>01</b><strong>本地 Whisper</strong><span>中文逐字转录和真实字幕时间轴</span></div>
-              <div><b>02</b><strong>Video Use 原则</strong><span>删除假启动、重复、错句并保护自然情绪</span></div>
-              <div><b>03</b><strong>动态包装</strong><span>钩子、证据、结果和经验重点卡片</span></div>
-              <div><b>04</b><strong>平台画幅</strong><span>9:16、原比例和1:1安全构图</span></div>
-              <div><b>05</b><strong>声音处理</strong><span>切点淡化、基础滤波和-16 LUFS响度</span></div>
-              <div><b>06</b><strong>AI返修闭环</strong><span>自然语言反馈、版本记录、重新渲染和QA</span></div>
+              <div><b>01</b><strong>HyperFrames</strong><span>透明动态卡片；失败时记录原因并回退 ASS</span></div>
+              <div><b>02</b><strong>Video Use</strong><span>逐字稿语义删错句、停顿检测、字幕和切点核查</span></div>
+              <div><b>03</b><strong>Promotion</strong><span>审核母版派生 9:16、1:1 和原比例下载</span></div>
+              <div><b>04</b><strong>Generative Media</strong><span>本地素材入库、权属确认和审批清单；云生成关闭</span></div>
+              <div><b>05</b><strong>Video Cut</strong><span>同一剪辑计划生成时间线、CMX 3600 EDL 和滤镜脚本</span></div>
+              <div><b>06</b><strong>AI Video Workflow</strong><span>上传、分析、确认、版本渲染、QA 和最终审核闭环</span></div>
             </div>
-            <div class="privacy-note"><strong>隐私边界：</strong>原视频和音频不上传云端；只有文字稿、逐字转录和技术参数交给已配置的公司模型做剪辑决策。不会自动发布。</div>
+            <div class="privacy-note"><strong>隐私边界：</strong>原视频和音频不上传云端；只有文字稿、逐字转录和技术参数交给已配置的文本模型做剪辑决策。不会自动发布。</div>
           </article>
         </section>
 

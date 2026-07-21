@@ -18,5 +18,6 @@ Thumbs.db
 # Generated AI content and local runtime
 content-items/
 .runtime/
+.runtime-downloads/
 __pycache__/
 *.pyc

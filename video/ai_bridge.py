@@ -1,6 +1,6 @@
 """Local AI bridge for the koubo workbench.
 
-- Loads the already configured company OpenAI-compatible model from OpenMontage.
+- Loads an OpenAI-compatible text model from this project's environment.
 - Runs faster-whisper locally for speech-to-text.
 - Never writes or returns API keys.
 """
@@ -10,12 +10,11 @@ import argparse
 import json
 import os
 import re
-import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-OPENMONTAGE_ROOT = Path(os.environ.get("OPENMONTAGE_ROOT", r"F:\code\OpenMontage")).resolve()
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,29 +42,101 @@ def extract_json(text: str) -> Any:
 def message_text(content: Any) -> str:
     if isinstance(content, str):
         return content
+    if isinstance(content, dict):
+        if "value" in content:
+            return message_text(content.get("value"))
+        if "text" in content:
+            return message_text(content.get("text"))
+        if "content" in content:
+            return message_text(content.get("content"))
     if isinstance(content, list):
-        return "\n".join(str(item.get("text", "")) for item in content if isinstance(item, dict) and item.get("text"))
+        return "\n".join(part for item in content if (part := message_text(item)).strip())
     return str(content or "")
 
 
-def load_company_runtime():
-    sys.path.insert(0, str(OPENMONTAGE_ROOT))
-    from dotenv import load_dotenv
-    from tools.company_openai import first_env, openai_client_from_env
+def response_field(value: Any, name: str, default: Any = None) -> Any:
+    if isinstance(value, dict):
+        return value.get(name, default)
+    return getattr(value, name, default)
 
-    load_dotenv(OPENMONTAGE_ROOT / ".env", override=False)
-    model = first_env("COMPANY_OPENAI_CHAT_MODEL", "OPENAI_MODEL")
+
+def response_details(response: Any) -> tuple[str, Any, dict[str, Any]]:
+    """Normalize OpenAI SDK objects and common compatible endpoint wrappers."""
+    if isinstance(response, str):
+        stripped = response.strip()
+        try:
+            decoded = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            return response, None, {}
+        wrapper_fields = {"choices", "message", "content", "output_text", "output"}
+        if isinstance(decoded, dict) and wrapper_fields.intersection(decoded):
+            return response_details(decoded)
+        return response, None, {}
+
+    usage_raw = response_field(response, "usage")
+    usage = {
+        "prompt_tokens": response_field(usage_raw, "prompt_tokens"),
+        "completion_tokens": response_field(usage_raw, "completion_tokens"),
+        "total_tokens": response_field(usage_raw, "total_tokens"),
+    } if usage_raw is not None else {}
+
+    choices = response_field(response, "choices")
+    if isinstance(choices, (list, tuple)) and choices:
+        choice = choices[0]
+        message = response_field(choice, "message")
+        content = response_field(message, "content") if message is not None else response_field(choice, "text")
+        return message_text(content), response_field(choice, "finish_reason"), usage
+
+    output_text = response_field(response, "output_text")
+    if output_text is not None:
+        return message_text(output_text), response_field(response, "finish_reason"), usage
+
+    output = response_field(response, "output")
+    if isinstance(output, (list, tuple)):
+        parts: list[str] = []
+        for item in output:
+            content = response_field(item, "content")
+            if content is not None:
+                parts.append(message_text(content))
+            else:
+                parts.append(message_text(response_field(item, "text")))
+        return "\n".join(part for part in parts if part.strip()), response_field(response, "finish_reason"), usage
+
+    message = response_field(response, "message")
+    if message is not None:
+        return message_text(response_field(message, "content", message)), response_field(response, "finish_reason"), usage
+
+    content = response_field(response, "content")
+    if content is not None:
+        return message_text(content), response_field(response, "finish_reason"), usage
+
+    return message_text(response), response_field(response, "finish_reason"), usage
+
+
+def load_text_model():
+    from dotenv import load_dotenv
+    from openai import OpenAI
+
+    load_dotenv(ROOT / ".env", override=False)
+    api_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    base_url = (os.environ.get("OPENAI_BASE_URL") or "").strip()
+    model = (os.environ.get("OPENAI_MODEL") or "").strip()
+    if not api_key:
+        raise RuntimeError("文本模型未配置：请在项目 .env 中填写 OPENAI_API_KEY")
     if not model:
-        raise RuntimeError("公司聊天模型未配置")
-    client = openai_client_from_env(
-        api_key_names=("COMPANY_OPENAI_API_KEY", "OPENAI_API_KEY"),
-        base_url_names=("COMPANY_OPENAI_BASE_URL", "OPENAI_BASE_URL"),
-    )
+        raise RuntimeError("文本模型未配置：请在项目 .env 中填写 OPENAI_MODEL")
+    client_options = {"api_key": api_key}
+    if base_url:
+        parsed = urlsplit(base_url)
+        if parsed.scheme and parsed.netloc and parsed.path.rstrip("/") == "":
+            base_url = urlunsplit((parsed.scheme, parsed.netloc, "/v1", parsed.query, parsed.fragment))
+        client_options["base_url"] = base_url
+    client = OpenAI(**client_options)
     return client, model
 
 
 def call_json(messages: list[dict[str, str]], *, temperature: float = 0.3, max_tokens: int = 12000) -> dict[str, Any]:
-    client, model = load_company_runtime()
+    client, model = load_text_model()
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -78,9 +149,9 @@ def call_json(messages: list[dict[str, str]], *, temperature: float = 0.3, max_t
     except Exception:
         json_mode = False
         response = client.chat.completions.create(**kwargs)
-    choice = response.choices[0]
-    content = message_text(choice.message.content)
-    finish_reason = getattr(choice, "finish_reason", None)
+    content, finish_reason, usage = response_details(response)
+    if not content.strip():
+        raise RuntimeError("文本模型返回了空内容")
     if finish_reason in {"length", "max_tokens"}:
         raise RuntimeError(f"模型输出被截断：{finish_reason}")
     json_repaired = False
@@ -98,11 +169,10 @@ def call_json(messages: list[dict[str, str]], *, temperature: float = 0.3, max_t
             max_tokens=max_tokens,
             response_format={"type": "json_object"},
         )
-        repair_choice = repair_response.choices[0]
-        repair_finish = getattr(repair_choice, "finish_reason", None)
+        repair_content, repair_finish, _ = response_details(repair_response)
         if repair_finish in {"length", "max_tokens"}:
             raise RuntimeError(f"JSON修复输出被截断：{repair_finish}")
-        data = extract_json(message_text(repair_choice.message.content))
+        data = extract_json(repair_content)
         json_repaired = True
     return {
         "model": model,
@@ -111,9 +181,9 @@ def call_json(messages: list[dict[str, str]], *, temperature: float = 0.3, max_t
         "finish_reason": finish_reason,
         "data": data,
         "usage": {
-            "prompt_tokens": getattr(getattr(response, "usage", None), "prompt_tokens", None),
-            "completion_tokens": getattr(getattr(response, "usage", None), "completion_tokens", None),
-            "total_tokens": getattr(getattr(response, "usage", None), "total_tokens", None),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
         },
     }
 
@@ -389,17 +459,35 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 def edit_plan(payload: dict[str, Any], feedback: str | None = None) -> dict[str, Any]:
     transcript = payload.get("transcript", {})
     base_plan = payload.get("base_plan", {})
+    compact_transcript = {
+        "text": transcript.get("text", ""),
+        "segments": [
+            {"start": item.get("start"), "end": item.get("end"), "text": item.get("text", "")}
+            for item in transcript.get("segments", [])
+            if isinstance(item, dict)
+        ],
+        "lowConfidenceWords": [
+            {"word": item.get("word", ""), "start": item.get("start"), "end": item.get("end"), "probability": item.get("probability")}
+            for item in transcript.get("words", [])
+            if isinstance(item, dict) and float(item.get("probability") or 0) < 0.62
+        ],
+    }
     system = """你是短视频口播剪辑导演。根据逐字转录、停顿检测、原口播目标和用户反馈生成保守、可执行的剪辑JSON。不得改动事实，不得凭空添加说过的话。优先删除假启动、重复、口头禅和明显错句；保留自然情绪和必要停顿。所有时间必须引用源视频秒数。只输出JSON。"""
     schema = {
         "keepSegments": [{"start": 0.0, "end": 5.0, "reason": "保留原因"}],
-        "overlayCards": [{"start": 1.0, "end": 3.5, "text": "不超过14字", "kind": "hook|evidence|result|lesson"}],
+        "overlayCards": [{"start": 1.0, "end": 3.5, "text": "不超过14字", "kind": "hook|evidence|result|lesson", "items": ["最多4条短要点"], "display": "banner|side-panel"}],
+        "coverDesign": {"eyebrow": "身份或场景，不超过12字", "lines": ["2到3行具体主题大字"], "highlights": ["需要黄色强调的原文片段"], "features": ["2到4个能力词"]},
         "subtitleStyle": "bold-clean",
         "editSummary": "剪辑策略摘要",
         "removedReasons": ["删除原因"],
         "confidence": 0.8,
     }
-    user = f"""目标口播稿：\n{payload.get('script', '')}\n\n源视频信息：\n{json.dumps(payload.get('source', {}), ensure_ascii=False)}\n\n停顿检测与基础保留区间：\n{json.dumps(base_plan, ensure_ascii=False)}\n\n逐字转录：\n{json.dumps(transcript, ensure_ascii=False)}\n\n用户最终审核反馈：\n{feedback or '无，这是第一次自动剪辑'}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n约束：keepSegments 按时间升序、不重叠，每段至少0.35秒；除非存在大量重复，不得删除超过原片55%；overlayCards 0-5个，只放最重要的钩子/证据/结果/经验。"""
-    return call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=10000)
+    user = f"""目标口播稿：\n{payload.get('script', '')}\n\n源视频信息：\n{json.dumps(payload.get('source', {}), ensure_ascii=False)}\n\n停顿检测与基础保留区间：\n{json.dumps(base_plan, ensure_ascii=False)}\n\n逐字转录（按句时间轴，另列低置信词）：\n{json.dumps(compact_transcript, ensure_ascii=False)}\n\n用户最终审核反馈：\n{feedback or '无，这是第一次自动剪辑'}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n约束：keepSegments 按时间升序、不重叠，每段至少0.35秒；除非存在大量重复，不得删除超过原片55%；overlayCards 0-5个，只放最重要的钩子/证据/结果/经验。只有出现步骤、清单或并列结构时才填写 2-4 条 items 并使用 side-panel，其余卡片使用 banner 且 items 为空；每条 item 不超过14字。coverDesign 必须让用户在主页缩略图上一眼看懂视频讲什么：lines 只写具体主题，不写“快来看”“太强了”等空泛钩子，共2到3行、单行尽量不超过9个汉字；highlights 必须是 lines 中的原文；features 只列视频明确展示的能力。结尾出现导演交流、现场提示或重复补录时，应只保留完整且自然的一版。"""
+    result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=10000)
+    plan = result.get("data")
+    if not isinstance(plan, dict) or not isinstance(plan.get("keepSegments"), list):
+        raise RuntimeError("文本模型返回的内容不是剪辑计划，请检查 OPENAI_BASE_URL 是否指向 OpenAI 兼容 API（通常以 /v1 结尾）")
+    return result
 
 
 def transcribe(payload: dict[str, Any]) -> dict[str, Any]:
@@ -459,7 +547,7 @@ def main() -> int:
         payload = json.loads(request_path.read_text(encoding="utf-8-sig"))
         operation = payload.get("operation")
         if operation == "config":
-            _, model = load_company_runtime()
+            _, model = load_text_model()
             result = {"success": True, "model": model, "transcription_model": "faster-whisper/small"}
         elif operation == "generate_content":
             result = {"success": True, **generate_content(payload)}

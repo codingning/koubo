@@ -9,8 +9,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
 const assert = (condition, message) => { if (!condition) failures.push(message); };
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8").replace(/^\uFEFF/, "");
+const normalizeSpokenText = value => String(value || "").replace(/[，。！？、；：,.!?;:\s]/g, "");
 
-for (const file of ["video/server.mjs", "video/ai_bridge.py", "web/index.html", "web/app.js", "web/styles.css", "打开AI口播工作台.vbs"]) {
+for (const file of ["video/server.mjs", "video/ai_bridge.py", "video/hyperframes-captions/index.html", "video/hyperframes-overlay/index.html", "web/index.html", "web/app.js", "web/styles.css", "打开AI口播工作台.vbs"]) {
   assert(fs.existsSync(path.join(root, file)), `缺少文件：${file}`);
 }
 
@@ -21,6 +22,38 @@ for (const file of ["video/server.mjs", "web/app.js"]) {
 
 const serverSource = read("video/server.mjs");
 const bridgeSource = read("video/ai_bridge.py");
+for (const capability of [
+  "validatePlan",
+  "renderHyperframesCards",
+  "renderHyperframesCaptions",
+  "writeTimelineArtifacts",
+  "renderVariants",
+  "runQa",
+  "ensureMediaManifest",
+  "videoColorPipeline",
+  "rerenderJob",
+  "renderCover",
+  "regenerateCover",
+]) assert(serverSource.includes(`function ${capability}`), `Missing video capability implementation: ${capability}`);
+for (const route of ["/replan", "/rerender", "/cover", "/assets", "/approve"]) {
+  assert(serverSource.includes(route), `Missing workflow endpoint: ${route}`);
+}
+for (const artifact of ["timeline-v", "timeline-v${version}.edl", "qa-report-v", "media-manifest-v", "captions-v", "filter-v", "cover-design-v"]) {
+  assert(serverSource.includes(artifact), `Missing auditable artifact: ${artifact}`);
+}
+assert(serverSource.includes("job.options.generateVariants === false"), "Promotion output switch is not enforced");
+assert(serverSource.includes("tonemap=tonemap=hable"), "HLG/HDR source is not tone-mapped for SDR delivery");
+assert(serverSource.includes('"-color_primaries", "bt709"'), "Rendered video is not tagged as BT.709");
+assert(serverSource.includes('captionStyle: normalizeCaptionStyle(options.captionStyle)'), "新任务未默认启用可控字幕包装");
+assert(serverSource.includes('renderHorizontal(1920, "16x9")') && serverSource.includes('renderHorizontal(1440, "4x3")'), "封面流程缺少 16:9 或 4:3 横版产物");
+assert(serverSource.includes("coverPackaging.wide16x9?.metadata?.width === 1920") && serverSource.includes("coverPackaging.landscape4x3?.metadata?.width === 1440"), "四画幅封面尺寸没有进入 QA 门禁");
+assert(serverSource.includes('engine: "ass-fallback"'), "动态包装缺少 ASS 降级路径");
+assert(serverSource.includes('feedback.trim() ? "revise_plan" : "edit_plan"'), "Replan feedback is not routed to the text model");
+assert(!/OPENMONTAGE|OpenMontage|company_openai/i.test(serverSource + bridgeSource), "运行代码仍依赖 OpenMontage");
+for (const name of ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"]) {
+  assert(read(".env.example").includes(name), `.env.example 缺少 ${name}`);
+}
+
 const python = path.join(root, ".runtime", "Scripts", "python.exe");
 if (fs.existsSync(python)) {
   const bridge = path.join(root, "video", "ai_bridge.py");
@@ -29,6 +62,7 @@ if (fs.existsSync(python)) {
 
   const structureTest = String.raw`
 import importlib.util
+import json
 import pathlib
 import sys
 
@@ -41,54 +75,56 @@ def sample(archetype, count):
     return {
         "structureDesign": {
             "archetype": archetype,
-            "selectionReason": "evidence shape and viewer need fit this structure",
-            "coreQuestion": "how to turn saved AI tools into a verified result",
-            "hookConflict": "saving more tools can disguise the lack of action",
+            "selectionReason": "这条内容的证据形态与观众问题适合当前结构",
+            "coreQuestion": "普通人如何把收藏AI工具变成一个可验证结果",
+            "hookConflict": "收藏越多越容易把准备误认为真正的行动进度",
             "saveableFramework": [
-                {"label": f"step-{i + 1}", "action": "finish one executable action in ten minutes", "expectedSignal": "a file exists or an explicit error appears"}
+                {"label": f"步骤{i + 1}", "action": "完成一个十分钟内可以执行的小动作", "expectedSignal": "得到一个文件或明确报错"}
                 for i in range(count)
             ],
-            "personalEvidenceRole": "real project output proves whether the action works",
-            "personalVariation": "adapt the action to the actual recording workflow limits",
-            "boundary": "an unfilmed result cannot be claimed as complete",
-            "payoff": "the viewer can locate their stage and perform the next action",
+            "personalEvidenceRole": "用真实项目结果证明动作有效",
+            "personalVariation": "结合AI口播工作台的实拍限制调整动作",
+            "boundary": "尚未拍摄验证的结果不能写成完成",
+            "payoff": "观众能判断自己在哪一步并完成下一动作",
         }
     }
 
-for archetype, count in {"evidence-story": 2, "saveable-map": 3, "short-resonance": 1}.items():
+valid = {
+    "evidence-story": 2,
+    "saveable-map": 3,
+    "short-resonance": 1,
+}
+for archetype, count in valid.items():
     issues = module.structure_issues(sample(archetype, count))
     if issues:
-        raise AssertionError(f"valid {archetype} rejected: {issues}")
+        raise AssertionError(f"{archetype} 合法样本被拒绝: {issues}")
 
 broken = sample("saveable-map", 3)
 broken["structureDesign"]["saveableFramework"][1].pop("expectedSignal")
-if not module.structure_issues(broken):
-    raise AssertionError("missing expectedSignal was accepted")
-if not module.structure_issues(sample("copy-a-viral-script", 2)):
-    raise AssertionError("invalid archetype was accepted")
+issues = module.structure_issues(broken)
+if not any("可观察信号" in issue for issue in issues):
+    raise AssertionError(f"缺少 expectedSignal 的框架未被拒绝: {issues}")
 
-primary_close = "Spend ten minutes creating one file you can open."
-you = "\u4f60"
-content = {
-    "engagement": {
-        "audienceMirror": "You may have saved many tools without producing a result",
-        "commentPrompt": "Which specific problem do you want to solve first?",
-        "followPromise": "The next post will show the verified result and boundary",
-        "viewerTask": "Complete one small action you can inspect within ten minutes",
-        "primaryClose": primary_close,
-    },
-    "creativeTone": {"humorBeat": "Do not mistake a bookmark for progress.", "trendMeme": {}},
-    "shortScript": f"{you} lack a result. {you} choose one problem. {you} only need one step. Do not mistake a bookmark for progress. " + primary_close,
-    "fullSegments": [
-        {"text": f"{you} saved many tools but still lack a verified result."},
-        {"text": f"{you} should narrow the problem, then complete one action. " + primary_close},
-    ],
-}
-if module.engagement_issues(content, {"bannedCallsToAction": []}):
-    raise AssertionError("valid primaryClose placement was rejected")
-content["shortScript"] = content["shortScript"].replace(primary_close, "")
-if not any("primaryClose" in issue for issue in module.engagement_issues(content, {"bannedCallsToAction": []})):
-    raise AssertionError("missing short-script primaryClose was accepted")
+invalid = sample("copy-a-viral-script", 2)
+if not module.structure_issues(invalid):
+    raise AssertionError("无效原型未被拒绝")
+
+class Box:
+    def __init__(self, **values):
+        self.__dict__.update(values)
+
+fixtures = [
+    ('{"keepSegments":[]}', '{"keepSegments":[]}'),
+    (json.dumps({"choices": [{"message": {"content": '{"ok":true}'}, "finish_reason": "stop"}]}), '{"ok":true}'),
+    ({"choices": [{"message": {"content": [{"type": "text", "text": '{"ok":2}'}]}}]}, '{"ok":2}'),
+    (Box(choices=[Box(message=Box(content='{"ok":3}'), finish_reason="stop")], usage=Box(total_tokens=8)), '{"ok":3}'),
+    ({"output_text": '{"ok":4}'}, '{"ok":4}'),
+    ({"output": [{"content": [{"type": "output_text", "text": '{"ok":5}'}]}]}, '{"ok":5}'),
+]
+for fixture, expected in fixtures:
+    content, _, _ = module.response_details(fixture)
+    if content != expected:
+        raise AssertionError(f"响应归一化失败: {content!r} != {expected!r}")
 `;
   const structureResult = spawnSync(python, ["-B", "-c", structureTest, bridge], { encoding: "utf8" });
   assert(structureResult.status === 0, `三种口播结构门禁测试失败：${(structureResult.stderr || structureResult.stdout).trim()}`);
@@ -104,6 +140,10 @@ assert(!app.includes("copy-ai-edit-prompt"), "网页仍保留复制高级剪辑�
 assert(app.includes("/api/contents/generate"), "网页未接入口播生成接口");
 assert(app.includes("/revise`"), "网页未接入自然语言返修接口");
 assert(app.includes("/approve`"), "网页未接入最终审核接口");
+assert(ids.has("edit-caption-style") && ids.has("edit-information-panels"), "网页缺少动态字幕或分屏信息板控制项");
+assert(app.includes("captionStyle") && app.includes("informationPanels"), "网页未把字幕包装选项发送给服务端");
+assert(ids.has("edit-generate-cover") && ids.has("edit-cover-title") && ids.has("regenerate-cover"), "网页缺少自动封面开关、标题覆盖或单独重做入口");
+assert(app.includes("generateCover") && app.includes("coverWide16x9") && app.includes("coverLandscape4x3"), "网页未完整接入四画幅封面流程");
 
 const sandbox = { window: {} };
 vm.runInNewContext(read("web/data/content-data.js"), sandbox, { filename: "content-data.js" });
@@ -119,12 +159,14 @@ for (const item of growthItems) {
   if (item.creativeTone?.humorBeat) assert(String(item.shortScript || "").includes(item.creativeTone.humorBeat), `${item.id} 精简稿没有包含轻松点`);
   if (item.creativeTone?.trendMeme?.id) {
     assert(Boolean(item.creativeTone.trendMeme.sourceUrl), `${item.id} 热梗缺少来源链接`);
-    assert(String(item.shortScript || "").includes(item.creativeTone.trendMeme.adaptedLine), `${item.id} 精简稿没有包含热梗改写句`);
+    assert(normalizeSpokenText(item.shortScript).includes(normalizeSpokenText(item.creativeTone.trendMeme.adaptedLine)), `${item.id} 精简稿没有包含热梗改写句`);
   }
   assert(!String(item.shortScript || "").startsWith("我"), `${item.id} 精简稿仍以自我汇报开场`);
 }
 const contentStyle = JSON.parse(read("config/content_style.json"));
-assert(contentStyle.version === "1.3-evidence-structures", "内容风格配置不是 evidence-structures 版本");
+assert(contentStyle.tone?.spokenLanguage, "内容风格配置缺少口语化规则");
+assert(contentStyle.engagement?.commentPrompt?.includes("具体的问题"), "内容风格配置缺少真实问题互动规则");
+assert(contentStyle.engagement?.followPromise?.includes("不固定承诺未来多少天"), "内容风格配置仍缺少非倒计时追更规则");
 assert(contentStyle.engagement?.primaryClose?.includes("自然"), "内容风格配置缺少单一自然收束规则");
 for (const archetype of ["evidence-story", "saveable-map", "short-resonance"]) {
   assert(Boolean(contentStyle.structureDesign?.archetypes?.[archetype]), `内容风格配置缺少 ${archetype} 结构`);

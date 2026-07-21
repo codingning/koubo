@@ -9,6 +9,7 @@
 - `POST /api/jobs`：上传原片并立即启动全自动处理；
 - `GET /api/jobs/:id`：读取转录、计划、进度、版本和 QA；
 - `POST /api/jobs/:id/revise`：按自然语言反馈生成新版本；
+- `POST /api/jobs/:id/cover`：复用原片和当前计划，只重做 9:16、3:4、16:9、4:3 四张文字封面；
 - `POST /api/jobs/:id/approve`：最终审核通过；
 - `POST /api/jobs/:id/retry`：失败后重试。
 
@@ -17,7 +18,7 @@
 - 原视频、音频、字幕和成片只写入 `video-jobs/`；
 - 新口播和证据包写入 `content-items/`；
 - 两个目录均被 Git 忽略；
-- 原视频不上传模型服务；公司模型只读取脱敏文字和技术参数。
+- 原视频不上传模型服务；文本模型只读取脱敏文字和技术参数。
 
 ## 启动
 
