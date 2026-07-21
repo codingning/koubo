@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "updatedAt": "2026-07-21",
+  "platform": "douyin",
+  "creators": [
+    {
+      "id": "douyin-reference-creator-1",
+      "label": "用户指定参考账号一",
+      "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAAOzTvIhQXaHWi6jT_P5rG5xEWpWPjufiKQHL4_uaFRZzOMFYOxxQPu3AtUmTd_P09",
+      "secUid": "MS4wLjABAAAAOzTvIhQXaHWi6jT_P5rG5xEWpWPjufiKQHL4_uaFRZzOMFYOxxQPu3AtUmTd_P09",
+      "pinnedVideoIds": ["7664557553531079986"],
+      "referenceFor": ["AI工具更新", "Codex", "知识拆解", "长视频章节结构", "评论提问"]
+    },
+    {
+      "id": "douyin-reference-creator-2",
+      "label": "用户指定参考账号二",
+      "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAACqJi0ISN_iKeH5JhOhbmqnf6WLx0Zt8MAa_h_DKUIVo",
+      "secUid": "MS4wLjABAAAACqJi0ISN_iKeH5JhOhbmqnf6WLx0Zt8MAa_h_DKUIVo",
+      "pinnedVideoIds": ["7662756855256562067"],
+      "referenceFor": ["AI实践", "AI剪辑", "真实过程", "翻车修正", "结果展示"]
+    }
+  ],
+  "policy": {
+    "feedLimitPerCreator": 8,
+    "searchResultLimit": 8,
+    "fullVideoAnalysisCount": 2,
+    "maximumReferenceDurationSeconds": 900,
+    "requireAtLeastOneFullContentSource": true,
+    "retainRawVideo": false,
+    "retainRawTranscript": false
+  }
+}

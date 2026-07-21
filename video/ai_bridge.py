@@ -331,8 +331,124 @@ def factual_issues(data: dict[str, Any], evidence: dict[str, Any]) -> list[str]:
     return sorted(set(issues))
 
 
+AI_TOPIC_PATTERN = re.compile(
+    r"AI|人工智能|Codex|ChatGPT|Agent|智能体|大模型|模型|提示词|vibe\s*cod(?:e|ing)|自动化",
+    re.IGNORECASE,
+)
+
+
+def compact_script_length(value: str) -> int:
+    return len(re.sub(r"[\s，。！？、；：,.!?;:‘’“”\"'（）()《》【】\[\]—…·]", "", value))
+
+
+def duration_issues(data: dict[str, Any]) -> list[str]:
+    short_script, full_text, _ = script_texts(data)
+    full_length = compact_script_length(full_text)
+    short_length = compact_script_length(short_script)
+    segments = data.get("fullSegments") if isinstance(data.get("fullSegments"), list) else []
+    issues: list[str] = []
+    if not 550 <= full_length <= 950:
+        issues.append(f"完整版必须适合2—3分钟口播，正文应为550—950个有效字符，当前为{full_length}")
+    if not 7 <= len(segments) <= 12:
+        issues.append(f"2—3分钟完整版应拆成7—12段，当前为{len(segments)}段")
+    if short_script and not 180 <= short_length <= 450:
+        issues.append(f"衍生短版应为180—450个有效字符，当前为{short_length}")
+    duration_label = str(data.get("durationFull") or "")
+    if not any(mark in duration_label for mark in ("2", "3", "120", "180")):
+        issues.append("durationFull 必须明确标注约2—3分钟")
+    return issues
+
+
+def ai_relevance_issues(data: dict[str, Any], topic_plan: dict[str, Any]) -> list[str]:
+    _, full_text, _ = script_texts(data)
+    headline = "".join(str(data.get(field) or "") for field in ("mainTopic", "shortTopic", "hook", "audienceBenefit"))
+    combined = headline + full_text
+    issues: list[str] = []
+    if not AI_TOPIC_PATTERN.search(headline):
+        issues.append("主选题、短标题或开场没有明确出现AI主题")
+    if len(AI_TOPIC_PATTERN.findall(combined)) < 4:
+        issues.append("正文的AI主题密度不足，个人进度压过了AI知识与实践主线")
+    planned_angle = str(topic_plan.get("aiAngle") or "").strip()
+    if len(planned_angle) < 10:
+        issues.append("topicPlan.aiAngle 没有锁定本集明确的AI角度")
+    return issues
+
+
+def reference_issues(data: dict[str, Any], research: dict[str, Any]) -> list[str]:
+    synthesis = data.get("referenceResearch") if isinstance(data.get("referenceResearch"), dict) else {}
+    full_sources = research.get("fullContentSources") if isinstance(research.get("fullContentSources"), list) else []
+    available_ids = {str(item.get("sourceId") or "") for item in full_sources if isinstance(item, dict)}
+    used_ids = {str(item) for item in synthesis.get("sourceIds", []) if str(item)} if isinstance(synthesis.get("sourceIds"), list) else set()
+    issues: list[str] = []
+    if not available_ids:
+        issues.append("本次生成没有至少一条完成全文核验的同题参考视频")
+    if not used_ids:
+        issues.append("referenceResearch.sourceIds 没有记录实际使用的参考视频")
+    elif not used_ids.issubset(available_ids):
+        issues.append("referenceResearch.sourceIds 引用了未完成全文核验的来源")
+    for field, minimum, label in (
+        ("borrowedKnowledge", 2, "从参考视频核验并重新组织的知识点"),
+        ("structuralChoices", 2, "借鉴的结构选择"),
+        ("engagementChoices", 1, "评论或收藏设计"),
+    ):
+        value = synthesis.get(field)
+        if not isinstance(value, list) or len([item for item in value if str(item).strip()]) < minimum:
+            issues.append(f"referenceResearch.{field} 缺少{label}")
+    if len(str(synthesis.get("originalityNote") or "").strip()) < 12:
+        issues.append("referenceResearch.originalityNote 没有说明如何避免复制")
+    return issues
+
+
+def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
+    evidence = payload.get("evidence", {})
+    content_style = payload.get("content_style", {})
+    schema = {
+        "topic": "明确包含AI对象或AI实践的主选题",
+        "shortTopic": "12字以内且能看出AI话题",
+        "coreQuestion": "观众看完只解决的一个问题",
+        "aiAngle": "本集具体讲哪项AI能力、方法、工具、限制或实践",
+        "personalEvidenceRole": "个人进度只负责证明什么",
+        "searchQueries": ["抖音同题搜索词1", "搜索词2", "搜索词3"],
+        "keywords": ["用于匹配参考视频的关键词"],
+        "whyNow": "为什么今天的真实进度适合讲这个AI题目",
+    }
+    system = """你是AI内容选题编辑。先根据创作者的真实进度锁定一个明确AI话题，再让个人经历只承担案例和证据角色。不要选纯生活感悟、泛成长、职业自由或项目进度汇报。输出单个JSON对象，不要Markdown。"""
+    user = f"""真实证据：\n{json.dumps(evidence, ensure_ascii=False, indent=2)}\n\n内容定位：\n{json.dumps(content_style, ensure_ascii=False, indent=2)}\n\n已有标题：\n{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n要求：topic、shortTopic和aiAngle都要让普通观众一眼看出在讲AI；searchQueries写2—3个适合抖音检索的具体同题词；keywords写5—10个可用于匹配参考视频的短词；不要把Day编号、代码量或Git状态当成选题。"""
+    result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=3000)
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    if not AI_TOPIC_PATTERN.search(str(data.get("topic") or "") + str(data.get("aiAngle") or "")):
+        raise RuntimeError("选题规划偏离AI主线")
+    if not 2 <= len(data.get("searchQueries") or []) <= 3:
+        raise RuntimeError("选题规划没有给出2—3个同题视频搜索词")
+    result["data"] = data
+    return result
+
+
+def analyze_reference(payload: dict[str, Any]) -> dict[str, Any]:
+    source = payload.get("source", {})
+    transcript = str(payload.get("transcript") or "")[:50000]
+    comments = payload.get("comments", [])
+    schema = {
+        "sourceId": str(source.get("sourceId") or ""),
+        "topic": "这条视频真正解决的问题",
+        "relevance": "与本次AI选题的具体关系",
+        "structure": [{"range": "时间范围", "function": "这一段承担的叙事或知识功能"}],
+        "knowledge": ["可核验、可转述的知识点或方法"],
+        "engagement": ["评论、收藏或继续观看是如何被内容自然触发的"],
+        "discussionSignals": ["评论中真实出现的问题类型，只概括不引用用户名和原句"],
+        "reusablePatterns": ["可以借鉴但必须重新表达的结构模式"],
+        "limits": ["视频未证明或仍需核验的边界"],
+        "copyBoundary": "不得复制的措辞、案例、人设与素材边界",
+    }
+    system = """你负责分析一条公开AI视频的内容结构。只能根据逐字转录、标题和公开评论概括；不得补写视频没有的知识，不得输出长段原文，不得复制创作者措辞、案例或人设。输出单个JSON对象，不要Markdown。"""
+    user = f"""本次目标选题：\n{json.dumps(payload.get('topic_plan', {}), ensure_ascii=False, indent=2)}\n\n视频信息：\n{json.dumps(source, ensure_ascii=False, indent=2)}\n\n逐字转录：\n{transcript}\n\n公开评论（仅用于判断观众真实问题，不引用用户名和原句）：\n{json.dumps(comments, ensure_ascii=False, indent=2)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}"""
+    return call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.1, max_tokens=6000)
+
+
 def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
     evidence = payload.get("evidence", {})
+    topic_plan = payload.get("topic_plan", {}) if isinstance(payload.get("topic_plan"), dict) else {}
+    reference_research = payload.get("reference_research", {}) if isinstance(payload.get("reference_research"), dict) else {}
     day_number = int(payload.get("day_number") or 1)
     today = str(payload.get("date") or "")
     style_path = ROOT / "config" / "content_style.json"
@@ -344,8 +460,8 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
         "mainTopic": "主选题",
         "shortTopic": "12字以内短标题",
         "column": f"普通人学AI第{day_number}天",
-        "durationFull": "约75秒",
-        "durationShort": "约40秒",
+        "durationFull": "约2—3分钟",
+        "durationShort": "约60—90秒衍生版",
         "hook": "0-3秒开场",
         "audienceBenefit": "观众能带走的一句话",
         "engagement": {
@@ -356,7 +472,7 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
             "primaryClose": "从以上互动意图中选择一个主动作，改写成自然进入两个版本结尾的一句话",
         },
         "structureDesign": {
-            "archetype": "evidence-story|saveable-map|short-resonance",
+            "archetype": "evidence-story|saveable-map",
             "selectionReason": "为什么本题适合这套结构",
             "coreQuestion": "整条视频只解决的一个问题",
             "hookConflict": "精准矛盾、反差或观众正在付出的代价",
@@ -367,6 +483,13 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
             "personalVariation": "结合本账号真实项目、优势或限制做出的变化",
             "boundary": "方法在哪些情况下不适用或还未经验证",
             "payoff": "观众看完能做出的判断或最小行动",
+        },
+        "referenceResearch": {
+            "sourceIds": ["只填写本次 fullContentSources 中实际使用的 sourceId"],
+            "borrowedKnowledge": ["从完整视频核验后重新组织的知识点，不复制原句"],
+            "structuralChoices": ["本稿借鉴了什么结构功能以及为何适合本题"],
+            "engagementChoices": ["评论、收藏或追看的自然触发设计"],
+            "originalityNote": "如何用本人的真实进度、证据和表达形成原创版本",
         },
         "creativeTone": {
             "humorBeat": "自然进入稿件的一句轻松自嘲或反差表达",
@@ -384,7 +507,7 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
         "progress": ["真实完成项"],
         "candidates": [{"type": "今日进度型", "topic": "候选", "score": 90, "result": "主选题"}],
         "fullSegments": [{"time": "0—3秒", "label": "直接给冲突", "tone": "自然", "text": "口播"}],
-        "shortScript": "30—45秒精简稿",
+        "shortScript": "60—90秒衍生短版，不作为默认拍摄稿",
         "titles": [{"type": "结果型", "text": "标题"}],
         "covers": [{"id": "cover-a", "name": "方案A", "copy": "封面大字", "expression": "表情", "composition": "构图", "color": "颜色", "reason": "理由"}],
         "shooting": {"broll": ["画面"], "highlights": ["字幕高亮词"], "guide": {"机位": "正面半身", "语速": "自然"}},
@@ -406,6 +529,12 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 真实证据：
 {json.dumps(evidence, ensure_ascii=False, indent=2)}
 
+已经锁定的AI选题规划：
+{json.dumps(topic_plan, ensure_ascii=False, indent=2)}
+
+本次同题抖音研究包：
+{json.dumps(reference_research, ensure_ascii=False, indent=2)}
+
 已有内容标题（避免重复）：
 {json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}
 
@@ -413,22 +542,31 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 
 硬性要求：
-1. 先锁定一个 coreQuestion，再只选一种结构。有失败、干预和结果证据用 evidence-story；需要梳理先后顺序或阶段判断用 saveable-map；只有一个强共鸣和一个最小动作时用 short-resonance。不要为了显得完整强行写成长稿。
-2. evidence-story 的 saveableFramework 写2—4项，完整版5—7段、45—90秒；saveable-map 写3—5项，完整版5—8段、45—120秒；short-resonance 写1—2项，完整版3—5段、20—45秒。shortScript 必须比完整版更短且信息闭环。
+1. 主选题必须明确属于AI工具、AI方法、AI项目、AI工作流、AI学习或AI能力边界。topic_plan 是主线，个人进度只能作为案例和证据，不能把Day编号、代码量、Git状态或泛成长感悟当成主题。
+2. 完整版固定为2—3分钟、550—950个有效字符、7—12段；默认拍摄完整版。只选 evidence-story 或 saveable-map：前者写2—4个框架项，后者写3—5个框架项。shortScript 是60—90秒衍生稿，必须比完整版短且信息闭环。
 3. saveableFramework 每项必须包含具体 action 与执行后可观察的 expectedSignal。禁止写“提升认知、保持坚持、拥抱AI”这类无法验证的口号。
 4. 开头优先从观众的困境、选择、损失或反常识切入；身份信息并非必要时，前20字不要以“我”开头。
-5. evidence-story 用个人经历证明方法；saveable-map 让观众定位当前阶段；short-resonance 用一句判断完成自我识别。三种结构都要写清 personalVariation 和 boundary。
+5. 完整稿只使用 evidence-story 或 saveable-map：前者用个人经历证明方法，后者让观众定位当前阶段；两种结构都要写清 personalVariation 和 boundary。
 6. 个人经历只作为真实案例，至少三次把经验翻译成观众可以执行的判断或动作。
 7. engagement.commentPrompt、followPromise、viewerTask 都要写清策划意图。选择其中最适合本集的一个主动作，改写成 engagement.primaryClose，并让 primaryClose 自然进入 fullSegments 最后一段和 shortScript。不要把三个字段逐句原样连在结尾。
 8. commentPrompt 必须是容易回答的具体问题；followPromise 只承诺已有计划支持的下一次验证；viewerTask 必须今天能做、不要求完美或公开。
-9. 45秒以上稿件自然放1—2个轻松点。短共鸣结构不必为了幽默破坏节奏，但仍需给出自然的 humorBeat 备选。
+9. 2—3分钟稿件自然放2—3个轻松点或反差，但只能有一个主热梗，不能连续抖包袱。
 10. 热梗只在确实贴合冲突时使用，写入 creativeTone.trendMeme；不得大段照搬、不得虚构来源、不得把热度数字写入口播。
 11. 不得自行增加证据中没有的拍摄遍数、耗时、播放量、结果或“明天一定发布”等承诺。证据写着尚未拍摄/发布时，只能把本条视频描述为准备执行的行动或使用条件句，不能声称已经录了几条、重拍几次或已经发出。
 12. titles 3个；covers 3个；candidates 最多5个。证据不足时明确写“今天不建议发布”，不要编造。
+13. 只能使用 reference_research.fullContentSources 中完成全文核验的来源来概括视频结构和知识。metadataOnlySources 只能用于发现选题和评论问题，不能假装看过完整视频。
+14. referenceResearch.sourceIds 至少记录1条实际使用的完整来源；至少提炼2条知识、2个结构选择和1个互动/收藏设计。全部用自己的话重组，并用本人的真实进度、证据和限制形成原创版本。
 """
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     result = call_json(messages, temperature=0.4, max_tokens=10000)
-    issues = structure_issues(result.get("data", {})) + engagement_issues(result.get("data", {}), content_style) + factual_issues(result.get("data", {}), evidence)
+    issues = (
+        structure_issues(result.get("data", {}))
+        + duration_issues(result.get("data", {}))
+        + ai_relevance_issues(result.get("data", {}), topic_plan)
+        + reference_issues(result.get("data", {}), reference_research)
+        + engagement_issues(result.get("data", {}), content_style)
+        + factual_issues(result.get("data", {}), evidence)
+    )
     initial_issues = list(issues)
     repair_attempts = 0
     while issues and repair_attempts < 2:
@@ -442,9 +580,16 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 上一版JSON：
 {json.dumps(result.get('data', {}), ensure_ascii=False, indent=2)}
 
-请在不增加任何新事实的前提下重写完整JSON。证据写着尚未拍摄或发布时，绝对不能改写成已经拍完、录了几条、重录几次或已经发布。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
+        请在不增加任何新事实的前提下重写完整JSON。主线必须是topic_plan中的明确AI话题，完整版必须达到2—3分钟、550—950个有效字符并拆成7—12段。证据写着尚未拍摄或发布时，绝对不能改写成已经拍完、录了几条、重录几次或已经发布。只能把reference_research.fullContentSources中的全文核验来源写入referenceResearch.sourceIds；外部知识和结构全部重新组织，不复制原句。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
         result = call_json(messages + [{"role": "assistant", "content": json.dumps(result.get("data", {}), ensure_ascii=False)}, {"role": "user", "content": repair}], temperature=0.15, max_tokens=10000)
-        issues = structure_issues(result.get("data", {})) + engagement_issues(result.get("data", {}), content_style) + factual_issues(result.get("data", {}), evidence)
+        issues = (
+            structure_issues(result.get("data", {}))
+            + duration_issues(result.get("data", {}))
+            + ai_relevance_issues(result.get("data", {}), topic_plan)
+            + reference_issues(result.get("data", {}), reference_research)
+            + engagement_issues(result.get("data", {}), content_style)
+            + factual_issues(result.get("data", {}), evidence)
+        )
     if issues:
         raise RuntimeError("内容质量与事实一致性门禁未通过：" + "；".join(issues))
     result["quality_revision"] = {
@@ -549,6 +694,10 @@ def main() -> int:
         if operation == "config":
             _, model = load_text_model()
             result = {"success": True, "model": model, "transcription_model": "faster-whisper/small"}
+        elif operation == "plan_topic":
+            result = {"success": True, **plan_topic(payload)}
+        elif operation == "analyze_reference":
+            result = {"success": True, **analyze_reference(payload)}
         elif operation == "generate_content":
             result = {"success": True, **generate_content(payload)}
         elif operation == "edit_plan":

@@ -16,6 +16,7 @@ const contentRoot = path.join(root, "content-items");
 const runtimePython = path.join(root, ".runtime", "Scripts", "python.exe");
 const runtimeFfmpeg = path.join(root, ".runtime", "ffmpeg", "bin");
 const aiBridge = path.join(here, "ai_bridge.py");
+const referenceCollector = path.join(root, "scripts", "collect_douyin_references.mjs");
 const host = "127.0.0.1";
 const port = Number(process.env.KOUBO_PORT || 8787);
 if (fs.existsSync(runtimeFfmpeg)) process.env.PATH = `${runtimeFfmpeg}${path.delimiter}${process.env.PATH || ""}`;
@@ -67,12 +68,30 @@ async function readJob(id) { return readJsonFile(path.join(confined(jobsRoot, id
 async function saveJob(job) { job.updatedAt = new Date().toISOString(); await writeJson(path.join(confined(jobsRoot, job.id), "job.json"), job); }
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { windowsHide: true, ...options });
+    const { timeoutMs = 0, onStdout, onStderr, ...spawnOptions } = options;
+    const child = spawn(command, args, { windowsHide: true, ...spawnOptions });
     let stdout = "", stderr = "";
-    child.stdout?.on("data", c => { stdout += c; options.onStdout?.(String(c)); });
-    child.stderr?.on("data", c => { stderr += c; options.onStderr?.(String(c)); });
-    child.on("error", reject);
-    child.on("close", code => code === 0 ? resolve({ stdout, stderr }) : reject(Object.assign(new Error(`${command} 退出码 ${code}`), { stdout, stderr, code })));
+    let timedOut = false, settled = false;
+    const timer = timeoutMs ? setTimeout(() => {
+      if (settled) return;
+      timedOut = true;
+      child.kill();
+    }, timeoutMs) : null;
+    child.stdout?.on("data", c => { stdout += c; onStdout?.(String(c)); });
+    child.stderr?.on("data", c => { stderr += c; onStderr?.(String(c)); });
+    child.on("error", error => {
+      if (timer) clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
+    child.on("close", code => {
+      if (timer) clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      if (timedOut) return reject(Object.assign(new Error(`${command} 超时`), { stdout, stderr, code }));
+      return code === 0 ? resolve({ stdout, stderr }) : reject(Object.assign(new Error(`${command} 退出码 ${code}`), { stdout, stderr, code }));
+    });
   });
 }
 async function runAi(payload, workDir, name) {
@@ -164,9 +183,17 @@ function normalizeContent(raw, dayNumber, id, meta) {
     boundary: String(design.boundary || ""),
     payoff: String(design.payoff || "")
   };
+  const research = value.referenceResearch && typeof value.referenceResearch === "object" ? value.referenceResearch : {};
+  const referenceResearch = {
+    sourceIds: (Array.isArray(research.sourceIds) ? research.sourceIds : []).map(String).slice(0, 8),
+    borrowedKnowledge: (Array.isArray(research.borrowedKnowledge) ? research.borrowedKnowledge : []).map(String).slice(0, 8),
+    structuralChoices: (Array.isArray(research.structuralChoices) ? research.structuralChoices : []).map(String).slice(0, 8),
+    engagementChoices: (Array.isArray(research.engagementChoices) ? research.engagementChoices : []).map(String).slice(0, 6),
+    originalityNote: String(research.originalityNote || "")
+  };
   return {
     id, kind: "growth", date: shanghaiDate(), day: `Day ${dayNumber}`, column: value.column || `普通人学AI第${dayNumber}天`,
-    status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "约75秒", durationShort: value.durationShort || "约40秒",
+    status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "约2—3分钟", durationShort: value.durationShort || "约60—90秒衍生版",
     mainTopic: String(value.mainTopic || "今天没有足够证据生成主选题"), shortTopic: String(value.shortTopic || value.mainTopic || "待确认").slice(0, 20),
     hook: String(value.hook || ""), audienceBenefit: String(value.audienceBenefit || ""),
     engagement: {
@@ -176,7 +203,7 @@ function normalizeContent(raw, dayNumber, id, meta) {
       viewerTask: String(value.engagement?.viewerTask || value.actionExperiment?.viewerTask || ""),
       primaryClose: String(value.engagement?.primaryClose || "")
     },
-    structureDesign,
+    structureDesign, referenceResearch,
     creativeTone: {
       humorBeat: String(value.creativeTone?.humorBeat || ""),
       trendMeme: value.creativeTone?.trendMeme && typeof value.creativeTone.trendMeme === "object" ? value.creativeTone.trendMeme : { id: "", adaptedLine: "", placement: "", sourceUrl: "" }
@@ -191,7 +218,9 @@ function normalizeContent(raw, dayNumber, id, meta) {
     risks: Array.isArray(value.risks) ? value.risks : [{ text: "发布前人工确认所有事实和隐私边界", done: false }],
     sourceFiles: [
       { label: "AI生成内容JSON", path: `/content-items/${id}/content.json` },
-      { label: "AI生成证据包", path: `/content-items/${id}/evidence.json` }
+      { label: "AI生成证据包", path: `/content-items/${id}/evidence.json` },
+      { label: "同题视频研究包", path: `/content-items/${id}/reference-research.json` },
+      { label: "AI选题规划", path: `/content-items/${id}/topic-plan.json` }
     ],
     sourcePackageHref: `/content-items/${id}/content.json`,
     sourcePackagePath: path.join(contentRoot, id, "content.json"),
@@ -199,25 +228,45 @@ function normalizeContent(raw, dayNumber, id, meta) {
     generation: { model: meta.model, usage: meta.usage || {}, mode: "openai-compatible", automatic: true, qualityRevision: meta.quality_revision || { repaired: false, initial_issues: [] } }
   };
 }
-async function generateContent() {
+async function generateContent(options = {}) {
   const lockKey = "__content_generation__";
   if (running.has(lockKey)) { const error = new Error("已有口播正在生成，请稍候"); error.statusCode = 409; throw error; }
   running.set(lockKey, true);
   try {
     const existing = await listGeneratedContents();
-  const baseTopics = [];
-  try {
-    const base = await fsp.readFile(path.join(webRoot, "data", "content-data.js"), "utf8");
-    for (const match of base.matchAll(/mainTopic:\s*"([^"]+)"/g)) baseTopics.push(match[1]);
-  } catch {}
-  const dayNumber = Math.max(1, ...existing.map(x => Number(String(x.day || "").replace(/\D/g, "")) || 0), 1) + 1;
-  const id = `growth-day-${dayNumber}-${timestampId()}`;
-  const dir = confined(contentRoot, id);
-  await fsp.mkdir(dir, { recursive: false });
-  const evidence = await collectEvidence();
-  await writeJson(path.join(dir, "evidence.json"), evidence);
-  const result = await runAi({ operation: "generate_content", date: shanghaiDate(), day_number: dayNumber, evidence, existing_topics: [...baseTopics, ...existing.map(x => x.mainTopic)] }, dir, "generate-content");
-  const content = normalizeContent(result.data, dayNumber, id, result);
+    const baseTopics = [];
+    try {
+      const base = await fsp.readFile(path.join(webRoot, "data", "content-data.js"), "utf8");
+      for (const match of base.matchAll(/mainTopic:\s*"([^"]+)"/g)) baseTopics.push(match[1]);
+    } catch {}
+    const requestedDay = Number(options.dayNumber || 0);
+    const dayNumber = Number.isInteger(requestedDay) && requestedDay >= 1 && requestedDay <= 365
+      ? requestedDay
+      : Math.max(1, ...existing.map(x => Number(String(x.day || "").replace(/\D/g, "")) || 0), 1) + 1;
+    const id = `growth-day-${dayNumber}${options.replacesContentId ? "-revision" : ""}-${timestampId()}`;
+    const dir = confined(contentRoot, id);
+    await fsp.mkdir(dir, { recursive: false });
+    const evidence = await collectEvidence();
+    await writeJson(path.join(dir, "evidence.json"), evidence);
+    const existingTopics = [...baseTopics, ...existing.map(x => x.mainTopic)];
+    let contentStyle = {};
+    try { contentStyle = await readJsonFile(path.join(root, "config", "content_style.json")); } catch {}
+    const topicResult = await runAi({ operation: "plan_topic", date: shanghaiDate(), day_number: dayNumber, evidence, content_style: contentStyle, existing_topics: existingTopics }, dir, "topic-plan");
+    const topicPlan = topicResult.data;
+    await writeJson(path.join(dir, "topic-plan.json"), topicPlan);
+    const referenceFile = path.join(dir, "reference-research.json");
+    try {
+      await run(process.execPath, [referenceCollector, "--plan", path.join(dir, "topic-plan.json"), "--output", referenceFile], { cwd: root, env: process.env, timeoutMs: 1200000 });
+    } catch (error) {
+      let detail = error.message;
+      try { detail = (await readJsonFile(referenceFile)).error || detail; } catch {}
+      throw new Error(`同题视频研究未通过，已停止生成：${detail}`);
+    }
+    const referenceResearch = await readJsonFile(referenceFile);
+    if (!Array.isArray(referenceResearch.fullContentSources) || !referenceResearch.fullContentSources.length) throw new Error("同题视频研究没有完成至少一条全文核验来源");
+    const result = await runAi({ operation: "generate_content", date: shanghaiDate(), day_number: dayNumber, evidence, topic_plan: topicPlan, reference_research: referenceResearch, existing_topics: existingTopics }, dir, "generate-content");
+    const content = normalizeContent(result.data, dayNumber, id, result);
+    if (options.replacesContentId) content.replacesContentId = safeName(options.replacesContentId);
     await writeJson(path.join(dir, "content.json"), content);
     return content;
   } finally {
@@ -1256,7 +1305,11 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, service: "koubo-ai-workflow", version: 2, localOnlyVideo: true, ffmpeg, hyperframes, ai: { configured: !!ai?.success, model: ai?.model || null, transcriptionModel: ai?.transcription_model || "faster-whisper/small" }, jobsRoot, contentRoot });
     }
     if (req.method === "GET" && pathname === "/api/contents") return json(res, 200, { items: await listGeneratedContents() });
-    if (req.method === "POST" && pathname === "/api/contents/generate") return json(res, 201, { item: await generateContent() });
+    if (req.method === "POST" && pathname === "/api/contents/generate") {
+      const hasBody = Number(req.headers["content-length"] || 0) > 0 || String(req.headers["transfer-encoding"] || "").toLowerCase() === "chunked";
+      const options = hasBody ? await readBodyJson(req, 64 * 1024) : {};
+      return json(res, 201, { item: await generateContent(options) });
+    }
     if (req.method === "GET" && pathname === "/api/jobs") {
       const entries = await fsp.readdir(jobsRoot, { withFileTypes: true }), jobs = [];
       for (const e of entries.filter(x => x.isDirectory()).sort((a, b) => b.name.localeCompare(a.name)).slice(0, 30)) try { jobs.push(await readJob(e.name)); } catch {}

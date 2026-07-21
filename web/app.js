@@ -207,8 +207,16 @@
     byId("comment-prompt").textContent = engagement.commentPrompt || "用一个具体选择题邀请观众参与下一步实验。";
     byId("follow-promise").textContent = engagement.followPromise || currentItem.storyPosition?.tomorrow || "说明下一集会验证什么真实结果。";
     byId("primary-close").textContent = engagement.primaryClose || "旧稿未标注；新稿会从评论、任务和下一次验证中只选一个主动作。";
-    byId("home-script-duration").textContent = currentItem.durationShort || "精简版";
-    byId("home-script-preview").textContent = shortText(currentItem);
+    const referenceResearch = currentItem.referenceResearch || {};
+    byId("reference-sources").textContent = Array.isArray(referenceResearch.sourceIds) && referenceResearch.sourceIds.length
+      ? referenceResearch.sourceIds.join("、")
+      : "新稿生成前会先核验至少一条同题完整视频。";
+    byId("reference-choices").textContent = [
+      ...(Array.isArray(referenceResearch.borrowedKnowledge) ? referenceResearch.borrowedKnowledge.slice(0, 2) : []),
+      ...(Array.isArray(referenceResearch.structuralChoices) ? referenceResearch.structuralChoices.slice(0, 1) : [])
+    ].join("；") || "只借鉴知识、结构和互动机制，不复制原句、案例或人设。";
+    byId("home-script-duration").textContent = currentItem.durationFull || "约2—3分钟";
+    byId("home-script-preview").textContent = fullPlainText(currentItem);
     byId("source-package-path").textContent = sourcePackagePath(currentItem);
     byId("open-source-package").href = sourcePackageHref(currentItem);
     byId("story-yesterday").textContent = currentItem.storyPosition?.yesterday || "旧定位基线内容，没有成长连续任务。";
@@ -923,8 +931,8 @@
 
   // Script actions
   $$(".segment").forEach(button => button.addEventListener("click", () => setScriptMode(button.dataset.scriptMode)));
-  byId("copy-short-hero").addEventListener("click", () => copyText(shortText(), "精简稿已复制"));
-  byId("copy-home-script").addEventListener("click", () => copyText(shortText(), "这版口播稿已复制"));
+  byId("copy-short-hero").addEventListener("click", () => copyText(fullPlainText(), "2—3分钟完整版已复制"));
+  byId("copy-home-script").addEventListener("click", () => copyText(fullPlainText(), "2—3分钟完整版已复制"));
   byId("copy-source-path").addEventListener("click", () => copyText(sourcePackagePath(), "文件位置已复制"));
   byId("copy-short-script").addEventListener("click", () => copyText(shortText(), "精简稿已复制"));
   byId("copy-current-script").addEventListener("click", () => copyText(currentScriptText(), "当前口播稿已复制"));

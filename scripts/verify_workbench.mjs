@@ -11,11 +11,11 @@ const assert = (condition, message) => { if (!condition) failures.push(message);
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8").replace(/^\uFEFF/, "");
 const normalizeSpokenText = value => String(value || "").replace(/[，。！？、；：,.!?;:\s]/g, "");
 
-for (const file of ["video/server.mjs", "video/ai_bridge.py", "video/hyperframes-captions/index.html", "video/hyperframes-overlay/index.html", "web/index.html", "web/app.js", "web/styles.css", "打开AI口播工作台.vbs"]) {
+for (const file of ["video/server.mjs", "video/ai_bridge.py", "scripts/collect_douyin_references.mjs", "config/reference_creators.json", "config/reference_video_library.json", "video/hyperframes-captions/index.html", "video/hyperframes-overlay/index.html", "web/index.html", "web/app.js", "web/styles.css", "打开AI口播工作台.vbs"]) {
   assert(fs.existsSync(path.join(root, file)), `缺少文件：${file}`);
 }
 
-for (const file of ["video/server.mjs", "web/app.js"]) {
+for (const file of ["video/server.mjs", "scripts/collect_douyin_references.mjs", "web/app.js"]) {
   const result = spawnSync(process.execPath, ["--check", path.join(root, file)], { encoding: "utf8" });
   assert(result.status === 0, `${file} 语法检查失败：${result.stderr.trim()}`);
 }
@@ -53,6 +53,10 @@ assert(!/OPENMONTAGE|OpenMontage|company_openai/i.test(serverSource + bridgeSour
 for (const name of ["OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL"]) {
   assert(read(".env.example").includes(name), `.env.example 缺少 ${name}`);
 }
+assert(read(".env.example").includes("OPENCLI_PROFILE") && read(".env.example").includes("KOUBO_LIVE_REFERENCE_RESEARCH"), ".env.example 缺少同题视频研究配置");
+assert(serverSource.includes('operation: "plan_topic"'), "生成流程没有先锁定AI选题");
+assert(serverSource.includes("reference-research.json") && serverSource.includes("referenceCollector"), "生成流程没有接入同题视频研究包");
+assert(bridgeSource.includes("reference_issues") && bridgeSource.includes("duration_issues") && bridgeSource.includes("ai_relevance_issues"), "生成器缺少来源、时长或AI相关性门禁");
 
 const python = path.join(root, ".runtime", "Scripts", "python.exe");
 if (fs.existsSync(python)) {
@@ -108,6 +112,38 @@ if not any("可观察信号" in issue for issue in issues):
 invalid = sample("copy-a-viral-script", 2)
 if not module.structure_issues(invalid):
     raise AssertionError("无效原型未被拒绝")
+
+long_script = {
+    "durationFull": "约2—3分钟",
+    "fullSegments": [
+        {"text": "AI工作流不是功能越多越好。" + "这个知识点要用真实测试和可观察结果讲清楚。" * 4}
+        for _ in range(8)
+    ],
+    "shortScript": "AI工具真正有用的标准，不是生成了多少功能，而是能不能让普通人完成一次测试。" * 7,
+}
+if module.duration_issues(long_script):
+    raise AssertionError(f"合法2—3分钟样本被拒绝: {module.duration_issues(long_script)}")
+short_script = {**long_script, "fullSegments": [{"text": "AI很有用。"}] * 3}
+if not module.duration_issues(short_script):
+    raise AssertionError("过短完整版没有被时长门禁拒绝")
+
+topic_plan = {"aiAngle": "解释AI口播剪辑为什么需要脚本、画面和素材对应关系"}
+ai_sample = {**long_script, "mainTopic": "AI口播剪辑先准备什么", "shortTopic": "AI剪辑准备", "hook": "AI剪辑不是把视频丢进去就结束"}
+if module.ai_relevance_issues(ai_sample, topic_plan):
+    raise AssertionError(f"明确AI主题被误判: {module.ai_relevance_issues(ai_sample, topic_plan)}")
+
+research = {"fullContentSources": [{"sourceId": "douyin-1"}]}
+research_sample = {
+    "referenceResearch": {
+        "sourceIds": ["douyin-1"],
+        "borrowedKnowledge": ["知识一", "知识二"],
+        "structuralChoices": ["结构一", "结构二"],
+        "engagementChoices": ["互动一"],
+        "originalityNote": "使用本人真实进度和测试证据重新组织为原创表达",
+    }
+}
+if module.reference_issues(research_sample, research):
+    raise AssertionError(f"合法参考研究被拒绝: {module.reference_issues(research_sample, research)}")
 
 class Box:
     def __init__(self, **values):
@@ -168,10 +204,13 @@ assert(contentStyle.tone?.spokenLanguage, "内容风格配置缺少口语化规�
 assert(contentStyle.engagement?.commentPrompt?.includes("具体的问题"), "内容风格配置缺少真实问题互动规则");
 assert(contentStyle.engagement?.followPromise?.includes("不固定承诺未来多少天"), "内容风格配置仍缺少非倒计时追更规则");
 assert(contentStyle.engagement?.primaryClose?.includes("自然"), "内容风格配置缺少单一自然收束规则");
+assert(contentStyle.version?.includes("medium-video-research"), "内容风格尚未升级为AI中视频研究模式");
+assert(contentStyle.structureDesign?.archetypes?.["evidence-story"]?.recommendedDuration === "120—180秒", "证据故事默认时长不是2—3分钟");
 for (const archetype of ["evidence-story", "saveable-map", "short-resonance"]) {
   assert(Boolean(contentStyle.structureDesign?.archetypes?.[archetype]), `内容风格配置缺少 ${archetype} 结构`);
 }
 assert(serverSource.includes("structureDesign"), "服务端没有保存结构设计字段");
+assert(serverSource.includes("referenceResearch"), "服务端没有保存参考视频研究字段");
 assert(bridgeSource.includes("structure_issues"), "生成器没有接入结构质量门禁");
 assert(!bridgeSource.includes("def enforce_script_contract"), "生成器仍在机械拼接口播结尾");
 assert(fs.existsSync(path.join(root, "docs", "CONTENT_STRUCTURE_RESEARCH_2026-07-20.md")), "缺少本轮内容结构调研报告");
