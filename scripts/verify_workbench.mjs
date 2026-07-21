@@ -45,6 +45,9 @@ assert(mediaPolicy.assetComplianceIssues(externalFixture, { script: "稿件没�
 assert(mediaPolicy.assetComplianceIssues({ ...externalFixture, clipEnd: null }, { script: "TestCreator" }, 8).some(issue => issue.includes("截取结束时间")), "外部素材缺少截取结束时间时未被拦截");
 assert(mediaPolicy.assetComplianceIssues({ ...externalFixture, licenseBasis: "commentary-quotation", clipEnd: 11, clipDuration: 11 }, { script: "TestCreator" }, 20).some(issue => issue.includes("10秒以内")), "未授权评论性引用超过产品时长限制时未被拦截");
 assert(mediaPolicy.assetComplianceIssues({ id: "paid-test", sourceType: "paid-stock", mediaKind: "image", path: existingFixture, reviewStatus: "approved", placement: { start: 0, end: 2, mode: "broll" }, paymentConfirmed: false }, { script: "" }, 8).some(issue => issue.includes("费用确认")), "付费素材未确认费用时未被拦截");
+const advisoryIssues = mediaPolicy.assetComplianceIssues({ ...externalFixture, licenseBasis: "" }, { script: "未在口播中提及", options: { rightsReviewMode: "advisory" } }, 8);
+assert(!advisoryIssues.some(issue => issue.includes("授权") || issue.includes("口播稿")), "advisory 模式仍错误阻塞版权依据或口播披露");
+assert(mediaPolicy.assetComplianceIssues({ ...externalFixture, creatorName: "", attributionText: "" }, { script: "", options: { rightsReviewMode: "advisory" } }, 8).some(issue => issue.includes("创作者") || issue.includes("署名")), "advisory 模式不应跳过来源和画面署名字段");
 const placementA = mediaPolicy.candidatePlacement(0, 4, 8), placementB = mediaPolicy.candidatePlacement(1, 4, 8);
 assert(placementA.end <= placementB.start, "自动视觉候选时间段发生不必要重叠");
 
@@ -70,7 +73,9 @@ for (const capability of [
 for (const route of ["/replan", "/rerender", "/cover", "/assets", "/approve"]) {
   assert(serverSource.includes(route), `Missing workflow endpoint: ${route}`);
 }
+assert(serverSource.includes("assets\\/rediscover"), "Missing rich-media rediscovery endpoint");
 assert(serverSource.includes("assetRenderMatch") && serverSource.includes("renderReviewedAssets"), "Missing reviewed-assets render endpoint");
+assert(serverSource.includes("ffmpeg-rich-motion") && serverSource.includes("textOnlyCardsMaxShare"), "Missing rich-media-first candidate generation");
 for (const artifact of ["timeline-v", "timeline-v${version}.edl", "qa-report-v", "media-manifest-v", "captions-v", "filter-v", "cover-design-v"]) {
   assert(serverSource.includes(artifact), `Missing auditable artifact: ${artifact}`);
 }
@@ -214,6 +219,7 @@ assert(app.includes("captionStyle") && app.includes("informationPanels"), "网�
 assert(ids.has("edit-generate-cover") && ids.has("edit-cover-title") && ids.has("regenerate-cover"), "网页缺少自动封面开关、标题覆盖或单独重做入口");
 assert(app.includes("generateCover") && app.includes("coverWide16x9") && app.includes("coverLandscape4x3"), "网页未完整接入四画幅封面流程");
 assert(ids.has("asset-review-panel") && ids.has("render-with-assets") && ids.has("asset-review-summary"), "网页缺少素材审核板或审核后渲染入口");
+assert(ids.has("rediscover-media") && app.includes("/assets/rediscover") && app.includes("rich-media-first"), "网页缺少富媒体候选重建入口");
 assert(app.includes("commentary-quotation") && app.includes("data-attribution-text") && app.includes("data-reject-media"), "素材审核板缺少评论性引用、来源署名或拒绝操作");
 assert(serverSource.includes("口播稿没有自然说明所采用的创作者名称"), "外部素材未检查稿件中的创作者披露");
 assert(serverSource.includes("paidGenerationRequiresConfirmation") && serverSource.includes("paymentConfirmed"), "付费素材缺少费用确认门禁");

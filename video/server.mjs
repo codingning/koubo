@@ -898,6 +898,7 @@ function creatorNameIsUsable(value) {
   const name = String(value || "").trim();
   return !!name && !/(待填写|待确认|用户指定参考账号)/.test(name);
 }
+function advisoryRightsMode(job) { return job?.options?.rightsReviewMode === "advisory"; }
 function assetComplianceIssues(rawAsset, job, outputDuration = null) {
   const asset = normalizeAssetRecord(rawAsset);
   const issues = [];
@@ -912,14 +913,14 @@ function assetComplianceIssues(rawAsset, job, outputDuration = null) {
     if (!asset.workTitle) issues.push("外部素材缺少作品标题");
     if (!/^https?:\/\//i.test(asset.sourceUrl)) issues.push("外部素材缺少有效原链接");
     if (!asset.usagePurpose) issues.push("外部素材缺少具体使用目的");
-    if (!APPROVABLE_LICENSE_BASES.has(asset.licenseBasis)) issues.push("外部素材缺少可接受的授权或引用依据");
+    if (!advisoryRightsMode(job) && !APPROVABLE_LICENSE_BASES.has(asset.licenseBasis)) issues.push("外部素材缺少可接受的授权或引用依据");
     if (!asset.attributionText || (asset.creatorName && !asset.attributionText.includes(asset.creatorName))) issues.push("画面署名必须包含创作者名称");
     if (!Number.isFinite(Number(asset.clipStart)) || Number(asset.clipStart) < 0) issues.push("外部素材缺少有效截取开始时间");
     if (!Number.isFinite(Number(asset.clipEnd)) || Number(asset.clipEnd) <= Number(asset.clipStart)) issues.push("外部素材缺少有效截取结束时间");
     if (!Number.isFinite(asset.clipDuration) || asset.clipDuration <= 0) issues.push("外部素材缺少引用片段时长");
     if (Number.isFinite(Number(asset.clipEnd)) && Number.isFinite(asset.clipDuration) && Math.abs((Number(asset.clipEnd) - Number(asset.clipStart)) - Number(asset.clipDuration)) > 0.15) issues.push("引用片段时长与截取起止时间不一致");
     if (asset.mediaKind === "video" && asset.placement && Number.isFinite(asset.clipDuration) && Number(asset.clipDuration) + 0.05 < asset.placement.end - asset.placement.start) issues.push("引用片段短于成片中的使用时长");
-    if (!creatorNameIsUsable(asset.creatorName) || !String(job.script || "").includes(asset.creatorName)) issues.push("口播稿没有自然说明所采用的创作者名称");
+    if (!advisoryRightsMode(job) && (!creatorNameIsUsable(asset.creatorName) || !String(job.script || "").includes(asset.creatorName))) issues.push("口播稿没有自然说明所采用的创作者名称");
     if (asset.licenseBasis === "commentary-quotation") {
       if (!/(介绍|评论|分析|说明|拆解)/.test(asset.usagePurpose)) issues.push("评论性引用必须写明介绍、评论、分析、说明或拆解目的");
       if (Number(asset.clipDuration) > 10.01) issues.push("本工作流将未明确授权的评论性引用限制为单段10秒以内");
@@ -949,6 +950,101 @@ function candidatePlacement(index, count, duration) {
   const start = Math.min(Math.max(0, safeDuration - 0.5), slot * index);
   const visible = Math.max(0.5, Math.min(4, slot));
   return { start: Number(start.toFixed(2)), end: Number(Math.min(safeDuration, start + visible).toFixed(2)), mode: "broll" };
+}
+function outputTimeToSource(job, outputTime) {
+  let cursor = 0;
+  for (const segment of job.currentPlan?.keepSegments || []) {
+    const duration = Math.max(0, Number(segment.end) - Number(segment.start));
+    if (outputTime <= cursor + duration) return Math.max(Number(segment.start), Number(segment.start) + outputTime - cursor);
+    cursor += duration;
+  }
+  return Math.max(0, Math.min(Number(job.source?.duration || 0) - 0.2, Number(outputTime || 0)));
+}
+function richVisualArchetype(beat = {}, index = 0) {
+  const text = `${beat.segment || ""} ${beat.asset || ""} ${beat.purpose || ""}`;
+  if (index === 0 || /(最终|效果|前后|对比|基础版|返修版)/.test(text)) return "proof-comparison";
+  if (/(角色|分工|Codex|HyperFrames|转录|渲染)/i.test(text)) return "workflow-map";
+  if (/(输入|提示|告诉AI|提交|素材与目标)/i.test(text)) return "prompt-console";
+  if (/(检查|审核|字幕|遮挡|裁切|问题)/i.test(text)) return "review-scan";
+  return "screen-demo";
+}
+function richVisualCopy(archetype, beat = {}) {
+  const title = String(beat.segment || "AI剪辑视觉证据").trim();
+  const variants = {
+    "proof-comparison": { kicker: "同一段口播 · 实际效果", headline: "左边原片，右边AI剪辑后", chips: ["动态字幕", "重点卡片", "节奏变化"] },
+    "workflow-map": { kicker: "不是一个AI包办", headline: "理解 → 动效 → 交付", chips: ["读懂内容", "生成视觉", "本地渲染"] },
+    "prompt-console": { kicker: "把成片标准一起交给AI", headline: "原片 + 重点 + 视觉要求", chips: ["不改原意", "重点动态化", "横竖屏输出"] },
+    "review-scan": { kicker: "第一版不能只看导出成功", headline: "逐项检查，再具体返修", chips: ["字幕", "遮挡", "切换", "裁切"] },
+    "screen-demo": { kicker: "真实工作流画面", headline: title, chips: ["原片", "AI理解", "视觉结果"] }
+  };
+  return { title, ...(variants[archetype] || variants["screen-demo"]) };
+}
+async function writeRichCandidateAss(dir, asset, archetype, beat, duration) {
+  const assFile = path.join(dir, `${asset.id}.ass`);
+  const copy = richVisualCopy(archetype, beat);
+  const chipPositions = archetype === "workflow-map"
+    ? [[120, 1030], [360, 1030], [600, 1030]]
+    : archetype === "review-scan"
+      ? [[390, 520], [390, 650], [390, 780], [390, 910]]
+      : [[110, 1050], [360, 1050], [610, 1050]];
+  const lines = [
+    "[Script Info]", "ScriptType: v4.00+", "PlayResX: 720", "PlayResY: 1280", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
+    "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+    "Style: Kicker,Microsoft YaHei,26,&H003ADCC8,&H000000FF,&H00101920,&H00000000,-1,0,0,0,100,100,1,0,1,1,0,7,54,54,0,1",
+    "Style: Headline,Microsoft YaHei,48,&H00FFFFFF,&H000000FF,&H00101920,&H00000000,-1,0,0,0,100,100,1,0,1,2,0,7,54,54,0,1",
+    "Style: Chip,Microsoft YaHei,25,&H00FFFFFF,&H000000FF,&H00101920,&H9007131D,-1,0,0,0,100,100,1,0,3,1,0,5,20,20,16,1",
+    "Style: Label,Microsoft YaHei,24,&H00FFFFFF,&H000000FF,&H00101920,&H9007131D,-1,0,0,0,100,100,1,0,3,1,0,5,20,20,12,1", "",
+    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+    `Dialogue: 5,0:00:00.05,0:00:0${duration.toFixed(2)},Kicker,,0,0,0,,{\\pos(54,75)\\fad(180,180)}${assEscape(copy.kicker)}`,
+    `Dialogue: 5,0:00:00.18,0:00:0${duration.toFixed(2)},Headline,,0,0,0,,{\\pos(54,125)\\fad(220,180)}${assEscape(wrapCardText(copy.headline, 13, 2))}`
+  ];
+  if (archetype === "proof-comparison") {
+    lines.push(`Dialogue: 6,0:00:00.35,0:00:0${duration.toFixed(2)},Label,,0,0,0,,{\\pos(180,320)\\fad(140,160)}原片`);
+    lines.push(`Dialogue: 6,0:00:00.55,0:00:0${duration.toFixed(2)},Label,,0,0,0,,{\\pos(540,320)\\fad(140,160)}AI剪辑后`);
+  }
+  copy.chips.forEach((chip, index) => {
+    const [x, y] = chipPositions[index] || [110 + index * 220, 1050];
+    const start = 0.65 + index * 0.42;
+    lines.push(`Dialogue: 7,0:00:0${start.toFixed(2)},0:00:0${duration.toFixed(2)},Chip,,0,0,0,,{\\pos(${x},${y})\\fad(180,180)\\fscx110\\fscy110\\t(0,220,\\fscx100\\fscy100)}${assEscape(chip)}`);
+  });
+  await fsp.writeFile(assFile, lines.join("\r\n"), "utf8");
+  return assFile;
+}
+async function writeGeneratedMotionCandidate(job, asset, beat, index) {
+  if (!job.sourcePath || !fs.existsSync(job.sourcePath)) throw new Error("缺少真人原片，无法生成富媒体候选");
+  const dir = path.join(confined(jobsRoot, job.id), "assets", "generated");
+  await fsp.mkdir(dir, { recursive: true });
+  const duration = Math.max(3.2, Math.min(4, Number(asset.placement?.end || 4) - Number(asset.placement?.start || 0)));
+  asset.placement.end = Number((asset.placement.start + duration).toFixed(2));
+  const archetype = richVisualArchetype(beat, index);
+  const sourceStart = outputTimeToSource(job, asset.placement.start);
+  const assFile = await writeRichCandidateAss(dir, asset, archetype, beat, duration);
+  const output = path.join(dir, `${asset.id}.mp4`);
+  const commonBg = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,boxblur=22:8,eq=brightness=-0.18:saturation=0.72";
+  let filter;
+  if (archetype === "proof-comparison") {
+    filter = `[0:v]split=3[bg][left][right];[bg]${commonBg}[bg0];[left]scale=340:604:force_original_aspect_ratio=increase,crop=340:604,eq=saturation=0.38:contrast=0.9[left0];[right]scale=340:604:force_original_aspect_ratio=increase,crop=340:604,eq=saturation=1.18:contrast=1.08,unsharp=5:5:0.65[right0];[bg0][left0]overlay=14:350[tmp];[tmp][right0]overlay=366:350,drawbox=x=12:y=348:w=344:h=608:color=0x9AA9B5@0.7:t=3,drawbox=x=364:y=348:w=344:h=608:color=0x2ED6C4@0.95:t=4,drawbox=x='364+mod(t*150,330)':y=936:w=24:h=5:color=0xFFAA3C@1:t=fill,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+  } else if (archetype === "workflow-map") {
+    filter = `[0:v]split=2[bg][fg];[bg]${commonBg}[bg0];[fg]scale=610:720:force_original_aspect_ratio=increase,crop=610:720,eq=saturation=1.08[fg0];[bg0][fg0]overlay=55:240,drawbox=x=52:y=237:w=616:h=726:color=0x2ED6C4@0.85:t=4,drawbox=x=55:y=990:w=190:h=105:color=0x102D3D@0.96:t=fill,drawbox=x=265:y=990:w=190:h=105:color=0x17364A@0.96:t=fill,drawbox=x=475:y=990:w=190:h=105:color=0x102D3D@0.96:t=fill,drawbox=x='80+mod(t*175,540)':y=1125:w=44:h=8:color=0xFFAA3C@1:t=fill,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+  } else if (archetype === "prompt-console") {
+    filter = `[0:v]${commonBg},drawbox=x=48:y=220:w=624:h=790:color=0x081824@0.94:t=fill,drawbox=x=48:y=220:w=624:h=790:color=0x2ED6C4@0.72:t=4,drawbox=x=78:y=350:w=500:h=18:color=0xFFFFFF@0.16:t=fill,drawbox=x=78:y=420:w=560:h=18:color=0xFFFFFF@0.12:t=fill,drawbox=x=78:y=490:w=420:h=18:color=0xFFFFFF@0.12:t=fill,drawbox=x=78:y=560:w=530:h=18:color=0xFFFFFF@0.12:t=fill,drawbox=x=78:y=650:w='120+min(t,2.8)*145':h=54:color=0x2ED6C4@0.82:t=fill,drawbox=x='90+mod(t*125,500)':y=740:w=5:h=68:color=0xFFAA3C@1:t=fill,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+  } else if (archetype === "review-scan") {
+    filter = `[0:v]split=2[bg][fg];[bg]${commonBg}[bg0];[fg]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,eq=saturation=0.9[fg0];[bg0][fg0]overlay=0:0,drawbox=x=330:y=340:w=340:h=680:color=0x07131D@0.90:t=fill,drawbox=x=330:y=340:w=340:h=680:color=0x2ED6C4@0.75:t=3,drawbox=x=350:y='370+mod(t*175,600)':w=300:h=4:color=0xFFAA3C@0.95:t=fill,drawbox=x=54:y=1040:w='40+min(t,3.2)*175':h=10:color=0x2ED6C4@0.9:t=fill,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+  } else {
+    filter = `[0:v]split=2[bg][fg];[bg]${commonBg}[bg0];[fg]scale=610:1084:force_original_aspect_ratio=increase,crop=610:1084,eq=saturation=1.08[fg0];[bg0][fg0]overlay=55:175,drawbox=x=52:y=172:w=616:h=1090:color=0x2ED6C4@0.82:t=4,drawbox=x='70+mod(t*145,560)':y=1160:w=60:h=8:color=0xFFAA3C@1:t=fill,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+  }
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", sourceStart.toFixed(3), "-t", duration.toFixed(3), "-i", job.sourcePath, "-filter_complex", filter, "-map", "[v]", "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "19", "-movflags", "+faststart", output], { cwd: dir });
+  await run("ffmpeg", ["-v", "error", "-i", output, "-f", "null", "-"]);
+  asset.path = output;
+  asset.url = `/video-jobs/${job.id}/assets/generated/${asset.id}.mp4`;
+  asset.fileName = `${asset.id}.mp4`;
+  asset.mediaKind = "video";
+  asset.previewUrl = asset.url;
+  asset.visualArchetype = archetype;
+  asset.clipStart = 0;
+  asset.clipEnd = duration;
+  asset.clipDuration = duration;
+  asset.generationEngine = "ffmpeg-rich-motion";
 }
 function wrapCardText(value, width, maxLines) {
   const chars = [...String(value || "").trim()];
@@ -1005,8 +1101,18 @@ async function discoverLocalProjectAssets(job) {
     createdAt: new Date().toISOString()
   }));
 }
-async function prepareAssetCandidates(job) {
-  if (job.assetDiscovery?.preparedAt) return job.assetDiscovery;
+async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) {
+  if (job.assetDiscovery?.preparedAt && !force) return job.assetDiscovery;
+  if (force) {
+    job.assetHistory = [...(job.assetHistory || []), {
+      archivedAt: new Date().toISOString(),
+      reason: reason || "重新发现素材",
+      discovery: job.assetDiscovery || null,
+      assets: job.assets || []
+    }];
+    job.assets = (job.assets || []).filter(asset => asset.discoveredAutomatically !== true);
+    delete job.assetDiscovery;
+  }
   const duration = (job.currentPlan?.keepSegments || []).reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
   const beats = (job.contentDirection?.shooting?.visualBeats || []).filter(item => item && (item.asset || item.purpose)).slice(0, 6);
   const assets = [];
@@ -1015,13 +1121,13 @@ async function prepareAssetCandidates(job) {
   for (const [index, beat] of visualNodes.entries()) {
     const asset = {
       id: `generated-${crypto.randomBytes(4).toString("hex")}`,
-      sourceType: "ai-generated-free",
-      sourceLabel: "本地规则生成信息卡",
+      sourceType: "local-derived",
+      sourceLabel: "真实原片衍生动态素材",
       title: String(beat.segment || `视觉节点 ${index + 1}`),
       usagePurpose: String(beat.purpose || beat.asset || "强化当前口播内容"),
       requestedAsset: String(beat.asset || "本地信息卡"),
-      licenseBasis: "locally-generated",
-      ownership: "project-generated",
+      licenseBasis: "user-owned-local",
+      ownership: "user-owned-local",
       reviewStatus: "pending",
       approved: false,
       generatedLocally: true,
@@ -1031,7 +1137,15 @@ async function prepareAssetCandidates(job) {
       placement: candidatePlacement(index, visualNodes.length, duration),
       createdAt: new Date().toISOString()
     };
-    await writeGeneratedCandidateCard(job, asset, asset.title, asset.usagePurpose);
+    try {
+      await writeGeneratedMotionCandidate(job, asset, beat, index);
+    } catch (error) {
+      asset.generationFallback = error.message;
+      asset.sourceType = "ai-generated-free";
+      asset.sourceLabel = "本地规则生成信息卡（动态素材失败回退）";
+      asset.licenseBasis = "locally-generated";
+      await writeGeneratedCandidateCard(job, asset, asset.title, asset.usagePurpose);
+    }
     assets.push(asset);
   }
   assets.push(...await discoverLocalProjectAssets(job));
@@ -1077,8 +1191,15 @@ async function prepareAssetCandidates(job) {
     localCandidates: assets.filter(asset => !EXTERNAL_SOURCE_TYPES.has(asset.sourceType)).length,
     externalCandidates: assets.filter(asset => EXTERNAL_SOURCE_TYPES.has(asset.sourceType)).length,
     freeStockConnector: "not-configured",
-    paidGeneration: { enabled: false, requiresExplicitCostConfirmation: true },
-    note: "免费图库连接器尚未配置；本次已优先生成本地零费用卡片并登记参考视频候选。"
+    visualStrategy: {
+      mode: "rich-media-first",
+      preferredMix: ["真人口播", "真实工作台或项目画面", "前后对比", "动态流程图", "AI生成视觉", "少量动态文字"],
+      textOnlyCardsMaxShare: 0.2,
+      referenceClipSeconds: { min: 2, max: 5 }
+    },
+    paidGeneration: { enabled: true, requiresExplicitCostConfirmation: job.options?.paidImageGenerationConfirmation !== false },
+    rightsReviewMode: job.options?.rightsReviewMode || "strict",
+    note: "已切换为富媒体优先：候选以真人原片衍生画面、前后对比、动态流程和真实项目证据为主，文字卡片只作补充；参考视频仅在必要时使用2—5秒并保留来源。"
   };
   job.assetReview = assetReviewSummary(job, duration);
   await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
@@ -1120,7 +1241,17 @@ async function ensureMediaManifest(job, version) {
     };
   });
   const review = assetReviewSummary(job, outputDuration);
-  const manifest = { version, policy: "priority-sourced-user-approved", cloudGenerationEnabled: false, paidGenerationRequiresConfirmation: true, externalUploadEnabled: false, review, assets, generatedAt: new Date().toISOString() };
+  const manifest = {
+    version,
+    policy: "rich-media-first-user-approved",
+    cloudGenerationEnabled: job.options?.cloudImageGenerationEnabled === true,
+    paidGenerationRequiresConfirmation: job.options?.paidImageGenerationConfirmation !== false,
+    rightsReviewMode: job.options?.rightsReviewMode || "strict",
+    externalUploadEnabled: false,
+    review,
+    assets,
+    generatedAt: new Date().toISOString()
+  };
   await writeJson(path.join(jobDir, `media-manifest-v${version}.json`), manifest);
   return manifest;
 }
@@ -1295,9 +1426,9 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
     reviewComplete: mediaManifest.review?.reviewComplete === true,
     approvedAssetsValid: approvedMedia.every(asset => (asset.complianceIssues || []).length === 0),
     approvedAssetsComposited: approvedMedia.every(asset => asset.composited === true),
-    externalMetadataComplete: externalMedia.every(asset => creatorNameIsUsable(asset.creatorName) && asset.workTitle && asset.sourceUrl && asset.usagePurpose && asset.licenseBasis),
+    externalMetadataComplete: externalMedia.every(asset => creatorNameIsUsable(asset.creatorName) && asset.workTitle && asset.sourceUrl && asset.usagePurpose && (advisoryRightsMode(job) || asset.licenseBasis)),
     externalAttributionRendered: externalMedia.every(asset => asset.composited === true && asset.attributionText && mediaManifest.attributionTrack),
-    externalScriptDisclosure: externalMedia.every(asset => String(job.script || "").includes(asset.creatorName))
+    externalScriptDisclosure: advisoryRightsMode(job) || externalMedia.every(asset => String(job.script || "").includes(asset.creatorName))
   };
   const mediaPass = Object.values(mediaCompliance).every(Boolean);
   const report = {
@@ -1770,7 +1901,11 @@ const server = http.createServer(async (req, res) => {
           generateVariants: options.generateVariants !== false, generateCover: options.generateCover !== false,
           coverTitle: cleanCoverCopy(options.coverTitle, 42), contentTitle: cleanCoverCopy(options.contentTitle, 42),
           silenceDb: Number(options.silenceDb ?? -36), silenceDuration: Number(options.silenceDuration ?? 0.45),
-          pauseKeep: Number(options.pauseKeep ?? 0.12), transcriptionModel: options.transcriptionModel || "small", aiMode: "full-auto"
+          pauseKeep: Number(options.pauseKeep ?? 0.12), transcriptionModel: options.transcriptionModel || "small", aiMode: "full-auto",
+          visualStrategy: "rich-media-first",
+          cloudImageGenerationEnabled: options.cloudImageGenerationEnabled === true,
+          paidImageGenerationConfirmation: options.paidImageGenerationConfirmation !== false,
+          rightsReviewMode: options.rightsReviewMode === "advisory" ? "advisory" : "strict"
         },
         versions: [], reviews: [], assets: [], jobDir: dir
       };
@@ -1819,6 +1954,25 @@ const server = http.createServer(async (req, res) => {
       const job = await readJob(coverMatch[1]);
       const cover = await regenerateCover(job, body);
       return json(res, 200, { job, cover, reusedVideo: true, reusedPlan: true });
+    }
+    const assetRediscoverMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/rediscover$/);
+    if (req.method === "POST" && assetRediscoverMatch) {
+      const body = await readBodyJson(req);
+      const job = await readJob(assetRediscoverMatch[1]);
+      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
+      if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
+      job.options = {
+        ...job.options,
+        visualStrategy: "rich-media-first",
+        cloudImageGenerationEnabled: body.cloudImageGenerationEnabled === true || job.options?.cloudImageGenerationEnabled === true,
+        paidImageGenerationConfirmation: body.paidImageGenerationConfirmation === false ? false : job.options?.paidImageGenerationConfirmation !== false,
+        rightsReviewMode: body.rightsReviewMode === "advisory" ? "advisory" : job.options?.rightsReviewMode || "strict"
+      };
+      await prepareAssetCandidates(job, { force: true, reason: String(body.reason || "按富媒体优先策略重新发现素材") });
+      job.status = "awaiting_asset_review";
+      job.progress = 60;
+      await saveJob(job);
+      return json(res, 200, { job, archivedVersions: (job.assetHistory || []).length });
     }
     const assetUploadMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets$/);
     if (req.method === "POST" && assetUploadMatch) {

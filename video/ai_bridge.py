@@ -708,7 +708,7 @@ def edit_plan(payload: dict[str, Any], feedback: str | None = None) -> dict[str,
             if isinstance(item, dict) and float(item.get("probability") or 0) < 0.62
         ],
     }
-    system = """你是短视频口播剪辑导演。根据逐字转录、停顿检测、原口播目标、内容包中的结果先行视觉设计和用户反馈，生成保守但有明确视觉节奏的剪辑JSON。不得改动事实，不得凭空添加说过的话。优先删除假启动、重复、口头禅和明显错句；保留自然情绪和必要停顿。开头0—8秒优先用最强动态标题或结果卡证明最终效果，正文只在关键步骤、证据、第一版问题和结论处加卡片，不能把每句话都包装成特效。所有时间必须引用源视频秒数。只输出JSON。"""
+    system = """你是短视频口播剪辑导演。根据逐字转录、停顿检测、原口播目标、内容包中的结果先行视觉设计和用户反馈，生成保守但有明确视觉节奏的剪辑JSON。不得改动事实，不得凭空添加说过的话。优先删除假启动、重复、口头禅和明显错句；保留自然情绪和必要停顿。视觉设计必须优先使用真人原片衍生画面、真实工作台或项目录屏、同一片段前后对比、局部放大、动态流程图以及必要的AI生成视觉；纯文字卡片只能承担标题、重点和转场，不能作为主要B-roll。开头0—8秒优先直接展示真实成片效果或前后对比，再用少量动态文字说明结果。正文只在关键步骤、证据、第一版问题和结论处安排视觉节点，不能把每句话都包装成特效。所有时间必须引用源视频秒数。只输出JSON。"""
     schema = {
         "keepSegments": [{"start": 0.0, "end": 5.0, "reason": "保留原因"}],
         "overlayCards": [{"start": 1.0, "end": 3.5, "text": "不超过14字", "kind": "hook|evidence|result|lesson", "items": ["最多4条短要点"], "display": "banner|side-panel"}],
@@ -719,7 +719,7 @@ def edit_plan(payload: dict[str, Any], feedback: str | None = None) -> dict[str,
         "removedReasons": ["删除原因"],
         "confidence": 0.8,
     }
-    user = f"""目标口播稿：\n{payload.get('script', '')}\n\n内容包中的结果证明与视觉设计：\n{json.dumps(payload.get('content_direction', {}), ensure_ascii=False, indent=2)}\n\n源视频信息：\n{json.dumps(payload.get('source', {}), ensure_ascii=False)}\n\n停顿检测与基础保留区间：\n{json.dumps(base_plan, ensure_ascii=False)}\n\n逐字转录（按句时间轴，另列低置信词）：\n{json.dumps(compact_transcript, ensure_ascii=False)}\n\n用户最终审核反馈：\n{feedback or '无，这是第一次自动剪辑'}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n约束：keepSegments 按时间升序、不重叠，每段至少0.35秒；除非存在大量重复，不得删除超过原片55%；overlayCards 使用3—6个，只放最重要的结果钩子、工具分工、关键步骤、第一版问题和最终经验，优先保证开头8秒内有一张 hook 或 result 卡。只有出现步骤、清单或并列结构时才填写2—4条 items并使用side-panel，其余卡片使用banner且items为空；每条item不超过14字。不要照抄参考博主的画面，应根据当前口播和content_direction重新设计。coverDesign 必须让用户在主页缩略图上一眼看懂视频讲什么：lines 只写具体主题，不写“快来看”“太强了”等空泛钩子，共2到3行、单行尽量不超过9个汉字；highlights 必须是 lines 中的原文；features 只列视频明确展示的能力。结尾出现导演交流、现场提示或重复补录时，应只保留完整且自然的一版。"""
+    user = f"""目标口播稿：\n{payload.get('script', '')}\n\n内容包中的结果证明与视觉设计：\n{json.dumps(payload.get('content_direction', {}), ensure_ascii=False, indent=2)}\n\n源视频信息：\n{json.dumps(payload.get('source', {}), ensure_ascii=False)}\n\n停顿检测与基础保留区间：\n{json.dumps(base_plan, ensure_ascii=False)}\n\n逐字转录（按句时间轴，另列低置信词）：\n{json.dumps(compact_transcript, ensure_ascii=False)}\n\n用户最终审核反馈：\n{feedback or '无，这是第一次自动剪辑'}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n约束：keepSegments 按时间升序、不重叠，每段至少0.35秒；除非存在大量重复，不得删除超过原片55%；overlayCards 使用3—6个，只放最重要的结果钩子、工具分工、关键步骤、第一版问题和最终经验，优先保证开头8秒内有一张 hook 或 result 卡。视觉节点中至少80%必须可实现为真实原片衍生画面、工作台或项目画面、前后对比、局部放大、动态流程或AI生成视觉；纯文字卡不得成为正文主体。只有出现步骤、清单或并列结构时才填写2—4条 items并使用side-panel，其余卡片使用banner且items为空；每条item不超过14字。不要照抄参考博主的画面，应根据当前口播和content_direction重新设计。coverDesign 必须让用户在主页缩略图上一眼看懂视频讲什么：lines 只写具体主题，不写“快来看”“太强了”等空泛钩子，共2到3行、单行尽量不超过9个汉字；highlights 必须是 lines 中的原文；features 只列视频明确展示的能力。结尾出现导演交流、现场提示或重复补录时，应只保留完整且自然的一版。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=10000)
     plan = result.get("data")
     if not isinstance(plan, dict) or not isinstance(plan.get("keepSegments"), list):

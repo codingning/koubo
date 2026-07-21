@@ -331,9 +331,9 @@
           </article>
 
           <article id="asset-review-panel" class="panel asset-review-panel is-hidden">
-            <div class="panel-head"><div><h3>素材审核板</h3><p>AI先准备候选，你逐条批准或拒绝；全部决定后才会渲染。</p></div><span id="asset-review-summary" class="mini-label">等待候选</span></div>
-            <div class="source-priority">优先级：本地证据 → 免费许可素材 → 已授权外部素材 → 评论性必要引用 → 付费素材（调用前确认费用）</div>
-            <div class="inline-actions"><input id="media-file" type="file" accept="image/*,video/*"><button id="upload-media" class="btn btn-secondary" disabled>加入本地候选</button><button id="render-with-assets" class="btn btn-primary" disabled>全部决定后开始渲染</button></div>
+            <div class="panel-head"><div><h3>素材审核板</h3><p>默认生成真实原片衍生画面、前后对比、工作台画面和动态流程；文字卡片只作点缀。</p></div><span id="asset-review-summary" class="mini-label">等待候选</span></div>
+            <div class="source-priority">当前策略：真人口播 → 真实工作台/项目画面 → 前后对比 → 动态流程图 → AI生成视觉 → 少量动态文字；参考视频仅在必要时使用2—5秒并标注来源。</div>
+            <div class="inline-actions"><input id="media-file" type="file" accept="image/*,video/*"><button id="upload-media" class="btn btn-secondary" disabled>加入本地候选</button><button id="rediscover-media" class="btn btn-secondary" disabled>重新生成富媒体候选</button><button id="render-with-assets" class="btn btn-primary" disabled>全部决定后开始渲染</button></div>
             <div id="asset-discovery-note" class="asset-discovery-note"></div>
             <div id="media-assets" class="media-assets"></div>
           </article>
@@ -375,7 +375,7 @@
               <div><b>01</b><strong>HyperFrames</strong><span>透明动态卡片；失败时记录原因并回退 ASS</span></div>
               <div><b>02</b><strong>Video Use</strong><span>逐字稿语义删错句、停顿检测、字幕和切点核查</span></div>
               <div><b>03</b><strong>Promotion</strong><span>审核母版派生 9:16、1:1 和原比例下载</span></div>
-              <div><b>04</b><strong>Generative Media</strong><span>自动候选、来源溯源、逐条审批和付费前确认；云生成默认关闭</span></div>
+              <div><b>04</b><strong>Generative Media</strong><span>富媒体候选、AI生成视觉、来源溯源和逐条审批；当前创作阶段不因生图费用中断</span></div>
               <div><b>05</b><strong>Video Cut</strong><span>同一剪辑计划生成时间线、CMX 3600 EDL 和滤镜脚本</span></div>
               <div><b>06</b><strong>AI Video Workflow</strong><span>上传、分析、确认、版本渲染、QA 和最终审核闭环</span></div>
             </div>

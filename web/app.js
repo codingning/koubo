@@ -589,6 +589,10 @@
       contentTitle: String(itemState().selectedTitle || currentItem.mainTopic || currentItem.shortTopic || "").trim(),
       silenceDuration: Number(byId("edit-silence-duration").value),
       transcriptionModel: byId("edit-transcription-model").value,
+      visualStrategy: "rich-media-first",
+      cloudImageGenerationEnabled: true,
+      paidImageGenerationConfirmation: false,
+      rightsReviewMode: "advisory",
       script: editedScript || shortText(currentItem)
     };
   }
@@ -854,9 +858,10 @@
     byId("asset-discovery-note").textContent = job.assetDiscovery?.note || "本地上传的素材也必须先审核，未批准不会进入成片。";
     const canRender = review.reviewComplete === true && review.renderReady === true && !["rendering", "revising"].includes(job.status);
     byId("render-with-assets").disabled = !canRender;
+    byId("rediscover-media").disabled = !job.id || ["rendering", "revising", "planning", "transcribing"].includes(job.status);
     byId("render-with-assets").textContent = job.output ? "按当前素材生成新版本" : "全部决定后开始渲染";
     const sourceLabels = {
-      "local-derived": "本地项目证据", "local-upload": "本地上传", "ai-generated-free": "本地零费用生成",
+      "local-derived": "真实画面衍生", "local-upload": "本地上传", "ai-generated-free": "本地生成视觉",
       "licensed-free": "免费许可素材", "external-creator": "外部创作者视频", "licensed-external": "已授权外部素材",
       "paid-stock": "付费素材", "paid-generated": "付费AI生成"
     };
@@ -905,6 +910,32 @@
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error || "素材加入失败");
       currentVideoJob = payload.job; renderVideoJob(currentVideoJob); byId("media-file").value = ""; toast("素材已本地入库，尚未批准");
     } catch (error) { toast(error.message); } finally { byId("upload-media").disabled = !byId("media-file").files?.length; }
+  }
+
+  async function rediscoverMediaAssets() {
+    if (!currentVideoJob?.id) return;
+    byId("rediscover-media").disabled = true;
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/rediscover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: "用户要求用真实录屏、前后对比、动态流程和AI视觉替换纯文字卡片",
+          cloudImageGenerationEnabled: true,
+          paidImageGenerationConfirmation: false,
+          rightsReviewMode: "advisory"
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "富媒体候选生成失败");
+      currentVideoJob = payload.job;
+      renderVideoJob(currentVideoJob);
+      toast(`富媒体候选已重建，旧素材清单已保留为第 ${payload.archivedVersions || 1} 版历史`);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      byId("rediscover-media").disabled = !currentVideoJob?.id;
+    }
   }
 
   async function decideMediaAsset(row, decision) {
@@ -1066,6 +1097,7 @@
   byId("regenerate-cover").addEventListener("click", regenerateVideoCover);
   byId("media-file").addEventListener("change", event => { byId("upload-media").disabled = !event.target.files?.length || !currentVideoJob?.id; });
   byId("upload-media").addEventListener("click", uploadMediaAsset);
+  byId("rediscover-media").addEventListener("click", rediscoverMediaAssets);
   byId("render-with-assets").addEventListener("click", renderWithApprovedAssets);
   byId("media-assets").addEventListener("click", event => {
     const approve = event.target.closest("[data-approve-media]");

@@ -14,6 +14,7 @@
     {
       "id": "douyin-reference-creator-2",
       "label": "用户指定参考账号二",
+      "creatorName": "西门聪明蛋XD",
       "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAACqJi0ISN_iKeH5JhOhbmqnf6WLx0Zt8MAa_h_DKUIVo",
       "secUid": "MS4wLjABAAAACqJi0ISN_iKeH5JhOhbmqnf6WLx0Zt8MAa_h_DKUIVo",
       "pinnedVideoIds": ["7662756855256562067"],
@@ -22,6 +23,7 @@
     {
       "id": "douyin-reference-creator-3",
       "label": "用户指定参考账号三",
+      "creatorName": "小义子小",
       "profileUrl": "https://www.douyin.com/user/MS4wLjABAAAAmFoTYey47ziOWM54H5p-khhj_L1Ev7Oht91hmX1ssDs0tcCVYjF1TaSvvj_ojFOa",
       "secUid": "MS4wLjABAAAAmFoTYey47ziOWM54H5p-khhj_L1Ev7Oht91hmX1ssDs0tcCVYjF1TaSvvj_ojFOa",
       "pinnedVideoIds": ["7641901934210813234"],
