@@ -626,8 +626,8 @@
   function statusLabel(job) {
     const labels = {
       uploaded: "视频已上传", analyzing: "正在分析画面、音轨和停顿", transcribing: "正在本地逐字转录（首次可能下载模型）",
-      planning: "AI正在根据逐字稿生成剪辑决策", rendering: "正在加字幕、重点卡片、调音量并渲染",
-      awaiting_asset_review: "素材候选已准备，请逐条批准或拒绝", revising: "正在按你的意见生成新版本", awaiting_review: "成片已完成，请你最终审核", approved: "已审核通过", error: "自动处理失败"
+      planning: "AI正在根据逐字稿生成剪辑决策", rendering: "正在生成完整剪辑预览与分段上下文小样",
+      awaiting_asset_review: "素材候选已准备，可自动采用本地素材生成完整预览", revising: "正在按你的意见生成新版本", awaiting_review: "完整预览与分段小样已完成，请从头到尾检查", approved: "已审核通过", error: "自动处理失败"
     };
     return labels[job.status] || job.status || "处理中";
   }
@@ -694,11 +694,21 @@
     if (!currentVideoJob) return;
     const output = versionOutput(currentVideoJob, version);
     if (!output) return;
-    const outputUrl = `${videoApiBase}${output.url}?t=${Date.now()}`;
-    byId("final-video").src = outputUrl;
-    byId("download-final").href = outputUrl;
+    const finalUrl = `${videoApiBase}${output.url}?t=${Date.now()}`;
+    const reviewBundle = output.reviewBundle;
+    const previewUrl = reviewBundle?.preview?.url ? `${videoApiBase}${reviewBundle.preview.url}?t=${Date.now()}` : finalUrl;
+    byId("final-video").src = previewUrl;
+    byId("download-final").href = finalUrl;
     byId("download-final").download = `${currentItem.day || "koubo"}-AI剪辑-v${output.version}.mp4`;
     byId("result-version").textContent = `版本 ${output.version}`;
+    byId("review-preview-note").textContent = reviewBundle?.preview
+      ? `当前播放720×1280完整审核预览；共 ${reviewBundle.segments?.length || 0} 个上下文小样。高清母版已保留，但不会自动发布。`
+      : "当前版本生成于旧流程，直接播放完整成片；下一次渲染会同时生成分段小样。";
+    byId("review-segments").innerHTML = (reviewBundle?.segments || []).map((segment, index) => `
+      <article class="review-segment-card">
+        <video controls playsinline preload="metadata" poster="${videoApiBase}${htmlEscape(segment.thumbnailUrl || "")}" src="${videoApiBase}${htmlEscape(segment.url)}"></video>
+        <div><strong>小样 ${index + 1} · ${htmlEscape(segment.title || "视觉节点")}</strong><small>成片 ${Number(segment.start).toFixed(1)}—${Number(segment.end).toFixed(1)} 秒 · ${Number(segment.duration).toFixed(1)} 秒</small></div>
+      </article>`).join("") || `<div class="empty-state">这个旧版本没有分段小样。</div>`;
     const qa = output.qa || {};
     const dynamicCaptionQa = output.captionPackaging?.requested && !["none", "static"].includes(output.captionPackaging.requested)
       ? [["动态字幕轨", qa.dynamicCaptionTrack], ["字幕安全区", qa.captionSafeArea]]
@@ -858,8 +868,9 @@
     byId("asset-discovery-note").textContent = job.assetDiscovery?.note || "本地上传的素材也必须先审核，未批准不会进入成片。";
     const canRender = review.reviewComplete === true && review.renderReady === true && !["rendering", "revising"].includes(job.status);
     byId("render-with-assets").disabled = !canRender;
+    byId("auto-review-preview").disabled = !job.id || !["awaiting_asset_review", "awaiting_review"].includes(job.status);
     byId("rediscover-media").disabled = !job.id || ["rendering", "revising", "planning", "transcribing"].includes(job.status);
-    byId("render-with-assets").textContent = job.output ? "按当前素材生成新版本" : "全部决定后开始渲染";
+    byId("render-with-assets").textContent = job.output ? "按当前决定生成新预览" : "按当前决定生成预览";
     const sourceLabels = {
       "local-derived": "真实画面衍生", "local-upload": "本地上传", "ai-generated-free": "本地生成视觉",
       "licensed-free": "免费许可素材", "external-creator": "外部创作者视频", "licensed-external": "已授权外部素材",
@@ -935,6 +946,31 @@
       toast(error.message);
     } finally {
       byId("rediscover-media").disabled = !currentVideoJob?.id;
+    }
+  }
+
+  async function autoReviewAndPreview() {
+    if (!currentVideoJob?.id) return;
+    const button = byId("auto-review-preview");
+    button.disabled = true;
+    button.textContent = "正在采用本地素材并启动预览…";
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/auto-review-preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "自动采用可渲染本地素材，跳过外部或缺文件素材，生成完整预览与15—30秒上下文小样" })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "完整预览启动失败");
+      currentVideoJob = payload.job;
+      renderVideoJob(currentVideoJob);
+      toast(`已自动决定 ${payload.decisions?.length || 0} 个素材，正在生成完整预览与分段小样`);
+      pollVideoJob(currentVideoJob.id);
+    } catch (error) {
+      toast(error.message);
+      renderMediaAssets(currentVideoJob);
+    } finally {
+      button.textContent = "自动采用本地素材并生成完整预览";
     }
   }
 
@@ -1098,6 +1134,7 @@
   byId("media-file").addEventListener("change", event => { byId("upload-media").disabled = !event.target.files?.length || !currentVideoJob?.id; });
   byId("upload-media").addEventListener("click", uploadMediaAsset);
   byId("rediscover-media").addEventListener("click", rediscoverMediaAssets);
+  byId("auto-review-preview").addEventListener("click", autoReviewAndPreview);
   byId("render-with-assets").addEventListener("click", renderWithApprovedAssets);
   byId("media-assets").addEventListener("click", event => {
     const approve = event.target.closest("[data-approve-media]");

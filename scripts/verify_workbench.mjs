@@ -62,6 +62,8 @@ for (const capability of [
   "runQa",
   "ensureMediaManifest",
   "prepareAssetCandidates",
+  "createReviewBundle",
+  "autoReviewLocalAssetsForPreview",
   "assetComplianceIssues",
   "buildMediaRenderPlan",
   "finalizeMediaManifest",
@@ -74,6 +76,7 @@ for (const route of ["/replan", "/rerender", "/cover", "/assets", "/approve"]) {
   assert(serverSource.includes(route), `Missing workflow endpoint: ${route}`);
 }
 assert(serverSource.includes("assets\\/rediscover"), "Missing rich-media rediscovery endpoint");
+assert(serverSource.includes("auto-review-preview"), "Missing automatic local-media preview endpoint");
 assert(serverSource.includes("assetRenderMatch") && serverSource.includes("renderReviewedAssets"), "Missing reviewed-assets render endpoint");
 assert(serverSource.includes("ffmpeg-rich-motion") && serverSource.includes("textOnlyCardsMaxShare"), "Missing rich-media-first candidate generation");
 for (const artifact of ["timeline-v", "timeline-v${version}.edl", "qa-report-v", "media-manifest-v", "captions-v", "filter-v", "cover-design-v"]) {
@@ -220,6 +223,8 @@ assert(ids.has("edit-generate-cover") && ids.has("edit-cover-title") && ids.has(
 assert(app.includes("generateCover") && app.includes("coverWide16x9") && app.includes("coverLandscape4x3"), "网页未完整接入四画幅封面流程");
 assert(ids.has("asset-review-panel") && ids.has("render-with-assets") && ids.has("asset-review-summary"), "网页缺少素材审核板或审核后渲染入口");
 assert(ids.has("rediscover-media") && app.includes("/assets/rediscover") && app.includes("rich-media-first"), "网页缺少富媒体候选重建入口");
+assert(ids.has("auto-review-preview") && ids.has("review-preview-note") && ids.has("review-segments"), "网页缺少完整预览或分段小样审核入口");
+assert(app.includes("/assets/auto-review-preview") && app.includes("reviewBundle"), "网页未接入自动本地素材决策或审核预览包");
 assert(app.includes("commentary-quotation") && app.includes("data-attribution-text") && app.includes("data-reject-media"), "素材审核板缺少评论性引用、来源署名或拒绝操作");
 assert(serverSource.includes("口播稿没有自然说明所采用的创作者名称"), "外部素材未检查稿件中的创作者披露");
 assert(serverSource.includes("paidGenerationRequiresConfirmation") && serverSource.includes("paymentConfirmed"), "付费素材缺少费用确认门禁");

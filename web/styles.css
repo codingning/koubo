@@ -385,6 +385,17 @@ a { color: inherit; }
 .edit-analysis p { grid-column: 1 / -1; margin: 0; padding: 10px 12px; border-left: 3px solid var(--accent); color: #35566a; background: var(--accent-soft); font-size: 12px; }
 .result-grid { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(320px,.85fr); gap: 20px; align-items: start; }
 .result-grid .final-video { margin: 0; }
+.review-media-column { min-width: 0; }
+.review-preview-note { margin-bottom: 10px; padding: 10px 12px; border-radius: 10px; color: #31586e; background: #eef8f6; font-size: 11px; font-weight: 700; line-height: 1.65; }
+.review-segment-section { margin-top: 18px; }
+.review-segment-section .section-heading { margin-bottom: 10px; }
+.review-segments { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.review-segment-card { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
+.review-segment-card video { width: 100%; aspect-ratio: 9/16; max-height: 300px; display: block; object-fit: contain; background: #07131d; }
+.review-segment-card div { padding: 9px 10px; }
+.review-segment-card strong, .review-segment-card small { display: block; overflow-wrap: anywhere; }
+.review-segment-card strong { color: var(--navy); font-size: 11px; }
+.review-segment-card small { margin-top: 3px; color: var(--muted); font-size: 9px; }
 .final-qa { display: flex; flex-wrap: wrap; gap: 7px; }
 .qa-chip { padding: 6px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; }
 .qa-chip.pass { color: var(--green); background: var(--green-soft); }
@@ -449,6 +460,7 @@ a { color: inherit; }
   .cover-grid { grid-template-columns: 1fr 1fr; }
   .skill-capability-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .capability-status { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .review-segments { grid-template-columns: 1fr; }
   .capability-status span:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
   .capability-status span:nth-child(4) { border-top: 1px solid var(--line); }
   .media-asset { grid-template-columns: 1fr; }

@@ -333,15 +333,22 @@
           <article id="asset-review-panel" class="panel asset-review-panel is-hidden">
             <div class="panel-head"><div><h3>素材审核板</h3><p>默认生成真实原片衍生画面、前后对比、工作台画面和动态流程；文字卡片只作点缀。</p></div><span id="asset-review-summary" class="mini-label">等待候选</span></div>
             <div class="source-priority">当前策略：真人口播 → 真实工作台/项目画面 → 前后对比 → 动态流程图 → AI生成视觉 → 少量动态文字；参考视频仅在必要时使用2—5秒并标注来源。</div>
-            <div class="inline-actions"><input id="media-file" type="file" accept="image/*,video/*"><button id="upload-media" class="btn btn-secondary" disabled>加入本地候选</button><button id="rediscover-media" class="btn btn-secondary" disabled>重新生成富媒体候选</button><button id="render-with-assets" class="btn btn-primary" disabled>全部决定后开始渲染</button></div>
+            <div class="inline-actions"><input id="media-file" type="file" accept="image/*,video/*"><button id="upload-media" class="btn btn-secondary" disabled>加入本地候选</button><button id="rediscover-media" class="btn btn-secondary" disabled>重新生成富媒体候选</button><button id="auto-review-preview" class="btn btn-primary" disabled>自动采用本地素材并生成完整预览</button><button id="render-with-assets" class="btn btn-secondary" disabled>按当前决定生成预览</button></div>
             <div id="asset-discovery-note" class="asset-discovery-note"></div>
             <div id="media-assets" class="media-assets"></div>
           </article>
 
           <article id="edit-results" class="panel result-panel is-hidden">
-            <div class="panel-head"><h3>最终审核</h3><span id="result-version" class="mini-label">版本 1</span></div>
+            <div class="panel-head"><div><h3>完整预览与分段审核</h3><p>先看完整节奏，再用15—30秒上下文小样定位问题；通过后才进入最终审核。</p></div><span id="result-version" class="mini-label">版本 1</span></div>
             <div class="result-grid">
-              <video id="final-video" class="final-video" controls playsinline></video>
+              <div class="review-media-column">
+                <div id="review-preview-note" class="review-preview-note">正在准备完整审核预览……</div>
+                <video id="final-video" class="final-video" controls playsinline></video>
+                <section class="review-segment-section">
+                  <div class="section-heading"><h3>分段上下文小样</h3><p>每段保留素材出现前后的口播，反馈时直接说“小样几、第几秒”。</p></div>
+                  <div id="review-segments" class="review-segments"></div>
+                </section>
+              </div>
               <div>
                 <div id="final-qa" class="final-qa"></div>
                 <div id="capability-status" class="capability-status"></div>

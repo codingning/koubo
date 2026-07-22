@@ -1471,6 +1471,70 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
   await writeJson(path.join(confined(jobsRoot, job.id), `qa-report-v${version}.json`), report);
   return report;
 }
+function reviewContextWindows(job, outputDuration) {
+  const duration = Math.max(0, Number(outputDuration || 0));
+  const approved = (job.assets || []).filter(asset => asset.reviewStatus === "approved" && asset.placement);
+  const raw = approved.map(asset => {
+    const placementStart = Math.max(0, Number(asset.placement.start || 0));
+    const placementEnd = Math.min(duration, Math.max(placementStart, Number(asset.placement.end || placementStart)));
+    let start = Math.max(0, placementStart - 5);
+    let end = Math.min(duration, Math.max(placementEnd + 8, start + 15));
+    if (end - start < 15) start = Math.max(0, end - 15);
+    return { start, end, assetIds: [asset.id], titles: [asset.title || asset.fileName || "视觉节点"] };
+  }).sort((a, b) => a.start - b.start);
+  const merged = [];
+  for (const item of raw) {
+    const previous = merged.at(-1);
+    if (previous && item.start <= previous.end + 1 && Math.max(previous.end, item.end) - previous.start <= 30) {
+      previous.end = Math.max(previous.end, item.end);
+      previous.assetIds.push(...item.assetIds);
+      previous.titles.push(...item.titles);
+    } else merged.push({ ...item });
+  }
+  return merged.map((item, index) => ({
+    id: `review-segment-${index + 1}`,
+    title: [...new Set(item.titles)].join("＋"),
+    start: Number(item.start.toFixed(2)),
+    end: Number(item.end.toFixed(2)),
+    duration: Number((item.end - item.start).toFixed(2)),
+    assetIds: [...new Set(item.assetIds)]
+  }));
+}
+async function createReviewBundle(job, version, outputPath, outputDuration) {
+  const jobDir = confined(jobsRoot, job.id);
+  const previewName = `review-preview-v${version}.mp4`;
+  const previewPath = path.join(jobDir, previewName);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", outputPath,
+    "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=0x07131D,fps=30,format=yuv420p",
+    "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
+    "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv",
+    "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", previewPath]);
+  await run("ffmpeg", ["-v", "error", "-i", previewPath, "-f", "null", "-"]);
+  const previewMetadata = await probe(previewPath);
+  const segments = [];
+  for (const [index, window] of reviewContextWindows(job, outputDuration).entries()) {
+    const clipName = `review-segment-v${version}-${String(index + 1).padStart(2, "0")}.mp4`;
+    const thumbnailName = `review-segment-v${version}-${String(index + 1).padStart(2, "0")}.jpg`;
+    const clipPath = path.join(jobDir, clipName);
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", window.start.toFixed(3), "-i", previewPath, "-t", window.duration.toFixed(3),
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", clipPath]);
+    await run("ffmpeg", ["-v", "error", "-i", clipPath, "-f", "null", "-"]);
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", "1", "-i", clipPath, "-frames:v", "1", "-q:v", "3", path.join(jobDir, thumbnailName)]);
+    segments.push({ ...window, path: clipPath, url: `/video-jobs/${job.id}/${clipName}`, thumbnailUrl: `/video-jobs/${job.id}/${thumbnailName}` });
+  }
+  const bundle = {
+    version,
+    mode: "full-preview-with-context-segments",
+    preview: { path: previewPath, url: `/video-jobs/${job.id}/${previewName}`, metadata: previewMetadata },
+    segments,
+    highResolutionMasterRetained: true,
+    finalApprovalHeld: true,
+    autoPublish: false,
+    createdAt: new Date().toISOString()
+  };
+  await writeJson(path.join(jobDir, `review-bundle-v${version}.json`), bundle);
+  return bundle;
+}
 async function renderVersion(job, version) {
   const jobDir = confined(jobsRoot, job.id), plan = job.currentPlan, segments = plan.keepSegments;
   job.status = version > 1 ? "revising" : "rendering"; job.progress = 2; await saveJob(job);
@@ -1576,6 +1640,8 @@ async function renderVersion(job, version) {
   const variants = await renderVariants(job, version, outputPath);
   job.progress = 94; await saveJob(job);
   const qaReport = await runQa(job, version, outputPath, duration, timeline, variants, packaging, captionPackaging, coverPackaging, mediaManifest, colorManagement);
+  job.progress = 97; await saveJob(job);
+  const reviewBundle = await createReviewBundle(job, version, outputPath, duration);
   const artifactUrl = name => `/video-jobs/${job.id}/${name}`;
   const versionResult = {
     version,
@@ -1592,6 +1658,7 @@ async function renderVersion(job, version) {
     cover: coverPackaging,
     colorManagement,
     variants,
+    reviewBundle,
     media: { policy: mediaManifest.policy, approvedAssets: mediaManifest.assets.filter(asset => asset.approved).length },
     artifacts: {
       editPlan: artifactUrl(`edit-plan-v${version}.json`),
@@ -1602,6 +1669,8 @@ async function renderVersion(job, version) {
       filter: artifactUrl(`filter-v${version}.ffscript`),
       qa: artifactUrl(`qa-report-v${version}.json`),
       mediaManifest: artifactUrl(`media-manifest-v${version}.json`),
+      reviewBundle: artifactUrl(`review-bundle-v${version}.json`),
+      reviewPreview: reviewBundle.preview.url,
       ...(coverPackaging.available ? {
         coverDesign: artifactUrl(`cover-design-v${version}.json`),
         coverVertical: coverPackaging.vertical.url,
@@ -1766,6 +1835,38 @@ async function renderReviewedAssets(job, reason = "素材审核完成") {
     job.errorDetail = String(error.stderr || "").slice(-8000);
     await saveJob(job);
   } finally { running.delete(job.id); }
+}
+async function autoReviewLocalAssetsForPreview(job) {
+  const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+  const decidedAt = new Date().toISOString();
+  const decisions = [];
+  for (const asset of job.assets || []) {
+    if (asset.reviewStatus !== "pending") continue;
+    const isLocalRenderable = !EXTERNAL_SOURCE_TYPES.has(asset.sourceType) && !PAID_SOURCE_TYPES.has(asset.sourceType)
+      && ["image", "video"].includes(asset.mediaKind) && asset.path && fs.existsSync(asset.path) && asset.placement;
+    asset.reviewStatus = isLocalRenderable ? "approved" : "rejected";
+    asset.approved = isLocalRenderable;
+    asset.updatedAt = decidedAt;
+    decisions.push({
+      assetId: asset.id,
+      reviewStatus: asset.reviewStatus,
+      placement: asset.placement || null,
+      licenseBasis: asset.licenseBasis || "",
+      usagePurpose: asset.usagePurpose || "",
+      reason: isLocalRenderable ? "完整预览模式自动采用可渲染的本地富媒体素材" : "完整预览模式跳过外部、付费、缺文件或缺时间段素材",
+      decidedAt
+    });
+  }
+  job.options = { ...job.options, reviewMode: "full-preview-with-context-segments", autoReviewLocalAssets: true };
+  job.assetDecisions = [...(job.assetDecisions || []), ...decisions];
+  job.assetReview = assetReviewSummary(job, duration);
+  job.status = "awaiting_asset_review";
+  job.progress = 60;
+  const jobDir = confined(jobsRoot, job.id);
+  await writeJson(path.join(jobDir, "asset-decisions.json"), job.assetDecisions);
+  await writeJson(path.join(jobDir, "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
+  await saveJob(job);
+  return { decisions, review: job.assetReview };
 }
 async function rerenderJob(job, reason = "", renderOptions = {}) {
   if (running.has(job.id)) return;
@@ -1973,6 +2074,17 @@ const server = http.createServer(async (req, res) => {
       job.progress = 60;
       await saveJob(job);
       return json(res, 200, { job, archivedVersions: (job.assetHistory || []).length });
+    }
+    const autoReviewPreviewMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/auto-review-preview$/);
+    if (req.method === "POST" && autoReviewPreviewMatch) {
+      const body = await readBodyJson(req);
+      const job = await readJob(autoReviewPreviewMatch[1]);
+      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
+      if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
+      const result = await autoReviewLocalAssetsForPreview(job);
+      if (!result.review.reviewComplete || !result.review.renderReady) return json(res, 409, { error: "自动素材决策后仍未达到预览渲染条件", review: result.review, job });
+      renderReviewedAssets(job, String(body.reason || "自动采用本地富媒体素材并生成完整预览与分段小样"));
+      return json(res, 202, { job, review: result.review, decisions: result.decisions });
     }
     const assetUploadMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets$/);
     if (req.method === "POST" && assetUploadMatch) {

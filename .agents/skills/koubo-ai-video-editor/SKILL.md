@@ -18,7 +18,7 @@ node .agents\skills\koubo-ai-video-editor\scripts\inspect_job.mjs "<任务目录
 ```
 
 4. 读取 `job.json`、`edit-plan.json`、`ai-brief.md`；如果已有 `final.mp4`，先把它当作基础版，不覆盖原片。
-5. 若任务状态是 `awaiting_asset_review`，先检查 `asset-candidates.json` 和网页素材审核板；所有候选必须逐条批准或拒绝，不能绕过审核直接渲染。
+5. 若任务状态是 `awaiting_asset_review`，先检查 `asset-candidates.json` 和网页素材审核板。默认推荐“完整预览＋分段小样”：经用户授权后可自动批准可渲染的本地素材并拒绝外部/付费/缺文件候选，但必须把每项自动决定写入 `asset-decisions.json`，不能绕过审核记录直接渲染。
 
 ## 路由
 
@@ -70,6 +70,9 @@ node .agents\skills\koubo-ai-video-editor\scripts\inspect_job.mjs "<任务目录
 - `variants/final-vertical.mp4`、`final-square.mp4`：平台派生版；
 - `qa-report.json`：技术检查；
 - `project.md`：本次策略、决策和待办。
+- `review-preview-vN.mp4`：720×1280完整审核预览；
+- `review-segment-vN-NN.mp4`：包含视觉节点前后口播的15—30秒上下文小样；
+- `review-bundle-vN.json`：完整预览、小样、时间段与关联素材清单。
 
 至少验证：
 
