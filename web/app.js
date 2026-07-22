@@ -696,16 +696,18 @@
     if (!output) return;
     const finalUrl = `${videoApiBase}${output.url}?t=${Date.now()}`;
     const reviewBundle = output.reviewBundle;
+    const previewMetadata = reviewBundle?.preview?.metadata || output.metadata || {};
+    const landscapePreview = Number(previewMetadata.width || 0) > Number(previewMetadata.height || 0);
     const previewUrl = reviewBundle?.preview?.url ? `${videoApiBase}${reviewBundle.preview.url}?t=${Date.now()}` : finalUrl;
     byId("final-video").src = previewUrl;
     byId("download-final").href = finalUrl;
     byId("download-final").download = `${currentItem.day || "koubo"}-AI剪辑-v${output.version}.mp4`;
     byId("result-version").textContent = `版本 ${output.version}`;
     byId("review-preview-note").textContent = reviewBundle?.preview
-      ? `当前播放720×1280完整审核预览；共 ${reviewBundle.segments?.length || 0} 个上下文小样。高清母版已保留，但不会自动发布。`
+      ? `当前播放${previewMetadata.width || ""}×${previewMetadata.height || ""}完整审核预览；共 ${reviewBundle.segments?.length || 0} 个上下文小样。高清母版已保留，但不会自动发布。`
       : "当前版本生成于旧流程，直接播放完整成片；下一次渲染会同时生成分段小样。";
     byId("review-segments").innerHTML = (reviewBundle?.segments || []).map((segment, index) => `
-      <article class="review-segment-card">
+      <article class="review-segment-card ${landscapePreview ? "is-landscape" : ""}">
         <video controls playsinline preload="metadata" poster="${videoApiBase}${htmlEscape(segment.thumbnailUrl || "")}" src="${videoApiBase}${htmlEscape(segment.url)}"></video>
         <div><strong>小样 ${index + 1} · ${htmlEscape(segment.title || "视觉节点")}</strong><small>成片 ${Number(segment.start).toFixed(1)}—${Number(segment.end).toFixed(1)} 秒 · ${Number(segment.duration).toFixed(1)} 秒</small></div>
       </article>`).join("") || `<div class="empty-state">这个旧版本没有分段小样。</div>`;
@@ -719,7 +721,7 @@
       ["H.264视频", qa.h264], ["AAC音频", qa.aac], ["yuv420p兼容", qa.yuv420p], ["BT.709 SDR", qa.sdrBt709], ["完整解码", qa.decodes], ["时长校验", qa.durationMatches], ["无长黑帧", qa.noLongBlackFrames !== false], ["无长冻结", qa.noLongFreezeFrames !== false], ...dynamicCaptionQa, ...coverQa, ...mediaQa
     ].map(([label, pass]) => `<span class="qa-chip ${pass ? "pass" : "warn"}">${pass ? "✓" : "!"} ${label}</span>`).join("");
     const provenance = output.provenance === "silence-fallback" ? "停顿降级" : "语义剪辑";
-    const packaging = output.packaging?.engine === "hyperframes" ? "HyperFrames" : output.packaging?.engine === "ass-fallback" ? "ASS 降级" : "无动态卡片";
+    const packaging = currentVideoJob.options?.layout === "landscape-tech" ? "16:9 科技包装" : output.packaging?.engine === "hyperframes" ? "HyperFrames" : output.packaging?.engine === "ass-fallback" ? "ASS 降级" : "无动态卡片";
     const captions = output.captionPackaging?.engine === "hyperframes" ? "关键词弹入" : output.captionPackaging?.engine === "ass-static" ? "简洁静态" : output.captionPackaging?.engine === "ass-fallback" ? "ASS 降级" : "关闭";
     const color = output.colorManagement?.engine === "zscale-hable" ? "HLG→SDR / BT.709" : "BT.709";
     const coverStatus = output.cover?.available ? "四画幅已生成" : output.cover?.requested ? "生成失败" : "关闭";

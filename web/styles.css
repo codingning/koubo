@@ -392,6 +392,7 @@ a { color: inherit; }
 .review-segments { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
 .review-segment-card { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: #fff; }
 .review-segment-card video { width: 100%; aspect-ratio: 9/16; max-height: 300px; display: block; object-fit: contain; background: #07131d; }
+.review-segment-card.is-landscape video { aspect-ratio: 16/9; max-height: none; }
 .review-segment-card div { padding: 9px 10px; }
 .review-segment-card strong, .review-segment-card small { display: block; overflow-wrap: anywhere; }
 .review-segment-card strong { color: var(--navy); font-size: 11px; }

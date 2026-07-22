@@ -86,6 +86,8 @@ assert(serverSource.includes("job.options.generateVariants === false"), "Promoti
 assert(serverSource.includes("tonemap=tonemap=hable"), "HLG/HDR source is not tone-mapped for SDR delivery");
 assert(serverSource.includes('"-color_primaries", "bt709"'), "Rendered video is not tagged as BT.709");
 assert(serverSource.includes('captionStyle: normalizeCaptionStyle(options.captionStyle)'), "新任务未默认启用可控字幕包装");
+assert(serverSource.includes('layout: ["landscape-tech", "original", "vertical", "square"].includes(options.layout) ? options.layout : "landscape-tech"'), "新任务未默认启用 16:9 科技感横版");
+assert(serverSource.includes('if (layout === "landscape-tech")') && serverSource.includes('ffmpeg-landscape-tech-motion'), "缺少横版科技画布或对应富媒体候选渲染");
 assert(serverSource.includes('renderHorizontal(1920, "16x9")') && serverSource.includes('renderHorizontal(1440, "4x3")'), "封面流程缺少 16:9 或 4:3 横版产物");
 assert(serverSource.includes("coverPackaging.wide16x9?.metadata?.width === 1920") && serverSource.includes("coverPackaging.landscape4x3?.metadata?.width === 1440"), "四画幅封面尺寸没有进入 QA 门禁");
 assert(serverSource.includes('engine: "ass-fallback"'), "动态包装缺少 ASS 降级路径");
@@ -218,6 +220,7 @@ assert(app.includes("/api/contents/generate"), "网页未接入口播生成接�
 assert(app.includes("/revise`"), "网页未接入自然语言返修接口");
 assert(app.includes("/approve`"), "网页未接入最终审核接口");
 assert(ids.has("edit-caption-style") && ids.has("edit-information-panels"), "网页缺少动态字幕或分屏信息板控制项");
+assert(html.includes('<option value="landscape-tech">16:9 科技感横版</option>'), "网页未把 16:9 科技感横版设为首选");
 assert(app.includes("captionStyle") && app.includes("informationPanels"), "网页未把字幕包装选项发送给服务端");
 assert(ids.has("edit-generate-cover") && ids.has("edit-cover-title") && ids.has("regenerate-cover"), "网页缺少自动封面开关、标题覆盖或单独重做入口");
 assert(app.includes("generateCover") && app.includes("coverWide16x9") && app.includes("coverLandscape4x3"), "网页未完整接入四画幅封面流程");

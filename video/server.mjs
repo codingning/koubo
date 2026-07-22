@@ -606,12 +606,18 @@ async function renderHyperframesCaptions(jobDir, job, timeline, version) {
   metadata.alphaAverage = alphaAverage;
   return { requested: style, engine: "hyperframes", style, cues: cues.length, path: output, url: `/video-jobs/${path.basename(jobDir)}/overlays/v${version}/captions.webm`, metadata, fallbackReason: null };
 }
-async function writeAss(jobDir, transcript, keeps, overlays, version, script = "") {
+async function writeAss(jobDir, transcript, keeps, overlays, version, script = "", dimensions = { width: 1080, height: 1920 }) {
+  const landscape = dimensions.width > dimensions.height;
+  const captionFontSize = landscape ? 34 : 56;
+  const captionMargin = landscape ? 42 : 180;
+  const captionSideMargin = landscape ? 110 : 70;
+  const overlayFontSize = landscape ? 42 : 76;
+  const overlayMargin = landscape ? 52 : 230;
   const lines = [
-    "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1080", "PlayResY: 1920", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
+    "[Script Info]", "ScriptType: v4.00+", `PlayResX: ${dimensions.width}`, `PlayResY: ${dimensions.height}`, "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
     "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    "Style: Caption,Microsoft YaHei,56,&H00FFFFFF,&H000000FF,&H00101010,&H70000000,-1,0,0,0,100,100,1,0,1,4,0,2,70,70,180,1",
-    "Style: Overlay,Microsoft YaHei,76,&H00FFFFFF,&H000000FF,&H00000000,&H900F8278,-1,0,0,0,100,100,1,0,3,2,0,8,90,90,230,1", "",
+    `Style: Caption,Microsoft YaHei,${captionFontSize},&H00FFFFFF,&H000000FF,&H00101010,&H70000000,-1,0,0,0,100,100,1,0,1,3,0,2,${captionSideMargin},${captionSideMargin},${captionMargin},1`,
+    `Style: Overlay,Microsoft YaHei,${overlayFontSize},&H00FFFFFF,&H000000FF,&H00000000,&H900F8278,-1,0,0,0,100,100,1,0,3,2,0,8,90,90,${overlayMargin},1`, "",
     "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
   ];
   for (const cue of transcriptCues(transcript, keeps, script)) lines.push(`Dialogue: 0,${assTime(cue.start)},${assTime(Math.max(cue.end, cue.start + 0.35))},Caption,,0,0,0,,${assEscape(cue.text)}`);
@@ -624,6 +630,7 @@ async function writeAss(jobDir, transcript, keeps, overlays, version, script = "
   return file;
 }
 function videoLayoutFilter(layout) {
+  if (layout === "landscape-tech") return "split=2[bg][fg];[bg]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,boxblur=28:10,eq=brightness=-0.48:saturation=0.42,drawgrid=w=64:h=64:t=1:c=0x2ED6C4@0.07[bg2];[fg]scale=404:720:force_original_aspect_ratio=decrease,pad=404:720:(ow-iw)/2:(oh-ih)/2:color=0x060A10,eq=saturation=1.05:contrast=1.04[fg2];[bg2]drawbox=x=0:y=0:w=850:h=720:color=0x050A11@0.68:t=fill,drawbox=x=30:y=28:w=790:h=664:color=0x162331@0.42:t=2,drawbox=x=850:y=0:w=4:h=720:color=0xE0A82E@0.9:t=fill[stage];[stage][fg2]overlay=876:0";
   const size = layout === "square" ? "1080:1080" : "1080:1920";
   if (layout === "original") return "scale=trunc(iw/2)*2:trunc(ih/2)*2";
   return `split=2[bg][fg];[bg]scale=${size}:force_original_aspect_ratio=increase,crop=${size},boxblur=24:8[bg2];[fg]scale=${size}:force_original_aspect_ratio=decrease[fg2];[bg2][fg2]overlay=(W-w)/2:(H-h)/2`;
@@ -863,6 +870,28 @@ function normalizePlacement(value) {
   const validModes = new Set(["broll", "pip", "comparison-left", "comparison-right"]);
   return { start, end, mode: validModes.has(value?.mode) ? value.mode : "broll" };
 }
+
+function landscapeBeatAnchor(beat = {}, fallback = 0) {
+  const text = `${beat.segment || ""} ${beat.asset || ""} ${beat.purpose || ""}`;
+  if (/(最终效果|开头结果)/.test(text)) return 0;
+  if (/(返修前后验证|同一时间点|指定位置.*对比)/.test(text)) return 0.77;
+  if (/(自然语言返修|时间点.*具体问题)/.test(text)) return 0.63;
+  if (/(最终人工审核|最终发布|能不能发)/.test(text)) return 0.89;
+  if (/(基础版限制|基础字幕|返修前)/.test(text)) return 0.11;
+  if (/(三个角色|角色分工|Codex.*HyperFrames)/i.test(text)) return 0.2;
+  if (/(完整输入|输入方式|剪辑目标)/.test(text)) return 0.33;
+  if (/(AI理解|复述重点|第一版播放)/.test(text)) return 0.45;
+  if (/(检查第一版|逐段播放|人工检查)/.test(text)) return 0.53;
+  return fallback;
+}
+
+function candidatePlacementForBeat(beat, index, count, duration) {
+  const safeDuration = Math.max(1, Number(duration || 1));
+  const fallback = index / Math.max(1, count);
+  const start = Math.min(Math.max(0, safeDuration - 0.5), safeDuration * landscapeBeatAnchor(beat, fallback));
+  const visible = Math.max(0.5, Math.min(5.6, safeDuration - start));
+  return { start: Number(start.toFixed(2)), end: Number((start + visible).toFixed(2)), mode: "broll" };
+}
 function normalizeAssetRecord(asset = {}) {
   const reviewStatus = ["pending", "approved", "rejected"].includes(asset.reviewStatus)
     ? asset.reviewStatus
@@ -962,10 +991,10 @@ function outputTimeToSource(job, outputTime) {
 }
 function richVisualArchetype(beat = {}, index = 0) {
   const text = `${beat.segment || ""} ${beat.asset || ""} ${beat.purpose || ""}`;
-  if (index === 0 || /(最终|效果|前后|对比|基础版|返修版)/.test(text)) return "proof-comparison";
   if (/(角色|分工|Codex|HyperFrames|转录|渲染)/i.test(text)) return "workflow-map";
-  if (/(输入|提示|告诉AI|提交|素材与目标)/i.test(text)) return "prompt-console";
-  if (/(检查|审核|字幕|遮挡|裁切|问题)/i.test(text)) return "review-scan";
+  if (/(自然语言返修|完整输入|输入方式|提示|告诉AI|提交|时间点.*具体问题|素材与目标)/i.test(text)) return "prompt-console";
+  if (/(最终人工审核|检查第一版|审核|字幕核对|遮挡检查|裁切检查)/i.test(text)) return "review-scan";
+  if (index === 0 || /(最终效果|前后验证|同一时间点|基础版限制|返修版)/.test(text)) return "proof-comparison";
   return "screen-demo";
 }
 function richVisualCopy(archetype, beat = {}) {
@@ -979,9 +1008,102 @@ function richVisualCopy(archetype, beat = {}) {
   };
   return { title, ...(variants[archetype] || variants["screen-demo"]) };
 }
-async function writeRichCandidateAss(dir, asset, archetype, beat, duration) {
+
+function landscapeHudTitle(value = "") {
+  const text = String(value || "").trim();
+  const mappings = [
+    [/最终效果|0—8秒/, "先看最终效果"],
+    [/基础版限制/, "第一版不等于成片"],
+    [/三个角色/, "AI剪辑的四个角色"],
+    [/完整输入/, "把成片标准一起交给AI"],
+    [/AI理解/, "先复述重点，再生成第一版"],
+    [/检查第一版/, "逐项检查，记录时间点"],
+    [/自然语言返修/, "返修只需要三段式"],
+    [/返修前后验证/, "回到同一位置做对比"],
+    [/最终人工审核/, "AI生成，人决定交付"]
+  ];
+  return mappings.find(([pattern]) => pattern.test(text))?.[1] || text || "AI口播剪辑实战";
+}
+
+async function writeLandscapeHudAss(jobDir, job, timeline, version) {
+  const approved = (job.assets || [])
+    .filter(asset => asset.reviewStatus === "approved" && asset.placement && !EXTERNAL_SOURCE_TYPES.has(asset.sourceType))
+    .sort((a, b) => Number(a.placement.start) - Number(b.placement.start));
+  const unique = [];
+  for (const asset of approved) {
+    if (unique.some(item => Math.abs(Number(item.placement.start) - Number(asset.placement.start)) < 0.4)) continue;
+    unique.push(asset);
+  }
+  if (!unique.length) return null;
+  const lines = [
+    "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1280", "PlayResY: 720", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
+    "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+    "Style: HudKicker,Microsoft YaHei,20,&H002ED6C4,&H000000FF,&H00101920,&H00000000,-1,0,0,0,100,100,1,0,1,1,0,7,60,60,0,1",
+    "Style: HudTitle,Microsoft YaHei,44,&H00FFFFFF,&H000000FF,&H00101920,&H00000000,-1,0,0,0,100,100,1,0,1,2,0,7,60,60,0,1",
+    "Style: HudChip,Microsoft YaHei,22,&H00FFFFFF,&H000000FF,&H00101920,&HA00B1924,-1,0,0,0,100,100,1,0,3,1,0,7,60,60,0,1",
+    "Style: HudStep,Consolas,18,&H00E0A82E,&H000000FF,&H00101920,&H00000000,-1,0,0,0,100,100,2,0,1,1,0,7,60,60,0,1", "",
+    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
+  ];
+  unique.forEach((asset, index) => {
+    const start = Math.max(0, Number(asset.placement.start || 0));
+    const end = index + 1 < unique.length ? Math.max(start + 0.8, Number(unique[index + 1].placement.start || timeline.outputDuration)) : timeline.outputDuration;
+    const title = landscapeHudTitle(asset.title || asset.fileName);
+    const copy = richVisualCopy(asset.visualArchetype || "screen-demo", { segment: asset.title || title });
+    const fade = "{\\fad(220,180)}";
+    lines.push(`Dialogue: 1,${assTime(start)},${assTime(end)},HudStep,,0,0,0,,{\\pos(66,72)}${fade}SECTION ${String(index + 1).padStart(2, "0")}  /  ${String(unique.length).padStart(2, "0")}`);
+    lines.push(`Dialogue: 1,${assTime(start)},${assTime(end)},HudKicker,,0,0,0,,{\\pos(66,118)}${fade}DAY 02 · AI口播剪辑实验`);
+    lines.push(`Dialogue: 1,${assTime(start)},${assTime(end)},HudTitle,,0,0,0,,{\\pos(66,190)}${fade}${assEscape(wrapCardText(title, 14, 2))}`);
+    copy.chips.slice(0, 3).forEach((chip, chipIndex) => {
+      lines.push(`Dialogue: 1,${assTime(start + 0.12 + chipIndex * 0.08)},${assTime(end)},HudChip,,0,0,0,,{\\pos(70,${390 + chipIndex * 66})}${fade}  ${assEscape(chip)}  `);
+    });
+  });
+  const file = path.join(jobDir, `landscape-hud-v${version}.ass`);
+  await fsp.writeFile(file, lines.join("\r\n"), "utf8");
+  return file;
+}
+async function writeRichCandidateAss(dir, asset, archetype, beat, duration, layout = "vertical") {
   const assFile = path.join(dir, `${asset.id}.ass`);
   const copy = richVisualCopy(archetype, beat);
+  if (layout === "landscape-tech") {
+    const chips = copy.chips.slice(0, 4);
+    const chipPositions = archetype === "review-scan"
+      ? [[820, 270], [820, 350], [820, 430], [820, 510]]
+      : [[80, 586], [310, 586], [540, 586], [770, 586]];
+    const lines = [
+      "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1280", "PlayResY: 720", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
+      "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+      "Style: Kicker,Microsoft YaHei,22,&H002ED6C4,&H000000FF,&H00101920,&H00000000,-1,0,0,0,100,100,1,0,1,1,0,7,48,48,0,1",
+      "Style: Headline,Microsoft YaHei,38,&H00FFFFFF,&H000000FF,&H00101920,&H00000000,-1,0,0,0,100,100,1,0,1,2,0,7,48,48,0,1",
+      "Style: Chip,Microsoft YaHei,20,&H00FFFFFF,&H000000FF,&H00101920,&HA0060A10,-1,0,0,0,100,100,1,0,3,1,0,5,16,16,10,1",
+      "Style: Label,Microsoft YaHei,20,&H00FFFFFF,&H000000FF,&H00101920,&HA0060A10,-1,0,0,0,100,100,1,0,3,1,0,5,16,16,10,1", "",
+      "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+      `Dialogue: 5,0:00:00.05,0:00:0${duration.toFixed(2)},Kicker,,0,0,0,,{\\pos(48,48)\\fad(180,180)}${assEscape(copy.kicker)}`,
+      `Dialogue: 5,0:00:00.16,0:00:0${duration.toFixed(2)},Headline,,0,0,0,,{\\pos(48,88)\\fad(220,180)}${assEscape(wrapCardText(copy.headline, 22, 2))}`
+    ];
+    if (archetype === "proof-comparison") {
+      lines.push(`Dialogue: 6,0:00:00.35,0:00:0${duration.toFixed(2)},Label,,0,0,0,,{\\pos(330,205)\\fad(140,160)}原片`);
+      lines.push(`Dialogue: 6,0:00:00.55,0:00:0${duration.toFixed(2)},Label,,0,0,0,,{\\pos(950,205)\\fad(140,160)}AI剪辑后`);
+    } else if (archetype === "workflow-map") {
+      [[420, 226, "01  Codex · 接收目标 / 串联流程"], [420, 331, "02  视频理解 · 识别重点 / 定位停顿"], [420, 436, "03  HyperFrames · 动态字幕 / 重点卡片"], [420, 529, "04  本地渲染 · 16:9成片 / QA"]].forEach(([x, y, text], index) => {
+        lines.push(`Dialogue: 6,0:00:0${(0.42 + index * 0.22).toFixed(2)},0:00:0${duration.toFixed(2)},Label,,0,0,0,,{\\pos(${x},${y})\\fad(150,180)}${assEscape(text)}`);
+      });
+    } else if (archetype === "prompt-console") {
+      [[225, 230, "01 上传真人口播"], [225, 292, "02 说清主题与重点"], [225, 354, "03 指定视觉和画幅"], [225, 416, "04 先复述，再生成"]].forEach(([x, y, text], index) => {
+        lines.push(`Dialogue: 6,0:00:0${(0.42 + index * 0.2).toFixed(2)},0:00:0${duration.toFixed(2)},Label,,0,0,0,,{\\pos(${x},${y})\\fad(150,180)}${assEscape(text)}`);
+      });
+    } else if (archetype === "review-scan") {
+      lines.push(`Dialogue: 6,0:00:00.36,0:00:0${duration.toFixed(2)},Label,,0,0,0,,{\\pos(820,205)\\fad(140,160)}逐项检查 · 记录时间点`);
+    } else {
+      lines.push(`Dialogue: 6,0:00:00.36,0:00:0${duration.toFixed(2)},Label,,0,0,0,,{\\pos(390,270)\\fad(140,160)}先核对AI理解，再看第一版`);
+    }
+    chips.forEach((chip, index) => {
+      const [x, y] = chipPositions[index] || [80 + index * 230, 586];
+      const start = 0.65 + index * 0.34;
+      lines.push(`Dialogue: 7,0:00:0${start.toFixed(2)},0:00:0${duration.toFixed(2)},Chip,,0,0,0,,{\\pos(${x},${y})\\fad(160,180)\\fscx112\\fscy112\\t(0,220,\\fscx100\\fscy100)}${assEscape(chip)}`);
+    });
+    await fsp.writeFile(assFile, lines.join("\r\n"), "utf8");
+    return assFile;
+  }
   const chipPositions = archetype === "workflow-map"
     ? [[120, 1030], [360, 1030], [600, 1030]]
     : archetype === "review-scan"
@@ -1014,12 +1136,51 @@ async function writeGeneratedMotionCandidate(job, asset, beat, index) {
   if (!job.sourcePath || !fs.existsSync(job.sourcePath)) throw new Error("缺少真人原片，无法生成富媒体候选");
   const dir = path.join(confined(jobsRoot, job.id), "assets", "generated");
   await fsp.mkdir(dir, { recursive: true });
-  const duration = Math.max(3.2, Math.min(4, Number(asset.placement?.end || 4) - Number(asset.placement?.start || 0)));
+  const landscape = job.options?.layout === "landscape-tech";
+  const duration = Math.max(3.2, Math.min(landscape ? 5.6 : 4, Number(asset.placement?.end || 4) - Number(asset.placement?.start || 0)));
   asset.placement.end = Number((asset.placement.start + duration).toFixed(2));
   const archetype = richVisualArchetype(beat, index);
   const sourceStart = outputTimeToSource(job, asset.placement.start);
-  const assFile = await writeRichCandidateAss(dir, asset, archetype, beat, duration);
+  const assFile = await writeRichCandidateAss(dir, asset, archetype, beat, duration, job.options?.layout);
   const output = path.join(dir, `${asset.id}.mp4`);
+  if (landscape) {
+    const techBg = "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,boxblur=30:10,eq=brightness=-0.48:saturation=0.42,drawgrid=w=64:h=64:t=1:c=0x2ED6C4@0.07";
+    const evidenceImage = [
+      path.join(confined(jobsRoot, job.id), "assets", "generated", "day2-workbench-viewport-v2.png"),
+      path.join(confined(jobsRoot, job.id), "assets", "generated", "day2-workbench-viewport.png")
+    ].find(candidate => fs.existsSync(candidate));
+    const useEvidenceImage = !!evidenceImage && ["prompt-console", "review-scan", "screen-demo"].includes(archetype);
+    let landscapeFilter;
+    if (archetype === "proof-comparison") {
+      landscapeFilter = `[0:v]split=3[bg][left][right];[bg]${techBg}[bg0];[left]scale=560:315:force_original_aspect_ratio=increase,crop=560:315,eq=saturation=0.38:contrast=0.92[left0];[right]scale=560:315:force_original_aspect_ratio=increase,crop=560:315,eq=saturation=1.15:contrast=1.08,unsharp=5:5:0.65[right0];[bg0]drawbox=x=38:y=185:w=584:h=349:color=0x8D9AA5@0.65:t=3,drawbox=x=658:y=185:w=584:h=349:color=0xE0A82E@0.95:t=4[stage];[stage][left0]overlay=50:202[tmp];[tmp][right0]overlay=670:202,drawbox=x='670+mod(t*180,520)':y=528:w=36:h=5:color=0x2ED6C4@1:t=fill,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+    } else if (archetype === "workflow-map") {
+      landscapeFilter = `[0:v]split=2[bg][speaker];[bg]${techBg}[bg0];[speaker]scale=360:640:force_original_aspect_ratio=decrease,pad=360:640:(ow-iw)/2:(oh-ih)/2:color=0x060A10,eq=saturation=1.06[speaker0];[bg0]drawbox=x=48:y=185:w=740:h=84:color=0x0D1B27@0.96:t=fill,drawbox=x=48:y=290:w=740:h=84:color=0x102432@0.96:t=fill,drawbox=x=48:y=395:w=740:h=84:color=0x0D1B27@0.96:t=fill,drawbox=x=48:y=500:w=740:h=58:color=0x102432@0.96:t=fill,drawbox=x=46:y=183:w=744:h=379:color=0x2ED6C4@0.65:t=2,drawbox=x='65+mod(t*190,690)':y=548:w=45:h=6:color=0xE0A82E@1:t=fill[stage];[stage][speaker0]overlay=872:40,drawbox=x=868:y=36:w=368:h=648:color=0xE0A82E@0.88:t=3,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+    } else if (archetype === "prompt-console" && useEvidenceImage) {
+      landscapeFilter = `[0:v]split=2[bg][speaker];[bg]${techBg}[bg0];[speaker]scale=340:604:force_original_aspect_ratio=decrease,pad=340:604:(ow-iw)/2:(oh-ih)/2:color=0x060A10[speaker0];[1:v]scale=760:390:force_original_aspect_ratio=decrease,pad=760:390:(ow-iw)/2:(oh-ih)/2:color=0xF3F5F7,trim=duration=${duration.toFixed(3)},setpts=PTS-STARTPTS[evidence];[bg0]drawbox=x=48:y=165:w=790:h=410:color=0x07131D@0.96:t=fill,drawbox=x=48:y=165:w=790:h=410:color=0x2ED6C4@0.72:t=3[stage];[stage][evidence]overlay=63:180[tmp];[tmp][speaker0]overlay=890:68,drawbox=x=886:y=64:w=348:h=612:color=0xE0A82E@0.88:t=3,drawbox=x='75+mod(t*150,720)':y=548:w=42:h=5:color=0xE0A82E@1:t=fill,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+    } else if (archetype === "prompt-console") {
+      landscapeFilter = `[0:v]split=2[bg][speaker];[bg]${techBg}[bg0];[speaker]scale=340:604:force_original_aspect_ratio=decrease,pad=340:604:(ow-iw)/2:(oh-ih)/2:color=0x060A10[speaker0];[bg0]drawbox=x=48:y=170:w=790:h=375:color=0x07131D@0.96:t=fill,drawbox=x=48:y=170:w=790:h=375:color=0x2ED6C4@0.72:t=3,drawbox=x='92+mod(t*145,650)':y=492:w=5:h=32:color=0xE0A82E@1:t=fill[stage];[stage][speaker0]overlay=890:68,drawbox=x=886:y=64:w=348:h=612:color=0xE0A82E@0.88:t=3,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+    } else if (archetype === "review-scan" && useEvidenceImage) {
+      landscapeFilter = `[0:v]split=2[bg][speaker];[bg]${techBg}[bg0];[speaker]scale=300:534:force_original_aspect_ratio=decrease,pad=300:534:(ow-iw)/2:(oh-ih)/2:color=0x060A10[speaker0];[1:v]scale=800:440:force_original_aspect_ratio=decrease,pad=800:440:(ow-iw)/2:(oh-ih)/2:color=0xF3F5F7,trim=duration=${duration.toFixed(3)},setpts=PTS-STARTPTS[evidence];[bg0]drawbox=x=48:y=165:w=830:h=470:color=0x07131D@0.94:t=fill,drawbox=x=48:y=165:w=830:h=470:color=0x2ED6C4@0.65:t=3[stage];[stage][evidence]overlay=63:180[tmp];[tmp][speaker0]overlay=925:116,drawbox=x=921:y=112:w=308:h=542:color=0xE0A82E@0.88:t=3,drawbox=x=75:y='195+mod(t*120,400)':w=770:h=4:color=0xE0A82E@0.95:t=fill,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+    } else if (archetype === "review-scan") {
+      landscapeFilter = `[0:v]split=2[bg][speaker];[bg]${techBg}[bg0];[speaker]scale=340:604:force_original_aspect_ratio=decrease,pad=340:604:(ow-iw)/2:(oh-ih)/2:color=0x060A10[speaker0];[bg0]drawbox=x=430:y=185:w=800:h=380:color=0x07131D@0.94:t=fill,drawbox=x=430:y=185:w=800:h=380:color=0x2ED6C4@0.65:t=3,drawbox=x=465:y='210+mod(t*130,320)':w=720:h=4:color=0xE0A82E@0.95:t=fill[stage];[stage][speaker0]overlay=48:68,drawbox=x=44:y=64:w=348:h=612:color=0xE0A82E@0.88:t=3,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+    } else {
+      landscapeFilter = `[0:v]split=2[bg][speaker];[bg]${techBg}[bg0];[speaker]scale=360:640:force_original_aspect_ratio=decrease,pad=360:640:(ow-iw)/2:(oh-ih)/2:color=0x060A10[speaker0];[bg0]drawbox=x=48:y=185:w=760:h=360:color=0x07131D@0.92:t=fill,drawbox=x=48:y=185:w=760:h=360:color=0x2ED6C4@0.58:t=3,drawbox=x=82:y=245:w=620:h=18:color=0xFFFFFF@0.14:t=fill,drawbox=x=82:y=320:w=560:h=18:color=0xFFFFFF@0.10:t=fill,drawbox=x=82:y=395:w='150+min(t,3.2)*150':h=52:color=0x2ED6C4@0.75:t=fill[stage];[stage][speaker0]overlay=872:40,drawbox=x=868:y=36:w=368:h=648:color=0xE0A82E@0.88:t=3,ass=filename='${path.basename(assFile)}',fps=30,format=yuv420p[v]`;
+    }
+    const landscapeInputs = ["-ss", sourceStart.toFixed(3), "-t", duration.toFixed(3), "-i", job.sourcePath, ...(useEvidenceImage ? ["-loop", "1", "-t", duration.toFixed(3), "-i", evidenceImage] : [])];
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", ...landscapeInputs, "-filter_complex", landscapeFilter, "-map", "[v]", "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "19", "-movflags", "+faststart", output], { cwd: dir });
+    await run("ffmpeg", ["-v", "error", "-i", output, "-f", "null", "-"]);
+    asset.path = output;
+    asset.url = `/video-jobs/${job.id}/assets/generated/${asset.id}.mp4`;
+    asset.fileName = `${asset.id}.mp4`;
+    asset.mediaKind = "video";
+    asset.previewUrl = asset.url;
+    asset.visualArchetype = archetype;
+    asset.clipStart = 0;
+    asset.clipEnd = duration;
+    asset.clipDuration = duration;
+    asset.generationEngine = "ffmpeg-landscape-tech-motion";
+    return;
+  }
   const commonBg = "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,boxblur=22:8,eq=brightness=-0.18:saturation=0.72";
   let filter;
   if (archetype === "proof-comparison") {
@@ -1114,9 +1275,9 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
     delete job.assetDiscovery;
   }
   const duration = (job.currentPlan?.keepSegments || []).reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-  const beats = (job.contentDirection?.shooting?.visualBeats || []).filter(item => item && (item.asset || item.purpose)).slice(0, 6);
+  const beats = (job.contentDirection?.shooting?.visualBeats || []).filter(item => item && (item.asset || item.purpose)).slice(0, job.options?.layout === "landscape-tech" ? 10 : 6);
   const assets = [];
-  const visualNodes = (beats.length ? beats : (job.currentPlan?.overlayCards || []).map(card => ({ segment: card.text, asset: card.text, purpose: "强化当前口播重点" }))).slice(0, 6);
+  const visualNodes = (beats.length ? beats : (job.currentPlan?.overlayCards || []).map(card => ({ segment: card.text, asset: card.text, purpose: "强化当前口播重点" }))).slice(0, job.options?.layout === "landscape-tech" ? 10 : 6);
   if (!visualNodes.length) visualNodes.push({ segment: "开头结果", asset: "本次口播的核心结果信息卡", purpose: "让观众先看到本条视频要交付的结果" });
   for (const [index, beat] of visualNodes.entries()) {
     const asset = {
@@ -1134,7 +1295,7 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
       discoveredAutomatically: true,
       paymentRequired: false,
       paymentConfirmed: true,
-      placement: candidatePlacement(index, visualNodes.length, duration),
+      placement: job.options?.layout === "landscape-tech" ? candidatePlacementForBeat(beat, index, visualNodes.length, duration) : candidatePlacement(index, visualNodes.length, duration),
       createdAt: new Date().toISOString()
     };
     try {
@@ -1186,14 +1347,14 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
   job.assets = [...(job.assets || []), ...assets].map(normalizeAssetRecord);
   job.assetDiscovery = {
     preparedAt: new Date().toISOString(),
-    visualNodes: visualNodes.map((beat, index) => ({ id: `visual-node-${index + 1}`, segment: String(beat.segment || ""), requestedAsset: String(beat.asset || ""), purpose: String(beat.purpose || ""), placement: candidatePlacement(index, visualNodes.length, duration) })),
+    visualNodes: visualNodes.map((beat, index) => ({ id: `visual-node-${index + 1}`, segment: String(beat.segment || ""), requestedAsset: String(beat.asset || ""), purpose: String(beat.purpose || ""), placement: job.options?.layout === "landscape-tech" ? candidatePlacementForBeat(beat, index, visualNodes.length, duration) : candidatePlacement(index, visualNodes.length, duration) })),
     sourcePriority: ["local-derived", "licensed-free", "authorized-external", "commentary-quotation", "paid-with-confirmation"],
     localCandidates: assets.filter(asset => !EXTERNAL_SOURCE_TYPES.has(asset.sourceType)).length,
     externalCandidates: assets.filter(asset => EXTERNAL_SOURCE_TYPES.has(asset.sourceType)).length,
     freeStockConnector: "not-configured",
     visualStrategy: {
-      mode: "rich-media-first",
-      preferredMix: ["真人口播", "真实工作台或项目画面", "前后对比", "动态流程图", "AI生成视觉", "少量动态文字"],
+      mode: job.options?.layout === "landscape-tech" ? "landscape-tech-reference" : "rich-media-first",
+      preferredMix: job.options?.layout === "landscape-tech" ? ["16:9科技画布", "真人矩形画中画", "真实工作台或项目画面", "前后对比", "动态流程图", "底部描边字幕"] : ["真人口播", "真实工作台或项目画面", "前后对比", "动态流程图", "AI生成视觉", "少量动态文字"],
       textOnlyCardsMaxShare: 0.2,
       referenceClipSeconds: { min: 2, max: 5 }
     },
@@ -1256,6 +1417,7 @@ async function ensureMediaManifest(job, version) {
   return manifest;
 }
 function masterDimensions(job) {
+  if (job.options?.layout === "landscape-tech") return { width: 1280, height: 720 };
   if (job.options?.layout === "square") return { width: 1080, height: 1080 };
   if (job.options?.layout === "original") return { width: Math.max(2, Math.floor(Number(job.source?.width || 1080) / 2) * 2), height: Math.max(2, Math.floor(Number(job.source?.height || 1920) / 2) * 2) };
   return { width: 1080, height: 1920 };
@@ -1279,7 +1441,7 @@ async function buildMediaRenderPlan(job, version, manifest, firstInputIndex) {
     const targetWidthRaw = mode.startsWith("comparison-") ? Math.floor(dimensions.width / 2) : mode === "pip" ? Math.floor(dimensions.width * 0.42) : dimensions.width;
     const targetHeightRaw = mode.startsWith("comparison-") ? dimensions.height : mode === "pip" ? Math.floor(dimensions.height * 0.42) : dimensions.height;
     const targetWidth = Math.max(2, Math.floor(targetWidthRaw / 2) * 2), targetHeight = Math.max(2, Math.floor(targetHeightRaw / 2) * 2);
-    filters.push(`[${inputIndex}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=0x07131D,setsar=1,trim=duration=${placementDuration.toFixed(3)},setpts=PTS-STARTPTS+${asset.placement.start.toFixed(3)}/TB[media${inputIndex}]`);
+    filters.push(`[${inputIndex}:v]scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:color=0x07131D,trim=duration=${placementDuration.toFixed(3)},setpts=PTS-STARTPTS+${asset.placement.start.toFixed(3)}/TB[media${inputIndex}]`);
     const x = mode === "comparison-right" ? dimensions.width - targetWidth : mode === "pip" ? dimensions.width - targetWidth - 42 : 0;
     const y = mode === "pip" ? Math.round(dimensions.height * 0.14) : 0;
     filters.push(`[__MEDIA_BASE__][media${inputIndex}]overlay=x=${x}:y=${y}:eof_action=pass:shortest=0[__MEDIA_OUT__]`);
@@ -1504,8 +1666,10 @@ async function createReviewBundle(job, version, outputPath, outputDuration) {
   const jobDir = confined(jobsRoot, job.id);
   const previewName = `review-preview-v${version}.mp4`;
   const previewPath = path.join(jobDir, previewName);
+  const outputMetadata = await probe(outputPath);
+  const previewSize = outputMetadata.width > outputMetadata.height ? "960:540" : "720:1280";
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", outputPath,
-    "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=0x07131D,fps=30,format=yuv420p",
+    "-vf", `scale=${previewSize}:force_original_aspect_ratio=decrease,pad=${previewSize}:(ow-iw)/2:(oh-ih)/2:color=0x07131D,fps=30,format=yuv420p`,
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
     "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv",
     "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-movflags", "+faststart", previewPath]);
@@ -1543,9 +1707,10 @@ async function renderVersion(job, version) {
   const colorManagement = videoColorPipeline(job.source);
   await writeTimelineArtifacts(jobDir, timeline, version);
   const mediaManifest = await ensureMediaManifest(job, version);
+  const landscapeHud = job.options?.layout === "landscape-tech" ? await writeLandscapeHudAss(jobDir, job, timeline, version) : null;
   let packaging = { requested: timeline.cards.length ? "hyperframes" : "none", engine: "none", cards: timeline.cards.length, panels: 0, fallbackReason: null };
   let hyperframes = { engine: "none", clips: [] };
-  if (timeline.cards.length) {
+  if (timeline.cards.length && job.options?.layout !== "landscape-tech") {
     try {
       hyperframes = await renderHyperframesCards(jobDir, timeline, version, job.options);
       packaging.engine = "hyperframes";
@@ -1556,10 +1721,10 @@ async function renderVersion(job, version) {
     }
   }
   const captionsEnabled = job.options.captions !== false;
-  const requestedCaptionStyle = normalizeCaptionStyle(job.options.captionStyle);
+  const requestedCaptionStyle = job.options?.layout === "landscape-tech" ? "static" : normalizeCaptionStyle(job.options.captionStyle);
   let captionPackaging = { requested: captionsEnabled ? requestedCaptionStyle : "none", engine: "none", style: requestedCaptionStyle, cues: 0, fallbackReason: null };
   if (captionsEnabled) {
-    await writeAss(jobDir, job.transcript, segments, packaging.engine === "ass-fallback" ? plan.overlayCards || [] : [], version, job.script);
+    await writeAss(jobDir, job.transcript, segments, job.options?.layout === "landscape-tech" || packaging.engine === "ass-fallback" ? plan.overlayCards || [] : [], version, job.script, masterDimensions(job));
     const cues = dynamicCaptionCues(job, timeline);
     captionPackaging.cues = cues.length;
     if (requestedCaptionStyle === "static") captionPackaging.engine = "ass-static";
@@ -1582,7 +1747,10 @@ async function renderVersion(job, version) {
   });
   filters.push(`${segments.map((_, i) => `[v${i}][a${i}]`).join("")}concat=n=${segments.length}:v=1:a=1[vcat][acat]`);
   filters.push(`[vcat]${colorManagement.filter}[vcolor]`);
-  filters.push(`[vcolor]${videoLayoutFilter(job.options.layout || "vertical")}[vbase]`);
+  if (landscapeHud) {
+    filters.push(`[vcolor]${videoLayoutFilter(job.options.layout || "landscape-tech")}[vbase-raw]`);
+    filters.push(`[vbase-raw]ass=filename='${path.basename(landscapeHud)}'[vbase]`);
+  } else filters.push(`[vcolor]${videoLayoutFilter(job.options.layout || "landscape-tech")}[vbase]`);
   let videoLabel = "vbase";
   for (let index = 0; index < mediaPlan.filters.length; index += 2) {
     filters.push(mediaPlan.filters[index]);
@@ -1882,6 +2050,7 @@ async function rerenderJob(job, reason = "", renderOptions = {}) {
     job.currentVersion = version;
     job.options = {
       ...job.options,
+      layout: ["landscape-tech", "original", "vertical", "square"].includes(renderOptions.layout) ? renderOptions.layout : job.options.layout,
       captionStyle: normalizeCaptionStyle(renderOptions.captionStyle ?? job.options.captionStyle),
       informationPanels: renderOptions.informationPanels === undefined ? job.options.informationPanels !== false : renderOptions.informationPanels !== false,
       generateCover: renderOptions.generateCover === undefined ? job.options.generateCover !== false : renderOptions.generateCover !== false,
@@ -1998,7 +2167,7 @@ const server = http.createServer(async (req, res) => {
         options: {
           removeSilence: options.removeSilence !== false, captions: options.captions !== false,
           captionStyle: normalizeCaptionStyle(options.captionStyle), informationPanels: options.informationPanels !== false,
-          layout: ["original", "vertical", "square"].includes(options.layout) ? options.layout : "vertical",
+          layout: ["landscape-tech", "original", "vertical", "square"].includes(options.layout) ? options.layout : "landscape-tech",
           generateVariants: options.generateVariants !== false, generateCover: options.generateCover !== false,
           coverTitle: cleanCoverCopy(options.coverTitle, 42), contentTitle: cleanCoverCopy(options.contentTitle, 42),
           silenceDb: Number(options.silenceDb ?? -36), silenceDuration: Number(options.silenceDuration ?? 0.45),
