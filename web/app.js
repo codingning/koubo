@@ -59,6 +59,12 @@
   let directorWorkflowDefaults = null;
   let directorDraftConfig = null;
   let directorRenderSignature = "";
+  let multiAgentStatus = null;
+  let proposalBundle = null;
+  let blindReviewBundle = null;
+  let tutorialCheckpoint = null;
+  let memoryRecords = [];
+  let multiAgentReviews = null;
 
   function itemState(item = currentItem) {
     if (!persisted.items[item.id]) {
@@ -702,6 +708,360 @@
     }
   }
 
+  function multiAgentIdempotencyKey(prefix) {
+    const id = globalThis.crypto?.randomUUID?.()
+      || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return `${prefix}-${id}`.slice(0, 128);
+  }
+
+  async function multiAgentRequest(pathname, {
+    method = "GET",
+    body,
+    idempotencyPrefix = "koubo-ui",
+  } = {}) {
+    const response = await fetch(`${videoApiBase}${pathname}`, {
+      method,
+      cache: "no-store",
+      headers: {
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(method === "POST"
+          ? { "Idempotency-Key": multiAgentIdempotencyKey(idempotencyPrefix) }
+          : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `请求失败（${response.status}）`);
+    return payload;
+  }
+
+  function multiAgentStructure(candidate = {}) {
+    const list = value => Array.isArray(value)
+      ? value.join("、")
+      : typeof value === "object" && value
+        ? JSON.stringify(value)
+        : String(value || "无");
+    return [
+      ["构图", candidate.layout || "未指定"],
+      ["字幕", candidate.captions?.identity || list(candidate.captions)],
+      ["动效", list(candidate.motion?.structure || candidate.motion)],
+      ["声音", list(candidate.sound?.structure || candidate.sound)],
+    ];
+  }
+
+  function renderMultiAgentStatus() {
+    const badge = byId("multi-agent-status");
+    const enabled = multiAgentStatus?.enabled === true;
+    badge.textContent = enabled ? "实验已开启 · 影子模式" : "实验未开启";
+    badge.className = `experiment-badge ${enabled ? "is-enabled" : "is-disabled"}`;
+    byId("multi-agent-disabled-note").classList.toggle("is-hidden", enabled);
+    byId("multi-agent-workspace").classList.toggle("is-hidden", !enabled);
+    byId("multi-agent-generate").disabled = !(enabled && currentVideoJob?.id);
+    const tutorialReady = enabled
+      && byId("tutorial-input-path").value.trim()
+      && byId("tutorial-author").value.trim()
+      && byId("tutorial-license").value.trim();
+    byId("tutorial-ingest").disabled = !tutorialReady;
+  }
+
+  function renderMultiAgentProposals() {
+    const host = byId("multi-agent-proposals");
+    const proposals = proposalBundle?.proposals || [];
+    const candidates = proposalBundle?.candidates || [];
+    if (!proposals.length && !candidates.length) {
+      host.innerHTML = '<div class="empty-state">打开一个已有视频任务后，才能生成不改动 V4 成片的影子提案。</div>';
+      byId("multi-agent-build-ab").disabled = true;
+      byId("multi-agent-run-review").disabled = true;
+      return;
+    }
+    const kindLabels = { caption: "字幕专家", motion: "动效专家", sound: "声音专家" };
+    const proposalHtml = proposals.map(item => `
+      <article class="proposal-card">
+        <header><strong>${htmlEscape(kindLabels[item.proposalKind] || item.proposalKind || "专家提案")}</strong><span>${item.fallbackEngine ? "V4 安全回退" : "受控提案"}</span></header>
+        <dl>${multiAgentStructure(item.candidate).map(([label, value]) => `<div><dt>${htmlEscape(label)}</dt><dd>${htmlEscape(value)}</dd></div>`).join("")}</dl>
+        <div class="proposal-evidence"><b>引用记忆</b>${(item.citations || []).length
+          ? item.citations.map(citation => `<code title="${htmlEscape(citation.contentHash || "")}">${htmlEscape(citation.recordId || "未知记录")}</code>`).join("")
+          : "<span>没有引用；保留 V4 基线</span>"}</div>
+        ${(item.uncertainties || []).length ? `<p class="proposal-uncertainty">不确定项：${htmlEscape(item.uncertainties.join("；"))}</p>` : ""}
+      </article>`).join("");
+    const candidateHtml = candidates.map((candidate, index) => `
+      <article class="candidate-card">
+        <header><strong>结构候选 ${index + 1}</strong><span>${candidate.renderHash ? "已有成片哈希" : "尚未渲染"}</span></header>
+        <dl>${multiAgentStructure(candidate).map(([label, value]) => `<div><dt>${htmlEscape(label)}</dt><dd>${htmlEscape(value)}</dd></div>`).join("")}</dl>
+        ${candidate.renderHash ? `<code class="candidate-hash">SHA-256 ${htmlEscape(candidate.renderHash)}</code>` : '<small class="candidate-pending">只有经过真实渲染与 QA 后才可进入匿名 A/B。</small>'}
+      </article>`).join("");
+    const fallback = proposalBundle?.fallback?.agents?.length
+      ? `<div class="experiment-warning">以下专家不可用，已逐项回退到 V4：${htmlEscape(proposalBundle.fallback.agents.join("、"))}</div>`
+      : "";
+    host.innerHTML = `${fallback}<div class="proposal-grid">${proposalHtml}</div>
+      <div class="candidate-heading"><strong>导演保留的两个结构候选</strong><span>这里只比较差异，不赋予批准权</span></div>
+      <div class="candidate-grid">${candidateHtml}</div>`;
+    const renderReady = candidates.length >= 2
+      && candidates.slice(0, 2).every(item => /^[a-f0-9]{64}$/.test(item.renderHash || ""));
+    byId("multi-agent-build-ab").disabled = !renderReady;
+    byId("multi-agent-run-review").disabled = candidates.length === 0;
+  }
+
+  function findingMarkup(review, label) {
+    if (!review) return "";
+    const findings = review.timecodedFindings || [];
+    return `<section class="critic-report">
+      <header><strong>${htmlEscape(label)}</strong><time>${htmlEscape(review.createdAt || multiAgentReviews?.reviewedAt || "时间未返回")}</time></header>
+      <div class="critic-scores">${Object.entries(review.scores || {}).map(([key, value]) => `<span>${htmlEscape(key)} <b>${htmlEscape(value)}</b></span>`).join("")}</div>
+      ${findings.map(item => `<article><b>${Number(item.start || 0).toFixed(1)}–${Number(item.end || 0).toFixed(1)} 秒</b><p>${htmlEscape(item.finding || item.viewingReason || item.reason || "已记录")}</p>${item.viewingReason ? `<small>观看理由：${htmlEscape(item.viewingReason)}</small>` : ""}</article>`).join("") || "<p>没有返回时间码结论。</p>"}
+    </section>`;
+  }
+
+  function renderMultiAgentReview() {
+    const host = byId("multi-agent-ab-review");
+    if (!blindReviewBundle && !multiAgentReviews) {
+      host.innerHTML = '<div class="empty-state">等待两个可验证的候选成片。没有真实 renderHash 时不会伪造比较。</div>';
+      return;
+    }
+    const blindCandidates = (blindReviewBundle?.candidates || []).map(item => `
+      <article class="blind-candidate">
+        <header><strong>候选 ${htmlEscape(item.label)}</strong><span>身份已隐藏</span></header>
+        <dl>${multiAgentStructure(item.structure).map(([label, value]) => `<div><dt>${htmlEscape(label)}</dt><dd>${htmlEscape(value)}</dd></div>`).join("")}</dl>
+        <code>${htmlEscape(item.renderHash || "")}</code>
+      </article>`).join("");
+    host.innerHTML = `${blindCandidates ? `<div class="blind-grid">${blindCandidates}</div>` : ""}
+      ${findingMarkup(multiAgentReviews?.blind, "匿名质量批评")}
+      ${findingMarkup(multiAgentReviews?.retention, "逐秒留存质检")}`;
+  }
+
+  function renderTutorialCheckpoint() {
+    const host = byId("tutorial-checkpoint");
+    if (!tutorialCheckpoint) {
+      host.innerHTML = '<div class="empty-state">尚未登记教程。</div>';
+      return;
+    }
+    const stages = tutorialCheckpoint.completedStages || tutorialCheckpoint.stages || [];
+    host.innerHTML = `<article class="checkpoint-card">
+      <header><strong>${htmlEscape(tutorialCheckpoint.id || "教程检查点")}</strong><span>${htmlEscape(tutorialCheckpoint.stage || tutorialCheckpoint.status || "已登记")}</span></header>
+      <code title="${htmlEscape(tutorialCheckpoint.sourceHash || "")}">${htmlEscape(tutorialCheckpoint.sourceHash || "等待内容哈希")}</code>
+      <p>${Array.isArray(stages) ? htmlEscape(stages.join(" → ")) : htmlEscape(stages)}</p>
+      <small>断点记录可恢复；原视频不会进入 Agent 长期记忆。</small>
+    </article>`;
+  }
+
+  function memoryActions(record) {
+    const next = {
+      inbox: ["extract", "提取为技巧卡"],
+      extracted: ["recreate", "进入隔离复刻"],
+      recreated: ["trial", "进入项目试用"],
+      trial: ["approve", "人工批准"],
+      approved: ["promote", "晋级长期记忆"],
+      promoted: ["disable", "停用"],
+    }[record.status];
+    const actions = [];
+    if (next) actions.push(`<button class="btn btn-secondary" data-memory-action="${next[0]}">${next[1]}</button>`);
+    if (!["rejected", "expired", "disabled"].includes(record.status)) {
+      actions.push('<button class="text-button danger" data-memory-action="reject">拒绝</button>');
+      actions.push('<button class="text-button" data-memory-action="expire">过期</button>');
+    }
+    if (record.latestTransitionId) actions.push('<button class="text-button" data-memory-action="rollback">回滚最近一步</button>');
+    return actions.join("");
+  }
+
+  function renderMemoryRecords() {
+    const host = byId("memory-records");
+    if (!memoryRecords.length) {
+      host.innerHTML = '<div class="empty-state">当前没有技巧记忆。教程提取后会先进入 inbox，不会直接影响成片。</div>';
+      return;
+    }
+    host.innerHTML = memoryRecords.map(record => `
+      <article class="memory-card" data-memory-kind="${htmlEscape(record.kind)}" data-memory-id="${htmlEscape(record.id)}">
+        <header><div><strong>${htmlEscape(record.title || record.id)}</strong><small>${htmlEscape(record.namespace || "未分配命名空间")}</small></div><span class="memory-status status-${htmlEscape(record.status)}">${htmlEscape(record.status)}</span></header>
+        <p>${htmlEscape(record.problem || record.primitive || record.description || "技巧记录")}</p>
+        <div class="memory-meta"><span>证据 ${(record.evidence || []).length} 条</span><code title="${htmlEscape(record.contentHash || "")}">expectedHash ${htmlEscape((record.contentHash || "").slice(0, 12))}…</code></div>
+        <details><summary>查看证据与版本</summary><pre>${htmlEscape(JSON.stringify({
+          evidence: record.evidence || [],
+          versions: record.versions || {},
+          latestTransitionId: record.latestTransitionId || null,
+        }, null, 2))}</pre></details>
+        <div class="memory-actions">${memoryActions(record)}</div>
+      </article>`).join("");
+  }
+
+  async function refreshMultiAgentStatus() {
+    try {
+      multiAgentStatus = await multiAgentRequest("/api/multi-agent/status");
+      renderMultiAgentStatus();
+      await refreshMemoryRecords();
+    } catch (error) {
+      multiAgentStatus = null;
+      const badge = byId("multi-agent-status");
+      badge.textContent = "实验服务不可用";
+      badge.className = "experiment-badge is-disabled";
+      byId("multi-agent-workspace").classList.add("is-hidden");
+      byId("multi-agent-disabled-note").classList.remove("is-hidden");
+      byId("memory-records").innerHTML = `<div class="empty-state">记忆服务读取失败：${htmlEscape(error.message)}</div>`;
+    }
+  }
+
+  async function generateMultiAgentProposals() {
+    if (!currentVideoJob?.id || !multiAgentStatus?.enabled) return;
+    const button = byId("multi-agent-generate");
+    button.disabled = true;
+    button.textContent = "三个专家正在并行提案…";
+    proposalBundle = null;
+    blindReviewBundle = null;
+    multiAgentReviews = null;
+    renderMultiAgentProposals();
+    renderMultiAgentReview();
+    try {
+      const constraints = byId("multi-agent-constraints").value.trim();
+      const payload = await multiAgentRequest(
+        `/api/jobs/${encodeURIComponent(currentVideoJob.id)}/multi-agent/proposals`,
+        {
+          method: "POST",
+          body: { constraints: constraints ? { brief: constraints } : {} },
+          idempotencyPrefix: "proposal",
+        }
+      );
+      proposalBundle = payload.bundle;
+      renderMultiAgentProposals();
+      toast("影子提案已生成；V4 任务和审核状态没有改变");
+    } catch (error) {
+      byId("multi-agent-proposals").innerHTML = `<div class="experiment-error">提案失败：${htmlEscape(error.message)}。V4 工作流仍可继续使用。</div>`;
+    } finally {
+      button.textContent = "为当前任务生成提案";
+      renderMultiAgentStatus();
+    }
+  }
+
+  async function buildMultiAgentAb() {
+    const candidates = (proposalBundle?.candidates || []).slice(0, 2);
+    if (candidates.length < 2) return;
+    try {
+      const payload = await multiAgentRequest(
+        `/api/jobs/${encodeURIComponent(currentVideoJob.id)}/multi-agent/ab`,
+        {
+          method: "POST",
+          body: { candidates, baselineId: "koubo-v4-baseline-v1" },
+          idempotencyPrefix: "blind-ab",
+        }
+      );
+      blindReviewBundle = payload.bundle;
+      renderMultiAgentReview();
+    } catch (error) {
+      toast(`匿名 A/B 建立失败：${error.message}`);
+    }
+  }
+
+  async function runMultiAgentReview() {
+    const candidate = (proposalBundle?.candidates || [])[1]
+      || (proposalBundle?.candidates || [])[0];
+    if (!candidate || !currentVideoJob?.id) return;
+    const button = byId("multi-agent-run-review");
+    button.disabled = true;
+    try {
+      const payload = await multiAgentRequest(
+        `/api/jobs/${encodeURIComponent(currentVideoJob.id)}/multi-agent/reviews`,
+        {
+          method: "POST",
+          body: { candidate },
+          idempotencyPrefix: "critic-review",
+        }
+      );
+      multiAgentReviews = payload.reviews;
+      renderMultiAgentReview();
+    } catch (error) {
+      toast(`双重质检失败：${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function ingestTutorial() {
+    const button = byId("tutorial-ingest");
+    button.disabled = true;
+    button.textContent = "正在登记、分镜和提取…";
+    try {
+      const payload = await multiAgentRequest("/api/multi-agent/tutorials", {
+        method: "POST",
+        body: {
+          inputPath: byId("tutorial-input-path").value.trim(),
+          author: byId("tutorial-author").value.trim(),
+          license: byId("tutorial-license").value.trim(),
+          resume: true,
+        },
+        idempotencyPrefix: "tutorial",
+      });
+      tutorialCheckpoint = payload.tutorial;
+      renderTutorialCheckpoint();
+      await refreshMemoryRecords();
+      toast("教程已进入可恢复的知识提取流程");
+    } catch (error) {
+      byId("tutorial-checkpoint").innerHTML = `<div class="experiment-error">教程处理失败：${htmlEscape(error.message)}</div>`;
+    } finally {
+      button.textContent = "登记并提取技巧";
+      renderMultiAgentStatus();
+    }
+  }
+
+  async function refreshMemoryRecords() {
+    try {
+      const payload = await multiAgentRequest("/api/multi-agent/memory");
+      memoryRecords = payload.records || [];
+      renderMemoryRecords();
+    } catch (error) {
+      byId("memory-records").innerHTML = `<div class="empty-state">记忆读取失败：${htmlEscape(error.message)}</div>`;
+    }
+  }
+
+  function parsedMemoryEvidence() {
+    const raw = byId("memory-evidence-json").value.trim();
+    if (!raw) return [];
+    const evidence = JSON.parse(raw);
+    if (!Array.isArray(evidence)) throw new Error("人工证据必须是 JSON 数组");
+    return evidence;
+  }
+
+  async function transitionMemory(card, action) {
+    const kind = card.dataset.memoryKind;
+    const id = card.dataset.memoryId;
+    const record = memoryRecords.find(item => item.kind === kind && item.id === id);
+    if (!record) return;
+    let evidence;
+    try {
+      evidence = parsedMemoryEvidence();
+    } catch (error) {
+      return toast(error.message);
+    }
+    if (["approve", "promote", "reject", "expire", "disable"].includes(action) && evidence.length === 0) {
+      return toast("这个操作需要先填写可审计的人工证据");
+    }
+    const body = action === "rollback"
+      ? { transitionId: record.latestTransitionId }
+      : {
+        actor: { type: "human", id: "local-owner" },
+        evidence,
+        expectedHash: record.contentHash,
+      };
+    try {
+      const payload = await multiAgentRequest(
+        `/api/multi-agent/memory/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/${action}`,
+        {
+          method: "POST",
+          body,
+          idempotencyPrefix: `memory-${action}`,
+        }
+      );
+      const updated = payload.transition?.record;
+      if (updated) {
+        memoryRecords = memoryRecords.map(item => item.kind === kind && item.id === id
+          ? { kind, ...updated, latestTransitionId: action === "rollback" ? null : payload.transition.id }
+          : item);
+        renderMemoryRecords();
+      }
+      await refreshMemoryRecords();
+      toast(action === "rollback" ? "已回滚最近一次记忆变化" : `记忆状态已更新为 ${updated?.status || action}`);
+    } catch (error) {
+      toast(`记忆治理失败：${error.message}`);
+    }
+  }
+
   async function checkVideoService() {
     const status = byId("video-service-status");
     const detail = byId("video-service-detail");
@@ -731,6 +1091,7 @@
       } catch (error) {
         byId("director-stage-cards").innerHTML = `<div class="empty-state">六阶段配置读取失败：${htmlEscape(error.message)}</div>`;
       }
+      await refreshMultiAgentStatus();
       await refreshGeneratedContents();
       if (!currentVideoJob) await restoreLatestVideoJob();
     } catch (_) {
@@ -741,6 +1102,8 @@
       detail.textContent = "请双击项目根目录的“打开AI口播工作台.vbs”；它会静默启动服务并重新打开网页。";
       byId("generation-status").textContent = "请先通过“打开AI口播工作台.vbs”启动本地工作流。";
       byId("generate-content").disabled = true;
+      multiAgentStatus = null;
+      renderMultiAgentStatus();
     }
     byId("analyze-video").disabled = !(videoServiceOnline && selectedVideoFile);
   }
@@ -749,6 +1112,12 @@
     const hadActiveJob = !!currentVideoJob;
     selectedVideoFile = file || null;
     currentVideoJob = null;
+    proposalBundle = null;
+    blindReviewBundle = null;
+    multiAgentReviews = null;
+    renderMultiAgentProposals();
+    renderMultiAgentReview();
+    renderMultiAgentStatus();
     if (hadActiveJob && directorWorkflowDefaults) directorDraftConfig = cloneJson(directorWorkflowDefaults);
     directorRenderSignature = "";
     renderDirectorWorkflow(null, true);
@@ -903,6 +1272,7 @@
     byId("replan-video").classList.toggle("is-hidden", !(job.transcript && !videoRunningStatuses.includes(job.status)));
     renderDirectorWorkflow(job);
     renderMediaAssets(job);
+    renderMultiAgentStatus();
     if (job.output) renderEditResult(job);
     if (job.status === "error") byId("analyze-video").disabled = false;
   }
@@ -1372,6 +1742,20 @@
   byId("rediscover-media").addEventListener("click", rediscoverMediaAssets);
   byId("auto-review-preview").addEventListener("click", autoReviewAndPreview);
   byId("render-with-assets").addEventListener("click", renderWithApprovedAssets);
+  byId("multi-agent-refresh").addEventListener("click", refreshMultiAgentStatus);
+  byId("multi-agent-generate").addEventListener("click", generateMultiAgentProposals);
+  byId("multi-agent-build-ab").addEventListener("click", buildMultiAgentAb);
+  byId("multi-agent-run-review").addEventListener("click", runMultiAgentReview);
+  byId("tutorial-ingest").addEventListener("click", ingestTutorial);
+  for (const id of ["tutorial-input-path", "tutorial-author", "tutorial-license"]) {
+    byId(id).addEventListener("input", renderMultiAgentStatus);
+  }
+  byId("memory-refresh").addEventListener("click", refreshMemoryRecords);
+  byId("memory-records").addEventListener("click", event => {
+    const button = event.target.closest("[data-memory-action]");
+    const card = button?.closest("[data-memory-kind][data-memory-id]");
+    if (button && card) transitionMemory(card, button.dataset.memoryAction);
+  });
   byId("director-stage-cards").addEventListener("click", event => {
     const button = event.target.closest("[data-director-save],[data-director-run],[data-director-approve]");
     if (button) handleDirectorAction(button);
@@ -1427,6 +1811,11 @@
 
   // Initialize remembered mode and render
   renderAll();
+  renderMultiAgentStatus();
+  renderMultiAgentProposals();
+  renderMultiAgentReview();
+  renderTutorialCheckpoint();
+  renderMemoryRecords();
   setScriptMode(persisted.scriptMode || "full");
   checkVideoService();
 })();

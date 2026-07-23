@@ -683,7 +683,7 @@ node scripts/verify_workbench.mjs
 
 Expected: API tests PASS; v4 remains default; 141 existing controls remain valid before UI additions.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add video/multi-agent/api.mjs video/server.mjs tests/multi-agent/api.test.mjs
@@ -702,7 +702,7 @@ git commit -m "feat: expose controlled multi-agent APIs"
 - UI state: `multiAgentStatus`, `proposalBundle`, `blindReviewBundle`, `tutorialCheckpoint`, `memoryRecords`.
 - User actions never call final publish; promotion and review actions display evidence and expected hash.
 
-- [ ] **Step 1: Add failing workbench source assertions**
+- [x] **Step 1: Add failing workbench source assertions**
 
 Add assertions for:
 
@@ -718,16 +718,16 @@ for (const route of [
 ]) assert(appSource.includes(route), `Missing multi-agent client route: ${route}`);
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node scripts/verify_workbench.mjs`
 Expected: FAIL with missing multi-agent UI assertions.
 
-- [ ] **Step 3: Implement progressive panels and consolidated blind review**
+- [x] **Step 3: Implement progressive panels and consolidated blind review**
 
 The default v4 workflow remains visually primary. The multi-agent panel must show experimental/影子模式 status, candidate differences, citations, critic timestamps, memory transitions, and rollback actions. Do not expose candidate authors in blind review.
 
-- [ ] **Step 4: Run GREEN and inspect at desktop and narrow widths**
+- [x] **Step 4: Run GREEN and inspect at desktop and narrow widths**
 
 Run:
 

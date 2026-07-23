@@ -304,10 +304,20 @@ export function createMultiAgentApi({
       return idempotentMutation(req, pathname, async (body, key) => {
         const job = structuredClone(await readJob(proposalMatch[1]));
         const input = jobProposalInput(job);
-        const bundle = await orchestrator.propose({
+        const proposalBundle = await orchestrator.propose({
           ...input,
           constraints: sanitize(body.constraints || {}),
         });
+        const directed = await orchestrator.direct(proposalBundle.proposals, {
+          jobId: job.id,
+          v4Plan: input.v4Plan,
+        });
+        const bundle = {
+          ...proposalBundle,
+          candidates: directed.candidates,
+          conflicts: directed.conflicts || [],
+          directorFallback: directed.fallback || null,
+        };
         const artifactId = `${job.id}.${crypto.createHash("sha256").update(key).digest("hex").slice(0, 12)}`;
         const artifact = await writeArtifact("proposals", artifactId, bundle);
         return { status: 202, body: { bundle, artifact } };

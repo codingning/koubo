@@ -335,6 +335,79 @@
             <div id="director-stage-cards" class="director-stage-cards"><div class="empty-state">正在加载六阶段配置……</div></div>
           </article>
 
+          <article id="multi-agent-panel" class="panel multi-agent-panel">
+            <div class="panel-head multi-agent-head">
+              <div>
+                <div class="multi-agent-title-line">
+                  <h3>多 Agent 创作实验室</h3>
+                  <span id="multi-agent-status" class="experiment-badge is-checking">正在检查</span>
+                </div>
+                <p>视觉导演 V4 仍是默认成片管线。这里以影子模式生成字幕、动效和声音提案，不会批准成片、修改品牌骨架或自动发布。</p>
+              </div>
+              <button id="multi-agent-refresh" class="btn btn-secondary">刷新实验状态</button>
+            </div>
+            <div id="multi-agent-disabled-note" class="experiment-notice">
+              多 Agent 写操作尚未开启。读取和检查仍可使用；需要实验时由本地服务显式设置 <code>KOUBO_MULTI_AGENT_ENABLED=1</code> 后重启。
+            </div>
+            <div id="multi-agent-workspace" class="multi-agent-workspace is-hidden">
+              <section class="experiment-section">
+                <div class="experiment-section-head">
+                  <div><strong>1. 生成受控提案</strong><small>三个专家只读取自己的已批准记忆；导演最多组合两个结构差异明显的候选。</small></div>
+                  <button id="multi-agent-generate" class="btn btn-primary" disabled>为当前任务生成提案</button>
+                </div>
+                <label class="experiment-field" for="multi-agent-constraints">本次约束（可选）
+                  <textarea id="multi-agent-constraints" rows="3" placeholder="例如：保留第 6.2–7.0 秒的思考停顿；字幕不要遮挡产品画面。"></textarea>
+                </label>
+                <div id="multi-agent-proposals" class="multi-agent-proposals">
+                  <div class="empty-state">打开一个已有视频任务后，才能生成不改动 V4 成片的影子提案。</div>
+                </div>
+              </section>
+
+              <section class="experiment-section">
+                <div class="experiment-section-head">
+                  <div><strong>2. 匿名 A/B 与双重质检</strong><small>只有实际渲染且带 SHA-256 的候选才能进入盲评；界面不会显示候选作者或生成顺序。</small></div>
+                  <div class="inline-actions">
+                    <button id="multi-agent-build-ab" class="btn btn-secondary" disabled>建立匿名 A/B</button>
+                    <button id="multi-agent-run-review" class="btn btn-secondary" disabled>运行盲评与留存质检</button>
+                  </div>
+                </div>
+                <div id="multi-agent-ab-review" class="multi-agent-ab-review">
+                  <div class="empty-state">等待两个可验证的候选成片。没有真实 renderHash 时不会伪造比较。</div>
+                </div>
+              </section>
+            </div>
+          </article>
+
+          <div class="multi-agent-governance-grid">
+            <article id="tutorial-ingest-panel" class="panel tutorial-ingest-panel">
+              <div class="panel-head">
+                <div><h3>教程技巧入库</h3><p>只读取允许目录内的本地视频；先登记来源和许可，再断点提取，不复制原视频。</p></div>
+                <span class="mini-label">流程 A · 知识提取</span>
+              </div>
+              <div class="governance-form">
+                <label>本地教程路径<input id="tutorial-input-path" type="text" placeholder="F:\code\koubo\.cache\my-tutorial\lesson.mp4"></label>
+                <div class="governance-form-row">
+                  <label>作者 / 来源<input id="tutorial-author" type="text" placeholder="本人或公开作者名"></label>
+                  <label>许可依据<input id="tutorial-license" type="text" placeholder="self-created / explicit-authorization"></label>
+                </div>
+                <button id="tutorial-ingest" class="btn btn-secondary" disabled>登记并提取技巧</button>
+              </div>
+              <div id="tutorial-checkpoint" class="governance-output"><div class="empty-state">尚未登记教程。</div></div>
+            </article>
+
+            <article id="memory-governance-panel" class="panel memory-governance-panel">
+              <div class="panel-head">
+                <div><h3>Agent 本地记忆治理</h3><p>技巧必须经历复刻、项目试用和人工证据才能晋级；所有变化可审计、可回滚。</p></div>
+                <button id="memory-refresh" class="btn btn-secondary">刷新记忆</button>
+              </div>
+              <label class="experiment-field" for="memory-evidence-json">本次人工证据（JSON 数组）
+                <textarea id="memory-evidence-json" rows="4" spellcheck="false" placeholder='[{"type":"human-review","decision":"approved","reviewerId":"owner","projectId":"job-id"}]'></textarea>
+              </label>
+              <div class="memory-safety-note">界面会把当前 contentHash 作为 expectedHash 提交，防止覆盖别人刚更新的记忆。批准与晋级必须由你显式点击。</div>
+              <div id="memory-records" class="memory-records"><div class="empty-state">正在读取本地记忆……</div></div>
+            </article>
+          </div>
+
           <article id="asset-review-panel" class="panel asset-review-panel is-hidden">
             <div class="panel-head"><div><h3>素材审核板</h3><p>默认生成真实原片衍生画面、前后对比、工作台画面和动态流程；文字卡片只作点缀。</p></div><span id="asset-review-summary" class="mini-label">等待候选</span></div>
             <div class="source-priority">当前策略：真人口播 → 真实工作台/项目画面 → 前后对比 → 动态流程图 → AI生成视觉 → 少量动态文字；参考视频仅在必要时使用2—5秒并标注来源。</div>

@@ -232,6 +232,20 @@ for fixture, expected in fixtures:
 
 const html = read("web/index.html");
 const app = read("web/app.js");
+for (const id of [
+  "multi-agent-panel",
+  "multi-agent-proposals",
+  "multi-agent-ab-review",
+  "tutorial-ingest-panel",
+  "memory-governance-panel",
+]) assert(html.includes(`id="${id}"`), `Missing multi-agent UI: ${id}`);
+for (const route of [
+  "/api/multi-agent/status",
+  "/multi-agent/proposals",
+  "/multi-agent/ab",
+  "/api/multi-agent/tutorials",
+  "/api/multi-agent/memory",
+]) assert(app.includes(route), `Missing multi-agent client route: ${route}`);
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
 const referenced = new Set([...app.matchAll(/byId\("([^"]+)"\)/g)].map(match => match[1]));
 for (const id of referenced) assert(ids.has(id), `app.js 引用了不存在的 #${id}`);

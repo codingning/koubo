@@ -93,6 +93,27 @@ async function apiFixture(t, overrides = {}) {
           events: [],
         };
       },
+      async direct(proposals, options) {
+        return {
+          candidates: [
+            {
+              id: "candidate-v4-control",
+              layout: options.v4Plan.layout,
+              captions: { identity: "anchor" },
+              motion: { structure: ["title-enter"] },
+              sound: { structure: [] },
+            },
+            {
+              id: "candidate-multi-agent-expression",
+              layout: "speaker-center-evidence-full",
+              captions: { identity: "keyword-pop" },
+              motion: { structure: ["evidence-slide"] },
+              sound: { structure: ["semantic-cue"] },
+            },
+          ],
+          conflicts: [],
+        };
+      },
       async criticize(candidate) {
         return { id: "review.blind", reviewerId: "blind-critic", candidateId: candidate.id };
       },
@@ -178,6 +199,8 @@ test("proposal route cannot mutate job approval or output", async t => {
   assert.equal(proposalCalls.length, 1);
   assert.equal("sourcePath" in proposalCalls[0], false);
   assert.equal(artifacts[0].kind, "proposals");
+  assert.equal(response.data.bundle.candidates.length, 2);
+  assert.equal(response.data.bundle.candidates[0].id, "candidate-v4-control");
 });
 
 test("memory promotion rejects non-human approval before calling memory", async t => {

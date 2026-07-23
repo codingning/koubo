@@ -3023,8 +3023,24 @@ async function listMultiAgentMemory({ kind, status } = {}) {
   }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   return multiAgentStore.db.prepare(
-    `SELECT kind, json FROM records ${where} ORDER BY updated_at DESC, kind, id LIMIT 500`
-  ).all(...values).map(row => ({ kind: row.kind, ...multiAgentSafeInput(JSON.parse(row.json)) }));
+    `SELECT records.kind, records.json,
+      (
+        SELECT transitions.id
+        FROM transitions
+        WHERE transitions.record_kind = records.kind
+          AND transitions.record_id = records.id
+          AND transitions.rolled_back_at IS NULL
+        ORDER BY transitions.created_at DESC, transitions.id DESC
+        LIMIT 1
+      ) AS latest_transition_id
+    FROM records ${where}
+    ORDER BY records.updated_at DESC, records.kind, records.id
+    LIMIT 500`
+  ).all(...values).map(row => ({
+    kind: row.kind,
+    ...multiAgentSafeInput(JSON.parse(row.json)),
+    latestTransitionId: row.latest_transition_id || null,
+  }));
 }
 
 function parseLastJson(text) {
