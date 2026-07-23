@@ -339,7 +339,7 @@ git commit -m "feat: govern specialist editing memory"
 - Operations: `config`, `detect_scenes`, `agent_proposals`, `agent_critique`, `extract_techniques`.
 - The bridge accepts injected/offline fixture responses for tests and never reads `.env` into output.
 
-- [ ] **Step 1: Write failing Python contract and redaction tests**
+- [x] **Step 1: Write failing Python contract and redaction tests**
 
 ```py
 def test_config_reports_pinned_components_without_secrets(tmp_path):
@@ -353,12 +353,12 @@ def test_unknown_operation_is_a_structured_failure(tmp_path):
     assert result == {"success": False, "error": "unsupported operation: publish_video"}
 ```
 
-- [ ] **Step 2: Run RED with the explicit Python 3 runtime**
+- [x] **Step 2: Run RED with the explicit Python 3 runtime**
 
 Run: `D:\util\Python\3.13.9\python.exe -m unittest tests.python.test_multi_agent_bridge -v`
 Expected: FAIL because the bridge does not exist.
 
-- [ ] **Step 3: Add exact pins and minimal bridge**
+- [x] **Step 3: Add exact pins and minimal bridge**
 
 Lock:
 
@@ -369,7 +369,7 @@ scenedetect==0.7.1
 
 Document MIT/BSD-3-Clause licenses, Python ≥3.10 requirements, local-data behavior, replacement interfaces, and the Promptfoo `0.120.0` Node compatibility decision.
 
-- [ ] **Step 4: Create isolated venv, install pins, audit, and run GREEN**
+- [x] **Step 4: Create isolated venv, install pins, audit, and run GREEN**
 
 Run:
 
@@ -382,7 +382,7 @@ D:\util\Python\3.13.9\python.exe -m venv .runtime-multi-agent
 
 Expected: `pip check` and tests PASS. Add `.runtime-multi-agent/` to `.gitignore`; never commit the environment.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add .gitignore .env.example requirements-multi-agent.lock.txt video/multi_agent_bridge.py tests/python docs/research/2026-07-23-multi-agent-dependency-lock.md
