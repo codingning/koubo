@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "baselineId": "koubo-real-subjective-v1",
+  "mediaKind": "real-talking-head",
+  "jobId": "20260721132116-0831f6",
+  "source": {
+    "path": "full-hyperframes-v1/assets/speaker-cut-master.mp4",
+    "sha256": "f39b371f0e0c129a228f8bcb3698751a50928b423beaee34cff08a4ae7d09ea2"
+  },
+  "control": {
+    "path": "full-hyperframes-v1/renders/day2-full-hyperframes-review-v1.mp4",
+    "sha256": "804c56879c9207d324bb6b9432b640ce39075cc42ca477b098fa5ad02fce2908"
+  },
+  "samples": [
+    {
+      "id": "hook-result-proof",
+      "segmentId": "S01",
+      "editedStart": 0,
+      "duration": 18.386,
+      "focus": "钩子与结果证明",
+      "question": "前三秒是否建立了继续观看的理由，并让后面的结果证明可信？",
+      "reviewHints": [
+        "信息重点是否立刻清楚",
+        "动效是否帮助理解，而不是抢走注意力",
+        "看完前三秒后是否愿意继续"
+      ],
+      "phrases": [
+        "你现在看到的动态字幕",
+        "重点卡片、画面切换",
+        "还有横、竖两个版本"
+      ]
+    },
+    {
+      "id": "method-input-rules",
+      "segmentId": "S04",
+      "editedStart": 51.716,
+      "duration": 20,
+      "focus": "方法解释与步骤结构",
+      "question": "输入规则是否被讲得清楚、可执行，而且容易跟上？",
+      "reviewHints": [
+        "字幕强调是否贴合当前口播重点",
+        "卡片是否解释信息，而不是机械复述",
+        "二十秒内的节奏是否清楚但不疲劳"
+      ],
+      "phrases": [
+        "别只把原片扔进去说：帮我剪高级一点",
+        "请先理解主题和重点",
+        "不改变原意"
+      ]
+    },
+    {
+      "id": "human-review-boundary",
+      "segmentId": "S09",
+      "editedStart": 146.099,
+      "duration": 19.448,
+      "focus": "人工审核与品牌可信度",
+      "question": "人工审核边界是否表达得具体、可信，而且不像过度包装？",
+      "reviewHints": [
+        "抽象检查项是否被画面解释清楚",
+        "声音和动效是否足够克制",
+        "整体是否符合“从知道到做到”的账号内核"
+      ],
+      "phrases": [
+        "通过返修以后，才是你开头看到的这种结果",
+        "需要解释时才出现卡片",
+        "最后一遍仍然要人来看"
+      ]
+    }
+  ]
+}

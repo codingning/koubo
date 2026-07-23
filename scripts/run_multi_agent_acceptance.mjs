@@ -1028,7 +1028,26 @@ async function main() {
   }, null, 2)}\n`);
 }
 
-main().catch(error => {
-  process.stderr.write(`${String(error?.stack || error)}\n`);
-  process.exitCode = 1;
-});
+function isMainModule() {
+  return Boolean(process.argv[1])
+    && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+}
+
+export {
+  probeMedia,
+  renderControl,
+  renderChallenger,
+  qaMedia,
+  createContactSheet,
+  finalizeQa,
+  run,
+  sha256,
+  writeJson,
+};
+
+if (isMainModule()) {
+  main().catch(error => {
+    process.stderr.write(`${String(error?.stack || error)}\n`);
+    process.exitCode = 1;
+  });
+}

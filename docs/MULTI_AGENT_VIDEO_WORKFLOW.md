@@ -199,6 +199,26 @@ node scripts/run_multi_agent_acceptance.mjs `
 
 `.cache/multi-agent-acceptance/` 是本地忽略目录，不进入 Git。已完成的 run 不会被覆盖。
 
+上面的运行用于技术基线、记忆闭环与渲染门。主观风格结论必须另行使用真实口播材料：
+
+```powershell
+node scripts/run_multi_agent_subjective_review.mjs `
+  --jobs-root "F:\code\koubo\video-jobs" `
+  --run-id "YYYYMMDD-real-subjective"
+```
+
+主观审核规则：
+
+1. 只接受真实口播，不用合成 fixture 判断账号风格；
+2. 每组写明一个审核重点和一个核心问题；
+3. 允许选择“全组不合格”，不得强迫选出相对优胜者；
+4. 至少给出一个分类原因或具体例子；
+5. 字幕逐字准确性单独验收，不得把它伪装成已自动证明；
+6. 匿名映射留在服务目录之外；
+7. 主观结果不会自动发布或晋升长期记忆。
+
+`.cache/multi-agent-subjective-review/` 同样是本地忽略目录，已完成的 run 不会被覆盖。
+
 ## 迁移、回滚和恢复
 
 迁移文件位于 `video/multi-agent/migrations/`：
@@ -238,6 +258,10 @@ node scripts/run_multi_agent_acceptance.mjs `
 - 第一评测周期的编码技术门通过，但人工联络表发现候选字幕重复和证据卡长句溢出；该周期已按两轮上限封存。
 - 第二评测周期 `20260723-cycle2-v1b` 已从冻结原始母版重渲染挑战轨，并加入实际字体测量、自动换行、动态卡片高度和几何门。
 - 第二周期 9/9 技术门、6/6 挑战轨布局门及 6/6 Codex 人工视觉预检通过。
-- 集中式匿名盲审材料已经生成；在用户盲审结论写入前，v4 继续作为默认和回退，多 Agent 不进入生产。
+- 用户观看第二周期材料后指出九个候选均有不足，而且审核对象不清；由于其中两组是合成 fixture 且页面强制选优，第二周期只保留为技术证据，不形成主观风格结论。
+- 新运行 `20260723-real-subjective-v1` 使用同一条真实口播的 S01、S04、S09 三个语义窗口，页面按钩子、方法解释和品牌可信度分别提问，并允许全组拒绝。
+- 新运行 9/9 技术门、3/3 接触表预检和 9/9 浏览器媒体加载通过；在用户主观结论写入前，v4 继续作为默认和回退，多 Agent 不进入生产。
 
-第二周期报告：`docs/acceptance/multi-agent-v2-blind-review.md`。
+技术第二周期报告：`docs/acceptance/multi-agent-v2-blind-review.md`。
+
+当前真实口播主观审核报告：`docs/acceptance/multi-agent-real-subjective-v1.md`。

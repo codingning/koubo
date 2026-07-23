@@ -2,6 +2,8 @@
 
 日期：2026-07-23
 
+> 状态：**已被真实口播主观验收 v1 取代。** 用户观看后反馈九个候选均有不足，且不清楚每组三个候选究竟在比较整体剪辑、字幕匹配还是其他维度。由于原材料中有两组技术合成样本，并且页面强制选出一个“最好版本”，本次运行只保留为技术 QA 证据，不再作为主观风格结论。后续协议见 `multi-agent-real-subjective-v1.md`。
+
 分支：`codex/koubo-multi-agent-implementation`
 
 权威本地运行：`.cache/multi-agent-acceptance/20260723-cycle2-v1b/`
