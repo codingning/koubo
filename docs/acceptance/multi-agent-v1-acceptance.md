@@ -4,6 +4,8 @@
 分支：`codex/koubo-multi-agent-implementation`
 生产结论：**不批准多 Agent 视觉候选进入生产；Visual Director v4 继续作为默认和回退。**
 
+> 后续状态：本报告封存第一评测周期，不会改写。第二评测周期已修复这里记录的两项视觉阻断并通过盲审前预检，详见 `docs/acceptance/multi-agent-v2-blind-review.md`。用户盲审完成前，生产结论仍不变。
+
 ## 执行摘要
 
 本轮完成了可长期积累的底层闭环，但没有伪造“多 Agent 已经比 v4 更好”：

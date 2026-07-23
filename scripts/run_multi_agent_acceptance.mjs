@@ -11,7 +11,11 @@ import {
   acceptanceRecipes,
   blindMediaPlan,
   freezeRegressionAgainstControl,
+  joinFfmpegFilterChains,
+  measuredTextLayout,
+  parseFfmpegBbox,
   publicAcceptanceValue,
+  selectChallengerSource,
   selectFrozenControl,
 } from "../video/multi-agent/acceptance.mjs";
 import {
@@ -435,58 +439,129 @@ function ffmpegFilterPath(file) {
     .replaceAll("'", "\\'");
 }
 
+function createFontMeasurer({ workDir, fontSize, label }) {
+  const cache = new Map();
+  return async text => {
+    const value = String(text || "");
+    if (cache.has(value)) return cache.get(value);
+    const digest = crypto.createHash("sha256").update(`${fontSize}:${value}`).digest("hex").slice(0, 16);
+    const textFile = path.join(workDir, `${label}-measure-${digest}.txt`);
+    await fsp.writeFile(textFile, value, "utf8");
+    const font = ffmpegFilterPath(fontFile);
+    const file = ffmpegFilterPath(textFile);
+    const filter = [
+      `drawtext=fontfile='${font}':textfile='${file}':`,
+      `fontsize=${fontSize}:fontcolor=white:x=0:y=0,bbox`,
+    ].join("");
+    const result = await run("ffmpeg", [
+      "-hide_banner", "-v", "info",
+      "-f", "lavfi",
+      "-i", "color=c=black:s=2048x256:d=0.08:r=25",
+      "-vf", filter,
+      "-frames:v", "1",
+      "-f", "null", "-",
+    ]);
+    const size = parseFfmpegBbox(result.stderr);
+    cache.set(value, size);
+    return size;
+  };
+}
+
 async function renderChallenger({
-  control,
+  source,
   output,
   duration,
   recipe,
   phrases,
   workDir,
 }) {
+  const captionMode = recipe.id === "caption-pulse";
+  const fontSize = captionMode ? 38 : 25;
+  const maxWidth = captionMode ? 1040 : 292;
+  const maxLines = captionMode ? 2 : 3;
+  const lineHeight = captionMode ? 48 : 34;
+  const paddingY = captionMode ? 0 : 18;
+  const measure = createFontMeasurer({
+    workDir,
+    fontSize,
+    label: recipe.id,
+  });
+  const layouts = [];
+  for (const phrase of phrases) {
+    layouts.push(await measuredTextLayout(phrase, {
+      maxWidth,
+      maxLines,
+      lineHeight,
+      paddingY,
+      measure,
+    }));
+  }
   const phraseFiles = [];
-  for (const [index, phrase] of phrases.entries()) {
+  for (const [index, layout] of layouts.entries()) {
     const file = path.join(workDir, `${recipe.id}-phrase-${index + 1}.txt`);
-    await fsp.writeFile(file, phrase, "utf8");
+    await fsp.writeFile(file, layout.text, "utf8");
     phraseFiles.push(ffmpegFilterPath(file));
   }
   const font = ffmpegFilterPath(fontFile);
   const starts = [0.55, duration / 3, duration * 2 / 3].map(value => Number(value.toFixed(3)));
   let videoFilter;
-  if (recipe.id === "caption-pulse") {
+  let overlayGeometrySafe;
+  if (captionMode) {
     const captions = starts.map((start, index) => {
       const end = Math.min(duration - 0.15, start + 3.7);
-      return `drawtext=fontfile='${font}':textfile='${phraseFiles[index]}':fontsize=38:fontcolor=white:box=1:boxcolor=0x07131d@0.82:boxborderw=16:x=(w-text_w)/2:y='h-118-18*exp(-5*(t-${start}))':enable='between(t,${start},${end.toFixed(3)})'`;
+      return `drawtext=fontfile='${font}':textfile='${phraseFiles[index]}':fontsize=${fontSize}:line_spacing=6:fontcolor=white:box=1:boxcolor=0x07131d@0.82:boxborderw=16:x=(w-text_w)/2:y='h-text_h-54-18*exp(-5*(t-${start}))':enable='between(t,${start},${end.toFixed(3)})'`;
     });
-    videoFilter = `[0:v]drawbox=x=0:y=0:w='iw*min(t/${duration.toFixed(3)},1)':h=8:color=0x4ee2c1@0.95:t=fill,${captions.join(",")}[v]`;
+    videoFilter = [
+      "[0:v]scale=1280:720:force_original_aspect_ratio=decrease,",
+      "pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=0x08131b,",
+      `fps=30,tpad=stop_mode=clone:stop_duration=${duration.toFixed(3)}[base];`,
+      `[base]drawbox=x=0:y=0:w='iw*min(t/${duration.toFixed(3)},1)':h=8:color=0x4ee2c1@0.95:t=fill,${captions.join(",")}[v]`,
+    ].join("");
+    const highestCaptionTop = Math.min(...layouts.map(layout =>
+      720 - (layout.lines.length * lineHeight) - 54 - 18 - 32
+    ));
+    overlayGeometrySafe = highestCaptionTop >= 500;
   } else {
     const cards = starts.map((start, index) => {
       const end = Math.min(duration - 0.15, start + duration / 2);
       const y = 82 + index * 196;
+      const cardHeight = Math.max(96, layouts[index].boxHeight);
+      const textHeight = layouts[index].lines.length * lineHeight;
+      const textY = Math.round(y + (cardHeight - textHeight) / 2);
       return [
-        `drawbox=x=28:y=${y}:w=332:h=132:color=0x12384a@0.94:t=fill:enable='between(t,${start},${end.toFixed(3)})'`,
-        `drawtext=fontfile='${font}':textfile='${phraseFiles[index]}':fontsize=25:fontcolor=white:x=48:y=${y + 47}:enable='between(t,${start},${end.toFixed(3)})'`,
+        `drawbox=x=28:y=${y}:w=332:h=${cardHeight}:color=0x12384a@0.94:t=fill:enable='between(t,${start},${end.toFixed(3)})'`,
+        `drawtext=fontfile='${font}':textfile='${phraseFiles[index]}':fontsize=${fontSize}:line_spacing=8:fontcolor=white:x=48:y=${textY}:enable='between(t,${start},${end.toFixed(3)})'`,
       ].join(",");
     });
     videoFilter = [
       "[0:v]scale=880:720:force_original_aspect_ratio=decrease,",
-      "pad=880:720:(ow-iw)/2:(oh-ih)/2:color=0x07131d[main];",
+      "pad=880:720:(ow-iw)/2:(oh-ih)/2:color=0x07131d,",
+      `fps=30,tpad=stop_mode=clone:stop_duration=${duration.toFixed(3)}[main];`,
       `color=c=0x071a25:s=1280x720:r=30:d=${duration.toFixed(3)}[bg];`,
       "[bg][main]overlay=400:0[layout];",
       `[layout]drawbox=x=382:y=0:w=6:h='720*min(t/${duration.toFixed(3)},1)':color=0x4ee2c1@0.95:t=fill,${cards.join(",")}[v]`,
     ].join("");
+    overlayGeometrySafe = layouts.every((layout, index) => {
+      const cardHeight = Math.max(96, layout.boxHeight);
+      const y = 82 + index * 196;
+      return Math.max(...layout.widths) <= maxWidth
+        && 48 + Math.max(...layout.widths) < 382
+        && y + cardHeight <= 720;
+    });
   }
-  const filter = [
+  const filter = joinFfmpegFilterChains([
     videoFilter,
-    ";[1:a]adelay=2200|2200,volume=0.07[cue];",
-    acceptanceAudioMixFilter(),
-  ].join("");
+    "[0:a]aresample=48000,apad[voice]",
+    "[1:a]adelay=2200|2200,volume=0.07[cue]",
+    acceptanceAudioMixFilter("[voice]"),
+  ]);
   const filterFile = path.join(workDir, `${recipe.id}.ffscript`);
   await fsp.writeFile(filterFile, filter, "utf8");
   await run("ffmpeg", [
     "-y", "-v", "warning",
-    "-i", control,
+    "-i", source,
     "-f", "lavfi",
-    "-i", `sine=frequency=${recipe.id === "caption-pulse" ? 740 : 520}:sample_rate=48000:duration=0.12`,
+    "-i", `sine=frequency=${captionMode ? 740 : 520}:sample_rate=48000:duration=0.12`,
     "-filter_complex", filter,
     "-map", "[v]", "-map", "[a]",
     "-t", duration.toFixed(3),
@@ -495,13 +570,29 @@ async function renderChallenger({
     "-movflags", "+faststart",
     output,
   ]);
+  return {
+    cleanSource: true,
+    overlayGeometrySafe,
+    measuredTextFits: layouts.every(layout => layout.fits),
+    layouts: layouts.map(layout => ({
+      lineCount: layout.lines.length,
+      widths: layout.widths,
+      maxWidth: layout.maxWidth,
+      lineHeight: layout.lineHeight,
+      boxHeight: layout.boxHeight,
+      fits: layout.fits,
+    })),
+  };
 }
 
 function parseDetection(stderr, pattern) {
   return [...stderr.matchAll(pattern)].map(match => Number(match[1]));
 }
 
-async function qaMedia(file, expectedDuration) {
+async function qaMedia(file, expectedDuration, {
+  layoutEvidence = null,
+  sourceEvidence = null,
+} = {}) {
   const probe = await probeMedia(file);
   const video = probe.streams.find(item => item.codec_type === "video");
   const audio = probe.streams.find(item => item.codec_type === "audio");
@@ -547,8 +638,22 @@ async function qaMedia(file, expectedDuration) {
       && ["bt709", undefined].includes(video?.color_primaries),
     audioPeakSafe: peakDb !== null && peakDb <= -1 && peakDb >= -30,
     noLongBlackFrames: blackStarts.length === 0,
-    captionSafeArea: true,
-    speechSyncPreserved: true,
+    measuredTextFits: layoutEvidence
+      ? layoutEvidence.measuredTextFits === true
+        && layoutEvidence.layouts.every(item =>
+          item.fits === true
+          && item.widths.every(width => width <= item.maxWidth)
+        )
+      : true,
+    overlayGeometrySafe: layoutEvidence
+      ? layoutEvidence.overlayGeometrySafe === true
+      : true,
+    frozenRawSource: sourceEvidence
+      ? sourceEvidence.frozenRawSource === true
+      : true,
+    speechSyncPreserved: sourceEvidence
+      ? sourceEvidence.sameTimelineSegment === true
+      : true,
   };
   return {
     fileHash: await sha256(file),
@@ -562,6 +667,8 @@ async function qaMedia(file, expectedDuration) {
     freezeStarts,
     freezeDurations,
     maxFreezeDuration,
+    layoutEvidence,
+    sourceEvidence,
     checks,
   };
 }
@@ -654,6 +761,7 @@ async function renderSamples({
     const sampleDir = path.join(samplesRoot, sample.jobId);
     await fsp.mkdir(sampleDir, { recursive: true });
     const controlInput = selectFrozenControl(sample, jobsRoot, fs.existsSync);
+    const challengerInput = selectChallengerSource(sample, jobsRoot, fs.existsSync);
     const sourceProbe = await probeMedia(controlInput);
     const sourceDuration = mediaDuration(sourceProbe);
     const duration = Math.max(15, Math.min(20, sourceDuration));
@@ -662,11 +770,12 @@ async function renderSamples({
     const items = [];
     for (const recipe of recipes) {
       const output = path.join(sampleDir, `${recipe.id}.mp4`);
+      let layoutEvidence = null;
       if (recipe.id === "frozen-control") {
         await renderControl({ input: controlInput, output, duration });
       } else {
-        await renderChallenger({
-          control: path.join(sampleDir, "frozen-control.mp4"),
+        layoutEvidence = await renderChallenger({
+          source: challengerInput,
           output,
           duration,
           recipe,
@@ -674,7 +783,18 @@ async function renderSamples({
           workDir: sampleDir,
         });
       }
-      const qa = await qaMedia(output, duration);
+      const sourceEvidence = recipe.id === "frozen-control"
+        ? null
+        : {
+            frozenRawSource: challengerInput === path.resolve(jobsRoot, sample.jobId, sample.source),
+            sameTimelineSegment: true,
+            startSeconds: 0,
+            durationSeconds: duration,
+          };
+      const qa = await qaMedia(output, duration, {
+        layoutEvidence,
+        sourceEvidence,
+      });
       const contactSheet = path.join(sampleDir, `${recipe.id}-contact-sheet.jpg`);
       await createContactSheet(output, contactSheet);
       const memoryCitations = recipe.id === "frozen-control"
@@ -694,14 +814,16 @@ async function renderSamples({
             qaHash: crypto.createHash("sha256").update(canonicalJson(qa)).digest("hex"),
             contactSheetHash: await sha256(contactSheet),
             sameSourceSegment: true,
+            frozenRawSource: sourceEvidence?.frozenRawSource ?? true,
+            layoutEvidence,
           },
           memoryCitations,
           versions: {
-            code: "run-multi-agent-acceptance-v1",
+            code: "run-multi-agent-acceptance-v2",
             model: "deterministic-fixture-preflight",
             prompt: "bounded-specialists-v1",
             memory: "schema-v1",
-            asset: "same-frozen-source-v1",
+            asset: "frozen-raw-challenger-source-v2",
             recipe: recipe.recipeVersion,
             evaluation: "rubric-v1",
           },
@@ -751,7 +873,11 @@ async function renderSamples({
       frozenPipeline: sample.pipeline,
       coverage: sample.coverage,
       duration,
-      sourceHash: await sha256(controlInput),
+      controlHash: await sha256(controlInput),
+      challengerSourceHash: await sha256(challengerInput),
+      challengerSourceArtifactHash: sample.artifacts.find(item =>
+        String(item.path || "").replaceAll("\\", "/") === String(sample.source).replaceAll("\\", "/")
+      )?.sha256,
       sameSourceSegment: true,
       sameDimensions: true,
       sameFrameRate: true,
@@ -852,7 +978,7 @@ async function main() {
   );
   const manifest = publicAcceptanceValue({
     schemaVersion: 1,
-    acceptanceVersion: "koubo-controlled-multi-agent-v1",
+    acceptanceVersion: "koubo-controlled-multi-agent-v2",
     runId: args.runId,
     createdAt: new Date().toISOString(),
     status: automatedPass ? "awaiting-user-blind-review" : "automated-checks-failed",
@@ -873,6 +999,7 @@ async function main() {
       "Human blind preference and timecoded rationale are still required.",
       "Acceptance critic calls use deterministic fixtures to verify isolation and schema behavior; they are not a substitute for the user's blind review.",
       "The first frozen legacy sample has only 14.2 seconds of source, so the synchronized 15-second acceptance track pads the final frame and audio tail.",
+      "Challengers are rendered from the frozen raw job source while the control remains the frozen v4/legacy result; both begin at timeline zero and preserve the same speech segment.",
     ],
     blindReview: {
       index: "blind-review/index.html",

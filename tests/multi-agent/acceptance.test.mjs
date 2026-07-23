@@ -6,7 +6,11 @@ import {
   acceptanceRecipes,
   blindMediaPlan,
   freezeRegressionAgainstControl,
+  joinFfmpegFilterChains,
+  measuredTextLayout,
+  parseFfmpegBbox,
   publicAcceptanceValue,
+  selectChallengerSource,
   selectFrozenControl,
 } from "../../video/multi-agent/acceptance.mjs";
 import { candidateDiversity } from "../../video/multi-agent/evaluation.mjs";
@@ -42,6 +46,92 @@ test("frozen control selection prefers an existing synchronized sample", () => {
   const selected = selectFrozenControl(sample, "X:\\jobs", file => existing.has(file));
 
   assert.match(selected, /sample-18s-v1[\\/]renders[\\/]opening\.mp4$/);
+});
+
+test("challenger selection uses the frozen raw source instead of a rendered control", () => {
+  const sample = {
+    jobId: "job-1",
+    source: "raw-source.mp4",
+    artifacts: [
+      { path: "raw-source.mp4", sha256: "a".repeat(64) },
+      { path: "sample-18s-v1/renders/opening.mp4", sha256: "b".repeat(64) },
+    ],
+  };
+  const existing = new Set([
+    "X:\\jobs\\job-1\\raw-source.mp4",
+    "X:\\jobs\\job-1\\sample-18s-v1\\renders\\opening.mp4",
+  ]);
+
+  const selected = selectChallengerSource(sample, "X:\\jobs", file => existing.has(file));
+
+  assert.match(selected, /job-1[\\/]raw-source\.mp4$/);
+  assert.doesNotMatch(selected, /renders/);
+});
+
+test("challenger selection rejects an unfrozen source path", () => {
+  const sample = {
+    jobId: "job-1",
+    source: "raw-source.mp4",
+    artifacts: [{ path: "rendered.mp4", sha256: "b".repeat(64) }],
+  };
+
+  assert.throws(
+    () => selectChallengerSource(sample, "X:\\jobs", () => true),
+    /not frozen in the baseline/i,
+  );
+});
+
+test("measured text layout wraps against actual measured width and grows the card", async () => {
+  const layout = await measuredTextLayout("一二三四五六七八九十", {
+    maxWidth: 100,
+    maxLines: 3,
+    lineHeight: 32,
+    paddingY: 18,
+    measure: async value => ({
+      width: Array.from(value).length * 25,
+      height: 26,
+    }),
+  });
+
+  assert.deepEqual(layout.lines, ["一二三四", "五六七八", "九十"]);
+  assert.deepEqual(layout.widths, [100, 100, 50]);
+  assert.equal(layout.boxHeight, 132);
+  assert.equal(layout.fits, true);
+});
+
+test("measured text layout refuses to hide text beyond the line budget", async () => {
+  await assert.rejects(
+    measuredTextLayout("一二三四五六七八九十十一十二十三", {
+      maxWidth: 100,
+      maxLines: 3,
+      measure: async value => ({
+        width: Array.from(value).length * 25,
+        height: 26,
+      }),
+    }),
+    /exceeds 3 measured lines/i,
+  );
+});
+
+test("FFmpeg bbox output becomes deterministic font metrics", () => {
+  const stderr = [
+    "noise before the filter",
+    "[Parsed_bbox_1 @ 000001] n:0 pts:0 x1:0 x2:492 y1:0 y2:25 w:493 h:26 crop=493:26:0:0",
+  ].join("\n");
+
+  assert.deepEqual(parseFfmpegBbox(stderr), { width: 493, height: 26 });
+  assert.throws(() => parseFfmpegBbox("no bbox output"), /bbox measurement/i);
+});
+
+test("FFmpeg filter chains cannot create empty filters at semicolon boundaries", () => {
+  const graph = joinFfmpegFilterChains([
+    "[0:v]copy[v];",
+    ";[0:a]aresample=48000[a];",
+    "[a]anull[out]",
+  ]);
+
+  assert.equal(graph, "[0:v]copy[v];[0:a]aresample=48000[a];[a]anull[out]");
+  assert.equal(graph.includes(";;"), false);
 });
 
 test("blind media plan exposes labels and hashes but never recipe identities", () => {

@@ -828,6 +828,34 @@ Do not mark the goal complete until the consolidated user blind review is record
 
 ---
 
+### Task 13: Evaluation cycle 2 — repair raw-source and measured-layout gates
+
+- [x] **Step 1: Reproduce both visual failures and trace their data flow**
+
+The prior challenger renderer consumed the already rendered frozen control. Evidence cards used a fixed 332×132 card and unwrapped `drawtext`.
+
+- [x] **Step 2: Add failing tests for frozen raw-source selection and measured text layout**
+
+Tests require the challenger source to be a hash-frozen baseline artifact, reject an unfrozen path, wrap by measured width without truncation, grow card geometry, reject excess line counts, parse FFmpeg `bbox`, and prevent empty filter nodes.
+
+- [x] **Step 3: Render challengers from the clean frozen source and enforce layout evidence**
+
+The control remains the frozen completed output. Challengers start at timeline zero from `sample.source`. FFmpeg measures Microsoft YaHei at the target font size before rendering and writes the measurements into QA.
+
+- [x] **Step 4: Run real-media cycle `20260723-cycle2-v1b` and inspect all challenger contact sheets**
+
+All 9 videos pass automated media QA. All 6 challengers pass the raw-source, measured-width, and overlay-geometry gates. Manual preflight finds no duplicate subtitles, overflow, or evidence-rail overlap.
+
+- [x] **Step 5: Package operations and acceptance documentation and commit the checkpoint**
+
+Evidence is summarized in `docs/acceptance/multi-agent-v2-blind-review.md`; raw videos, hashes, and private blind mapping remain in the ignored run directory.
+
+- [ ] **Step 6: Record the user's consolidated blind review**
+
+Do not approve production expansion from automated or Codex visual preflight alone. Record one winner and at least one timecoded reason per sample, then rerun the 15-item completion audit.
+
+---
+
 ## Requirement-to-Evidence Matrix
 
 | Goal requirement | Primary evidence |
