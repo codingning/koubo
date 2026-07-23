@@ -579,7 +579,7 @@ git commit -m "feat: orchestrate bounded editing specialists"
 - Produces: `evaluateCandidate`, `compareCandidates`, `candidateDiversity`, `buildBlindReviewBundle`.
 - Score dimensions: technical, content, diversity, brand, human effort, explainability, reproducibility, blind review.
 
-- [ ] **Step 1: Write failing diversity, traceability, and no-fake-improvement tests**
+- [x] **Step 1: Write failing diversity, traceability, and no-fake-improvement tests**
 
 ```js
 test("color-only variants fail meaningful diversity", () => {
@@ -592,12 +592,12 @@ test("a candidate with missing provenance cannot outrank v4", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/multi-agent/evaluation.test.mjs`
 Expected: FAIL because evaluation does not exist.
 
-- [ ] **Step 3: Implement versioned scorecards, confounder fields, blind labels, diversity signatures, and two-iteration ceiling**
+- [x] **Step 3: Implement versioned scorecards, confounder fields, blind labels, diversity signatures, and two-iteration ceiling**
 
 Promptfoo stays local and pinned:
 
@@ -607,7 +607,7 @@ npx -y promptfoo@0.120.0 eval -c config/evaluation/promptfooconfig.yaml
 
 The config must use fixture providers unless an existing configured model is explicitly enabled.
 
-- [ ] **Step 4: Run GREEN and prompt regression**
+- [x] **Step 4: Run GREEN and prompt regression**
 
 Run:
 
@@ -618,7 +618,7 @@ npx -y promptfoo@0.120.0 eval -c config/evaluation/promptfooconfig.yaml
 
 Expected: PASS; reports contain no transcript bodies, API keys, absolute private media paths, or proposal authors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add video/multi-agent/evaluation.mjs tests/multi-agent/evaluation.test.mjs config/evaluation/promptfooconfig.yaml

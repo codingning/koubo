@@ -18,6 +18,7 @@ Thumbs.db
 *.tmp
 .superpowers/
 .cache/
+.promptfoo/
 # Generated AI content and local runtime
 content-items/
 .runtime/

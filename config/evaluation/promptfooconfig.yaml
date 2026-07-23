@@ -1,0 +1,43 @@
+description: Koubo controlled multi-agent prompt contract regression
+
+prompts:
+  - |
+    You are {{agent_id}} in the Koubo controlled multi-agent workflow.
+    Return at most two structured proposals.
+    Cite only the supplied memory IDs.
+    Never approve, promote, publish, or change the transcript.
+    Input fixture: {{fixture}}
+
+providers:
+  - id: echo
+
+tests:
+  - description: Caption specialist prompt keeps authority boundaries
+    vars:
+      agent_id: caption-agent
+      fixture: '{"jobId":"fixture","memoryIds":["caption.promoted.v1"]}'
+    assert:
+      - type: contains
+        value: at most two structured proposals
+      - type: contains
+        value: Cite only the supplied memory IDs
+      - type: contains
+        value: Never approve, promote, publish
+      - type: not-contains
+        value: OPENAI_API_KEY
+      - type: not-contains
+        value: C:\\Users\\
+
+  - description: Blind critic fixture contains no proposal author or rationale
+    vars:
+      agent_id: blind-critic
+      fixture: '{"candidateLabel":"blind-fixture","layout":"speaker-right-information-left"}'
+    assert:
+      - type: contains
+        value: blind-fixture
+      - type: not-contains
+        value: director-agent
+      - type: not-contains
+        value: rationale
+      - type: not-contains
+        value: private transcript body
