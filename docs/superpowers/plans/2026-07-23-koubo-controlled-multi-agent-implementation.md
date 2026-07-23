@@ -402,7 +402,7 @@ git commit -m "feat: add pinned multi-agent python bridge"
 - Methods: `registerSource`, `preprocess`, `extract`, `route`, `resume`.
 - Checkpoint stages: `registered`, `probed`, `scenes`, `transcribed`, `extracted`, `routed`, `awaiting_recreation`.
 
-- [ ] **Step 1: Write failing resume, provenance, and inbox-only tests**
+- [x] **Step 1: Write failing resume, provenance, and inbox-only tests**
 
 ```js
 test("resumes after transcription without repeating scene detection", async () => {
@@ -419,12 +419,12 @@ test("routes extracted techniques to inbox with source timecodes", async () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/multi-agent/tutorial-ingest.test.mjs`
 Expected: FAIL because the ingestor does not exist.
 
-- [ ] **Step 3: Implement content-addressed registration, checkpoint files, PySceneDetect/faster-whisper adapters, technique deduplication, and role routing**
+- [x] **Step 3: Implement content-addressed registration, checkpoint files, PySceneDetect/faster-whisper adapters, technique deduplication, and role routing**
 
 The CLI must support:
 
@@ -432,7 +432,7 @@ The CLI must support:
 node scripts/ingest_tutorial.mjs --input <local-video> --author "local fixture" --license "self-created" --resume
 ```
 
-- [ ] **Step 4: Run GREEN and create the legal three-scene fixture**
+- [x] **Step 4: Run GREEN and create the legal three-scene fixture**
 
 Run:
 
@@ -444,7 +444,7 @@ node scripts/ingest_tutorial.mjs --input .cache/legal-tutorial-fixture/tutorial.
 
 Expected: source hash, scenes, transcript, candidate cards, and checkpoint exist locally; every card remains `inbox`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add video/multi-agent/tutorial-ingest.mjs scripts/ingest_tutorial.mjs scripts/create_legal_tutorial_fixture.ps1 tests/multi-agent/tutorial-ingest.test.mjs
