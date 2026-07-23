@@ -85,12 +85,35 @@ node scripts/run_multi_agent_subjective_review.mjs `
 http://127.0.0.1:8766/index.html
 ```
 
+本地一键审核服务：
+
+```powershell
+node scripts/serve_multi_agent_subjective_review.mjs `
+  --run-root ".cache/multi-agent-subjective-review/20260723-real-subjective-v1" `
+  --port 8766
+```
+
+服务只绑定 `127.0.0.1`。页面提交时会重新校验 run ID、真实样本、匿名标签、媒体哈希、决定和理由，然后生成不可覆盖的 `subjective-review-record.json` 并更新 manifest。重复提交返回 `409`。提交结果明确保持：
+
+- `productionApproval: false`
+- `autoPublish: false`
+- `memoryPromotion: false`
+
+如果本地服务不可用，页面才会下载 JSON 作为兜底。也可以在恢复服务后显式导入：
+
+```powershell
+node scripts/record_multi_agent_subjective_review.mjs `
+  --run-root ".cache/multi-agent-subjective-review/20260723-real-subjective-v1" `
+  --review "C:\path\to\koubo-subjective-review-20260723-real-subjective-v1.json"
+```
+
 本地证据：
 
 ```text
 .cache/multi-agent-subjective-review/20260723-real-subjective-v1/
   subjective-manifest.json
   blind-map-private.json
+  subjective-review-record.json  # 用户提交后才出现
   samples/
   review/
 ```

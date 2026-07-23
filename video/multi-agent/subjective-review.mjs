@@ -136,10 +136,14 @@ export function buildSubjectiveReviewHtml({ runId, samples }) {
 <div class="hero"><span>真实口播集中盲审 · ${escapeHtml(runId)}</span><h1>审整体剪辑方案，不是做技术验收</h1><p>每组是同一段真实口播的完整剪辑方案。你在判断信息是否更容易理解、画面是否更想继续看、字幕/动效/声音是否服务表达，以及它像不像你愿意发布的账号内容。</p></div>
 <div class="scope"><strong>本轮边界：</strong>这里不要求逐字校对字幕；字幕文本准确性会单独验收。编码、黑帧、响度、画面尺寸和基础音画连续性已由自动检查覆盖。发现任何明显问题仍可指出，但这里的核心是主观成片判断。允许选择“全组不合格”。</div>
 ${sections}
-<div class="actions"><span id="status">每组做一个判断，并至少勾选或写下一条理由。</span><button id="export">导出盲审结果</button></div>
+<div class="actions"><span id="status">每组做一个判断，并至少勾选或写下一条理由。</span><button id="submit">提交审核结果</button></div>
 </main><script>
 const samples=${JSON.stringify(clientSamples)};
-document.querySelector("#export").addEventListener("click",()=>{
+function downloadFallback(payload){
+  const blob=new Blob([JSON.stringify(payload,null,2)+"\\n"],{type:"application/json"});
+  const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="koubo-subjective-review-${escapeHtml(runId)}.json";link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+}
+document.querySelector("#submit").addEventListener("click",async()=>{
   const reviews=samples.map(sample=>{
     const decision=document.querySelector('input[name="decision-'+sample.id+'"]:checked')?.value||"";
     const reasons=[...document.querySelectorAll('input[data-reason="'+sample.id+'"]:checked')].map(item=>item.value);
@@ -149,8 +153,17 @@ document.querySelector("#export").addEventListener("click",()=>{
   const invalid=reviews.find(item=>!item.decision||(!item.reasons.length&&!item.note));
   if(invalid){document.querySelector("#status").textContent="请完成 "+invalid.sampleId+" 的判断，并给出至少一条理由。";return}
   const payload={schemaVersion:1,runId:${JSON.stringify(runId)},reviewerType:"human",reviewedAt:new Date().toISOString(),samples:reviews,autoPublish:false,memoryPromotion:false};
-  const blob=new Blob([JSON.stringify(payload,null,2)+"\\n"],{type:"application/json"});
-  const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download="koubo-subjective-review-${escapeHtml(runId)}.json";link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
-  document.querySelector("#status").textContent="已导出。这个结果不会自动发布视频或晋升记忆。";
+  const button=document.querySelector("#submit");button.disabled=true;
+  document.querySelector("#status").textContent="正在写入本地验收记录…";
+  try{
+    const response=await fetch("/api/subjective-review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||"提交失败");
+    button.textContent="审核已记录";
+    document.querySelector("#status").textContent="已安全记录。不会自动发布视频、批准生产或晋升记忆。";
+  }catch(error){
+    downloadFallback(payload);button.disabled=false;
+    document.querySelector("#status").textContent="本地服务不可用，已下载 JSON 作为兜底；结果尚未写入验收记录。";
+  }
 });</script></body></html>`;
 }

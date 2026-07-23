@@ -219,6 +219,16 @@ node scripts/run_multi_agent_subjective_review.mjs `
 
 `.cache/multi-agent-subjective-review/` 同样是本地忽略目录，已完成的 run 不会被覆盖。
 
+审核页用本地受控服务打开，避免要求用户手工传递 JSON：
+
+```powershell
+node scripts/serve_multi_agent_subjective_review.mjs `
+  --run-root ".cache/multi-agent-subjective-review/YYYYMMDD-real-subjective" `
+  --port 8766
+```
+
+服务只绑定 loopback，支持视频 Range 请求，只暴露 `review/` 下的页面和匿名媒体。`blind-map-private.json`、manifest 和最终记录不通过静态路由公开。`POST /api/subjective-review` 只记录一次经过校验的人类结果；不会批准生产、发布视频或晋升记忆。离线下载的审核 JSON 可用 `scripts/record_multi_agent_subjective_review.mjs` 导入，仍执行相同校验和不可覆盖门。
+
 ## 迁移、回滚和恢复
 
 迁移文件位于 `video/multi-agent/migrations/`：

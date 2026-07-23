@@ -67,5 +67,8 @@ test("blind review HTML explains scope and includes reject-all without identitie
   assert.match(html, /不要求逐字校对.*单独验收/s);
   assert.doesNotMatch(html, /字幕是否逐字准确.*自动检查/s);
   assert.match(html, /前三秒是否建立了继续观看的理由/);
+  assert.match(html, /提交审核结果/);
+  assert.match(html, /fetch\("\/api\/subjective-review"/);
+  assert.match(html, /本地服务不可用.*下载 JSON/s);
   assert.doesNotMatch(html, /caption-pulse|evidence-rail|frozen-control|agent/i);
 });
