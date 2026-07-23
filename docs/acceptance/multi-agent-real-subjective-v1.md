@@ -127,3 +127,6 @@ node scripts/record_multi_agent_subjective_review.mjs `
 - 新候选是受控风格原型，不是经过用户批准的长期模板；
 - 未获得用户主观结果前不得批准生产扩展、晋升记忆或自动发布；
 - 即使某个候选胜出，也只能晋升通过审核的具体做法，不能把整个配方自动固化。
+
+15 条完成标准的最新逐项证据见
+`docs/acceptance/multi-agent-completion-audit.md`。当前唯一未闭合项是本页所述的用户主观盲审。

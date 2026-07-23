@@ -275,3 +275,6 @@ node scripts/serve_multi_agent_subjective_review.mjs `
 技术第二周期报告：`docs/acceptance/multi-agent-v2-blind-review.md`。
 
 当前真实口播主观审核报告：`docs/acceptance/multi-agent-real-subjective-v1.md`。
+
+15 条完成标准的最终逐项审计：
+`docs/acceptance/multi-agent-completion-audit.md`。在真实口播主观记录写入前，持续目标保持未完成。
