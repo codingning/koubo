@@ -220,7 +220,7 @@ git commit -m "feat: add versioned multi-agent contracts"
 - Store methods: `migrate()`, `put(kind, record, expectedHash?)`, `get(kind, id)`, `list(kind, filter)`, `appendEvent(event)`, `eventsFor(subjectId)`, `exportRecord(kind, id)`, `close()`.
 - Runtime data path: `data/multi-agent/runtime/`; reviewable exports: `data/multi-agent/library/`.
 
-- [ ] **Step 1: Write failing transaction, append-only, export, and migration tests**
+- [x] **Step 1: Write failing transaction, append-only, export, and migration tests**
 
 ```js
 test("writes a record and atomically exports canonical JSON", () => {
@@ -237,16 +237,16 @@ test("events cannot be updated or deleted", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/multi-agent/store.test.mjs`
 Expected: FAIL because the store does not exist.
 
-- [ ] **Step 3: Implement migration checksum, WAL, foreign keys, optimistic hash checks, atomic temp-file rename, and append-only triggers**
+- [x] **Step 3: Implement migration checksum, WAL, foreign keys, optimistic hash checks, atomic temp-file rename, and append-only triggers**
 
 The database must contain `records`, `events`, `transitions`, `agent_namespaces`, `schema_migrations`, and `evaluation_runs`.
 
-- [ ] **Step 4: Run GREEN and migration replay**
+- [x] **Step 4: Run GREEN and migration replay**
 
 Run:
 
@@ -257,7 +257,7 @@ node --test tests/multi-agent/contracts.test.mjs tests/multi-agent/store.test.mj
 
 Expected: PASS; reopening a migrated fixture does not change schema or exported hashes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add .gitignore video/multi-agent/migrations video/multi-agent/store.mjs tests/multi-agent/store.test.mjs
