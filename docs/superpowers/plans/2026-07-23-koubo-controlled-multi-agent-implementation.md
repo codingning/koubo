@@ -165,7 +165,7 @@ git commit -m "test: freeze v4 multi-agent evaluation baseline"
 - Produces: `SCHEMA_VERSION = 1`, `validateRecord(kind, value)`, `canonicalJson(value)`, `contentHash(value)`, `loadAgentProfiles(root)`.
 - Common record fields: `id`, `schemaVersion`, `createdAt`, `createdBy`, `status`, `source`, `evidence`, `applicability`, `prohibitions`, `versions`, `contentHash`.
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 ```js
 test("rejects a technique card without timestamped evidence", () => {
@@ -180,16 +180,16 @@ test("canonical hashes ignore object key order but not record content", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/multi-agent/contracts.test.mjs`
 Expected: FAIL because `contracts.mjs` does not exist.
 
-- [ ] **Step 3: Implement the eight schemas and minimal schema registry**
+- [x] **Step 3: Implement the eight schemas and minimal schema registry**
 
 Use repository-owned JSON Schema files for auditability. Implement only the JSON Schema keywords used by these contracts (`type`, `required`, `properties`, `items`, `enum`, `minimum`, `maximum`, `additionalProperties`) so the first version adds no generic validation dependency.
 
-- [ ] **Step 4: Run GREEN and validate every shipped config**
+- [x] **Step 4: Run GREEN and validate every shipped config**
 
 Run:
 
@@ -200,7 +200,7 @@ node -e "import('./video/multi-agent/contracts.mjs').then(async m => m.validateR
 
 Expected: PASS with all eight schemas and six profiles valid.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add config/multi-agent video/multi-agent/contracts.mjs tests/multi-agent/contracts.test.mjs

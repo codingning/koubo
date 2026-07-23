@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "koubo://schemas/asset-record/v1",
+  "title": "Koubo Asset Record v1",
+  "type": "object",
+  "x-koubo-common-record": true,
+  "required": [
+    "id", "schemaVersion", "createdAt", "createdBy", "status", "source", "evidence",
+    "applicability", "prohibitions", "versions", "contentHash",
+    "namespace", "mediaType", "localPath", "sha256", "license"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "status": { "type": "string" },
+    "namespace": { "type": "string" },
+    "mediaType": { "type": "string", "enum": ["image", "video", "audio", "font", "template", "project"] },
+    "localPath": { "type": "string" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "license": { "type": "string" }
+  },
+  "additionalProperties": true
+}
