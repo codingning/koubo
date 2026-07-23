@@ -275,7 +275,7 @@ git commit -m "feat: add auditable local domain store"
 - Methods: `ingest(record)`, `transition({ kind, id, to, actor, evidence, expectedHash })`, `retrieve({ agentId, query, includeCandidate })`, `reject(...)`, `expire(...)`, `rollback(transitionId)`, `exportNamespace(agentId)`.
 - Lifecycle: `inbox → extracted → recreated → trial → approved → promoted`; `rejected`, `expired`, and `disabled` are terminal until explicit rollback.
 
-- [ ] **Step 1: Write failing lifecycle and namespace isolation tests**
+- [x] **Step 1: Write failing lifecycle and namespace isolation tests**
 
 ```js
 test("automatic extraction cannot skip to approved", () => {
@@ -299,16 +299,16 @@ test("rollback restores prior retrieval behavior", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/multi-agent/memory.test.mjs`
 Expected: FAIL because the memory service does not exist.
 
-- [ ] **Step 3: Implement explicit transition table, evidence gates, negative memory, role filters, score ordering, and rollback events**
+- [x] **Step 3: Implement explicit transition table, evidence gates, negative memory, role filters, score ordering, and rollback events**
 
 Promotion to `approved` requires a human review record; promotion to `promoted` requires at least two distinct approved project trials. Brand-core changes remain unsupported in v1.
 
-- [ ] **Step 4: Run GREEN and full foundation suite**
+- [x] **Step 4: Run GREEN and full foundation suite**
 
 Run:
 
@@ -318,7 +318,7 @@ node --test tests/multi-agent/contracts.test.mjs tests/multi-agent/store.test.mj
 
 Expected: PASS with namespace export containing no raw media bytes or secrets.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add video/multi-agent/memory.mjs tests/multi-agent/memory.test.mjs
