@@ -518,7 +518,7 @@ git commit -m "feat: recreate editing techniques in sandbox"
 - Methods: `propose(input)`, `direct(proposals)`, `criticize(candidate, { blind })`, `retentionAudit(candidate)`.
 - Defaults: one call per specialist, two candidates per specialist, 90-second timeout, one retry, deterministic v4 fallback.
 
-- [ ] **Step 1: Write failing independence, authority, timeout, and fallback tests**
+- [x] **Step 1: Write failing independence, authority, timeout, and fallback tests**
 
 ```js
 test("specialists receive only shared evidence and their own promoted namespace", async () => {
@@ -541,16 +541,16 @@ test("timeout falls back to a traceable v4 proposal", async () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/multi-agent/orchestrator.test.mjs`
 Expected: FAIL because profiles and orchestrator do not exist.
 
-- [ ] **Step 3: Implement role-minimal inputs, memory citations, structured proposal validation, concurrency limits, cancellation, retries, and v4 fallback**
+- [x] **Step 3: Implement role-minimal inputs, memory citations, structured proposal validation, concurrency limits, cancellation, retries, and v4 fallback**
 
 Blind Critic input must omit agent IDs, prompts, rationales, and proposal order. Retention Critic must emit timestamped viewing reasons and may explicitly label necessary pauses.
 
-- [ ] **Step 4: Run GREEN and bridge fixture integration**
+- [x] **Step 4: Run GREEN and bridge fixture integration**
 
 Run:
 
@@ -561,7 +561,7 @@ node --test tests/multi-agent/orchestrator.test.mjs
 
 Expected: PASS; at least two candidates differ in layout/motion/sound structure, not only color.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add video/multi-agent/profiles.mjs video/multi-agent/orchestrator.mjs tests/multi-agent/orchestrator.test.mjs
