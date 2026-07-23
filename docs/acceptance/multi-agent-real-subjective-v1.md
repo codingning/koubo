@@ -6,7 +6,7 @@
 
 权威本地运行：`.cache/multi-agent-subjective-review/20260723-real-subjective-v1/`
 
-当前结论：**九个候选已经通过现有媒体技术门和页面预检，等待用户按三个明确问题进行主观审核。允许每组三个候选全部不合格；在主观结果记录前，Visual Director v4 仍是生产默认和唯一回退。**
+当前结论：**用户已将三组候选全部判为不合格。两个挑战轨没有达到 v4 的可感知动效、实时字幕和整体包装完成度，因此不批准多 Agent 创意渲染进入生产；Visual Director v4 继续作为生产默认和唯一回退。**
 
 ## 为什么废弃上一版主观审核
 
@@ -77,7 +77,7 @@ node scripts/run_multi_agent_subjective_review.mjs `
 | 页面文本和控件检查 | 通过 |
 | 浏览器媒体加载 | 9/9，`readyState=4`、无媒体错误 |
 | 浏览器控制台 | 无 warning/error |
-| 用户主观审核 | 待执行 |
+| 用户主观审核 | 3/3 全组不合格 |
 
 本地审核页：
 
@@ -120,13 +120,57 @@ node scripts/record_multi_agent_subjective_review.mjs `
 
 `blind-map-private.json` 位于服务目录之外。用户页面只包含匿名标签、媒体哈希、明确审核问题和可拒绝选项。
 
+## 用户结果与解盲
+
+用户在 2026-07-23 提交了不可覆盖记录：
+
+```text
+outcome = subjective-rejection-recorded
+rejectedSamples = 3
+selectedSamples = 0
+recordHash = 2391641cfec37bcc7ca370514e912c5ac06456fd560f29d28c29c99a16ec2fb6
+productionApproval = false
+autoPublish = false
+memoryPromotion = false
+```
+
+三组反馈一致：
+
+> v4 很容易被识别；另外两个候选没有看到足够的动效，字幕也不是实时跟随。
+
+解盲后，每组都包含 `frozen-control`、`caption-pulse` 和 `evidence-rail`，只是 A/B/C 顺序不同。因此拒绝不是固定标签造成的；同时，v4 的成熟视觉身份让用户能够从画面反推出控制轨，匿名协议只能隐藏元数据，不能消除这种风格识别。
+
+接触表和渲染代码复核支持用户判断：
+
+- `caption-pulse` 只有进度条、三个固定时间点的短字幕和轻微上移动画，不是逐字实时字幕；
+- `evidence-rail` 只有静态分栏、三个分段卡片显隐和进度线，不具备 v4 的标题、摘要、事实卡、真实证据和多阶段动效；
+- 两个挑战轨来自固定 FFmpeg 验收配方，而不是以 v4 等价完成度渲染 Director 组合后的实际提案；
+- 技术 QA 只证明文件可解码、布局未越界和音视频参数合格，不能证明动效丰富度或剪辑完成度。
+
+该拒绝已写入本地权威领域库：
+
+```text
+production-event/production.subjective-review.20260723-real-subjective-v1
+contentHash = 78fb6396aaf645440621303855ca27e4a3f81027d64faf2fc5db0cc526e51f0e
+```
+
+事件只适用于本次真实 job 的三个窗口。它禁止 `caption-pulse` 和 `evidence-rail` 进入生产，但不会把本次窗口的拒绝夸大为 v4 全局失败，也不会自动禁用通用技巧或晋升长期记忆。
+
+## 最终生产结论
+
+- 不批准 `controlled-multi-agent-v1` 创意渲染进入真实生产；
+- 不进行第三轮风格粉饰，遵守两轮有证据迭代上限；
+- Visual Director v4 继续作为默认生产与故障回退路径；
+- 保留已验证的领域库、教程摄取、记忆治理、角色隔离、提案、Critic、评测、工作台影子模式和回滚能力；
+- 下一次若重启创意渲染实验，必须先解决“Director 提案到 v4 等价渲染”的集成缺口，并建立逐字字幕时间轴；不能继续沿用本轮两个固定验收配方。
+
 ## 仍然不能声称的结论
 
 - 技术门通过不等于多 Agent 的成片更好；
 - 三个样本来自同一条真实 job，不能代表全部未来题材；
-- 新候选是受控风格原型，不是经过用户批准的长期模板；
-- 未获得用户主观结果前不得批准生产扩展、晋升记忆或自动发布；
-- 即使某个候选胜出，也只能晋升通过审核的具体做法，不能把整个配方自动固化。
+- 本轮没有任何候选胜出，不能声称多 Agent 改善了成片质量、风格多样性或留存；
+- 已验证的是受控基础设施和失败时安全回退，不是多 Agent 创意渲染的生产可用性；
+- 用户拒绝不得触发自动发布、自动晋升或品牌骨架变化。
 
 15 条完成标准的最新逐项证据见
-`docs/acceptance/multi-agent-completion-audit.md`。当前唯一未闭合项是本页所述的用户主观盲审。
+`docs/acceptance/multi-agent-completion-audit.md`。

@@ -270,11 +270,14 @@ node scripts/serve_multi_agent_subjective_review.mjs `
 - 第二周期 9/9 技术门、6/6 挑战轨布局门及 6/6 Codex 人工视觉预检通过。
 - 用户观看第二周期材料后指出九个候选均有不足，而且审核对象不清；由于其中两组是合成 fixture 且页面强制选优，第二周期只保留为技术证据，不形成主观风格结论。
 - 新运行 `20260723-real-subjective-v1` 使用同一条真实口播的 S01、S04、S09 三个语义窗口，页面按钩子、方法解释和品牌可信度分别提问，并允许全组拒绝。
-- 新运行 9/9 技术门、3/3 接触表预检和 9/9 浏览器媒体加载通过；在用户主观结论写入前，v4 继续作为默认和回退，多 Agent 不进入生产。
+- 新运行 9/9 技术门、3/3 接触表预检和 9/9 浏览器媒体加载通过；用户最终将三组全部判为不合格，原因是两个挑战轨缺少足够可感知的动效且字幕不是实时跟随。
+- 解盲和代码复核确认：挑战轨来自固定 FFmpeg 验收配方，没有以 v4 等价完成度渲染 Director 的实际提案；这解释了自动结构差异通过但人工质量门失败。
+- 主观拒绝已作为本地 `production-event` 写入领域库，不触发生产批准、发布、记忆晋升或品牌骨架修改。
+- 遵守两轮迭代上限，不再进行第三轮风格粉饰；`controlled-multi-agent-v1` 创意渲染不批准扩大，v4 继续作为默认和回退。已验证的摄取、记忆、提案、Critic、评测和工作台影子基础设施保留。
 
 技术第二周期报告：`docs/acceptance/multi-agent-v2-blind-review.md`。
 
 当前真实口播主观审核报告：`docs/acceptance/multi-agent-real-subjective-v1.md`。
 
 15 条完成标准的最终逐项审计：
-`docs/acceptance/multi-agent-completion-audit.md`。在真实口播主观记录写入前，持续目标保持未完成。
+`docs/acceptance/multi-agent-completion-audit.md`。本轮以负向生产决策收口，不声称多 Agent 成片质量获得提升。

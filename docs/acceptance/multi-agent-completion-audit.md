@@ -3,7 +3,7 @@
 日期：2026-07-23
 分支：`codex/koubo-multi-agent-implementation`
 审计对象：用户持续目标中的 15 条完成标准
-当前结论：**14 条已有可复核证据；第 13 条仍等待用户完成真实口播主观盲审，因此整个目标不能标记为完成。**
+当前结论：**15 条均已有可复核证据。真实口播主观审核的结果是 3/3 全组不合格，因此本目标以“受控基础设施完成、创意渲染不批准扩大、v4 保持默认”的负向生产决策收口，而不是伪造多 Agent 质量提升。**
 
 ## 判定边界
 
@@ -22,14 +22,14 @@
 | 3 | 领域库、版本化 schema、事件、迁移和回滚 | 已证明 | 8 类 schema、SQLite + canonical JSON、校验和迁移、append-only events、乐观哈希和 transition rollback 均有单元/集成测试。 |
 | 4 | 专业 Agent 有独立、可导出、可审计的记忆视图 | 已证明 | Caption、Motion、Sound 使用隔离 namespace；确定性导出会剔除秘密字段和原始媒体；跨 namespace 检索被测试拒绝。 |
 | 5 | 教程完成摄取、提取、复刻、QA、试用和晋升/淘汰闭环 | 已证明（合法夹具） | 本人生成的合法教程夹具完成 source hash、分镜、转录检查点、3 种 primitive 复刻、HyperFrames/媒体 QA、两个不同项目试用、明确夹具人工批准、晋升、回滚与恢复；夹具身份没有冒充用户批准。 |
-| 6 | 六个角色完成最小 A/B 管线 | 已证明 | Caption、Motion、Sound、Director、Blind Critic、Retention Critic 均有结构化契约、调用上限、隔离、超时/重试和 v4 回退测试；真实审核运行生成控制轨与两个挑战轨。 |
-| 7 | 同一输入稳定生成至少两种有意义候选，不是随机换色 | 已证明（结构层） | diversity gate 会拒绝仅换色方案；当前候选在字幕节奏、布局/证据卡、动效和声音结构上有确定性差异。此项不代表用户已经认可其审美质量。 |
-| 8 | 所有样片通过现有媒体技术 QA，且不削弱人工审核门 | 已证明（技术层） | 当前真实口播审核 9/9 完整解码、9/9 QA JSON 通过，原始母版与控制片哈希一致；页面允许全组拒绝，未提交主观结论时不能批准生产。 |
+| 6 | 六个角色完成最小 A/B 管线 | 已证明（影子模式） | Caption、Motion、Sound、Director、Blind Critic、Retention Critic 均有结构化契约、调用上限、隔离、超时/重试和 v4 回退测试；提案、组合、匿名 bundle 和双 Critic 链路可运行。真实渲染仍是固定验收适配器，因此本项只批准影子实验，不代表生产接管。 |
+| 7 | 同一输入稳定生成至少两种有意义候选，不是随机换色 | 已证明（结构层，不批准质量） | diversity gate 会拒绝仅换色方案；两个挑战轨在布局、字幕节奏、卡片和声音结构上有确定性差异。用户确认这些差异的实际呈现过弱，故它们满足“不是随机换色”的实验门，但不满足生产质量门。 |
+| 8 | 所有样片通过现有媒体技术 QA，且不削弱人工审核门 | 已证明（技术层） | 当前真实口播审核 9/9 完整解码、9/9 QA JSON 通过，原始母版与控制片哈希一致；人工门实际阻止了 3/3 不合格组进入生产。 |
 | 9 | 记忆晋升影响后续提案，降级/回滚恢复旧行为 | 已证明（合法夹具） | before / promoted / rollback proposal snapshots 与 `rollbackRestored=true` 证明检索和提案发生可解释变化并可恢复。 |
 | 10 | Agent、模型、提示词、记忆、素材、配方、评测和代码版本可追溯 | 已证明 | proposal/event/manifest 记录版本、内容哈希、引用和时间码；冻结清单与 blind map 将匿名候选映射回具体配方，同时不向评审页泄露身份。 |
 | 11 | 第三方依赖有许可证、安全、维护、兼容和退出方案 | 已证明 | `docs/research/2026-07-23-multi-agent-dependency-lock.md` 固定 OpenAI Agents SDK、PySceneDetect、Promptfoo、HyperFrames 的版本、许可证、用途、边界和退出路径；本地领域库保持权威。 |
 | 12 | 工作台、单元、集成、回归和真实媒体检查全部通过 | 已证明 | 本次审计新鲜运行：Node 90/90、Python 5/5、Promptfoo 2/2、工作台 159 个控件引用、真实审核视频 9/9 解码及 9/9 QA 全部通过。 |
-| 13 | 生成集中式最终验收材料，清楚展示差异、收益、失败和剩余风险 | **等待用户主观盲审** | `20260723-real-subjective-v1` 已提供 3 组真实口播、每组 3 个匿名候选、单一审核问题、分类原因和“全组不合格”。技术差异、既有失败及剩余风险已展示，但“哪些变化有收益、哪些全部失败”只能由用户观看后决定；当前没有 `subjective-review-record.json`。 |
+| 13 | 生成集中式最终验收材料，清楚展示差异、收益、失败和剩余风险 | 已证明（负向结论） | `20260723-real-subjective-v1` 提供 3 组真实口播、每组 3 个匿名候选、单一审核问题和“全组不合格”。用户提交 3/3 全组拒绝；解盲、实帧和代码复核确认两个挑战轨动效过弱、字幕非实时、固定验收配方未达到 v4 完成度。收益是验证了审核门能阻止退化方案；剩余风险和禁止扩大结论已记录。 |
 | 14 | 无自动发布、泄密或覆盖历史产物 | 已证明 | API、评审结果和测试明确禁止自动批准/发布/晋升；loopback 服务不暴露 private blind map；redaction 测试通过；每次运行使用不可覆盖目录。 |
 | 15 | 工作树干净、必要更改分阶段提交、文档可接续 | 已证明 | 实现位于独立 `codex/` 分支和 worktree；功能按可回滚阶段提交；本工作流、三份验收报告、依赖决策、设计和实施计划形成接续文档。 |
 
@@ -55,7 +55,7 @@ npx -y promptfoo@0.120.0 eval -c config/evaluation/promptfooconfig.yaml
 结果：index.html = HTTP 200；blind-map-private.json = HTTP 404
 ```
 
-## 唯一剩余门
+## 最终主观结果
 
 权威运行：
 
@@ -63,17 +63,31 @@ npx -y promptfoo@0.120.0 eval -c config/evaluation/promptfooconfig.yaml
 .cache/multi-agent-subjective-review/20260723-real-subjective-v1/
 ```
 
-当前状态：
+权威状态：
 
 ```text
-manifest.status = awaiting-user-subjective-review
-subjective-review-record.json = 不存在
+manifest.status = subjective-review-recorded
+subjective-review-record.json = 已写入且不可覆盖
+outcome = subjective-rejection-recorded
+rejectedSamples = 3
+selectedSamples = 0
+recordHash = 2391641cfec37bcc7ca370514e912c5ac06456fd560f29d28c29c99a16ec2fb6
 ```
 
-用户只需在本地评审页观看三组样片，为每组选择 A、B、C 或“全组不合格”，给出至少一个具体原因，然后点击提交。提交后系统还需要：
+用户反馈指出，v4 可从成熟视觉系统中被识别，两个挑战轨没有足够可感知的动效，字幕也不是实时跟随。解盲和接触表支持该判断；渲染代码进一步暴露出固定验收配方没有接入 Director 的实际提案，也没有达到 v4 等价包装层级。
 
-1. 校验并写入不可覆盖的主观记录；
-2. 根据盲映射汇总实际配方的收益、失败和剩余风险；
-3. 再跑一次完整回归；
-4. 更新本审计和生产结论；
-5. 只有 15 条全部满足时，才把持续目标标记为完成。
+这次失败没有被删除或平均掉，而是写入：
+
+```text
+data/multi-agent/library/production-event/
+  production.subjective-review.20260723-real-subjective-v1.json
+contentHash = 78fb6396aaf645440621303855ca27e4a3f81027d64faf2fc5db0cc526e51f0e
+```
+
+最终决策：
+
+1. 不批准 `caption-pulse`、`evidence-rail` 或 `controlled-multi-agent-v1` 创意渲染进入生产；
+2. 不执行第三轮风格粉饰，遵守两轮有证据迭代上限；
+3. Visual Director v4 保持默认和唯一故障回退；
+4. 保留领域库、教程闭环、角色隔离、提案、Critic、评测、工作台和回滚基础设施；
+5. 未来若重启实验，先接通 Director 提案到 v4 等价渲染和逐字字幕时间轴，再建立新的冻结评测周期。
