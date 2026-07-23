@@ -93,7 +93,7 @@
 - Produces: `discoverJobCandidates(jobsRoot)`, `selectRepresentativeJobs(candidates, { min: 3, max: 5 })`, `freezeBaseline({ jobsRoot, outputFile })`.
 - Baseline entry: `{ jobId, pipeline, status, source, coverage, artifacts, hashes, frozenAt, sourceRootPolicy }`.
 
-- [ ] **Step 1: Write the failing selector and immutability tests**
+- [x] **Step 1: Write the failing selector and immutability tests**
 
 ```js
 import test from "node:test";
@@ -118,12 +118,12 @@ test("refuses to overwrite a frozen manifest with different hashes", async () =>
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/baseline/freeze_evaluation_baseline.test.mjs`
 Expected: FAIL because the module and exports do not exist.
 
-- [ ] **Step 3: Implement deterministic discovery, coverage ranking, artifact hashing, and no-overwrite guard**
+- [x] **Step 3: Implement deterministic discovery, coverage ranking, artifact hashing, and no-overwrite guard**
 
 The CLI must accept:
 
@@ -133,7 +133,7 @@ node scripts/freeze_evaluation_baseline.mjs --jobs-root F:\code\koubo\video-jobs
 
 It must hash `job.json`, the selected edit/timeline/caption/QA manifests, and available review/sample MP4 files without copying them.
 
-- [ ] **Step 4: Run GREEN and freeze the real manifest**
+- [x] **Step 4: Run GREEN and freeze the real manifest**
 
 Run:
 
@@ -145,7 +145,7 @@ node scripts/verify_workbench.mjs
 
 Expected: all tests pass; manifest contains 3–5 entries; v4 verification remains 141 controls.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add config/evaluation scripts/freeze_evaluation_baseline.mjs tests/baseline tests/fixtures/jobs
