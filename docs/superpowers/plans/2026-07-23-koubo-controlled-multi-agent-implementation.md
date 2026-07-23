@@ -461,7 +461,7 @@ git commit -m "feat: ingest tutorial techniques with checkpoints"
 - Produces: `buildTechniqueSandbox({ technique, outputDir, fixtureMedia })`, `qaTechniqueSandbox({ projectDir, renderFile })`.
 - Supported v1 recipe primitives: `caption-pop`, `keyword-emphasis`, `element-slide`, `element-bounce`, `sfx-cue`, `voice-pause`.
 
-- [ ] **Step 1: Write failing allowlist and QA-gated transition tests**
+- [x] **Step 1: Write failing allowlist and QA-gated transition tests**
 
 ```js
 test("rejects arbitrary tutorial code and unknown primitives", async () => {
@@ -477,16 +477,16 @@ test("only successful render QA permits recreated transition", async () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/multi-agent/tutorial-sandbox.test.mjs`
 Expected: FAIL because the sandbox does not exist.
 
-- [ ] **Step 3: Implement deterministic HTML generation, manifest, no-network asset policy, and QA thresholds**
+- [x] **Step 3: Implement deterministic HTML generation, manifest, no-network asset policy, and QA thresholds**
 
 Use HyperFrames `0.7.68`; require full decode, safe area, contrast, sync error ≤100 ms, and true peak ≤-1.5 dBTP for mixed audio.
 
-- [ ] **Step 4: Render and inspect one caption, motion, and sound reconstruction**
+- [x] **Step 4: Render and inspect one caption, motion, and sound reconstruction**
 
 Run:
 
@@ -499,7 +499,7 @@ ffmpeg -v error -i <sandbox.mp4> -f null -
 
 Expected: three technique records reach `recreated`; no candidate is promoted.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add video/multi-agent/tutorial-sandbox.mjs tests/multi-agent/tutorial-sandbox.test.mjs
