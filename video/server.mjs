@@ -21,6 +21,12 @@ import {
   normalizeFullDirection,
   buildHyperframesDirectorProject,
 } from "./visual_director.mjs";
+import { createMultiAgentApi } from "./multi-agent/api.mjs";
+import { buildBlindReviewBundle } from "./multi-agent/evaluation.mjs";
+import { canonicalJson, loadAgentProfiles } from "./multi-agent/contracts.mjs";
+import { createMemoryService } from "./multi-agent/memory.mjs";
+import { createOrchestrator } from "./multi-agent/orchestrator.mjs";
+import { openDomainStore } from "./multi-agent/store.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -56,8 +62,8 @@ await Promise.all([fsp.mkdir(jobsRoot, { recursive: true }), fsp.mkdir(contentRo
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,X-File-Name,X-Content-Id,X-Options,X-Workflow-Draft");
-  res.setHeader("Access-Control-Expose-Headers", "Content-Length");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Idempotency-Key,X-File-Name,X-Content-Id,X-Options,X-Workflow-Draft");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Length,Idempotency-Replayed");
 }
 function json(res, status, value) {
   cors(res);
@@ -2895,10 +2901,192 @@ async function serveFile(req, res, file) {
   cors(res); res.writeHead(200, { "Content-Type": type, "Content-Length": stat.size, "Accept-Ranges": "bytes", "Cache-Control": "no-cache" }); fs.createReadStream(file).pipe(res);
 }
 
+const multiAgentEnabled = process.env.KOUBO_MULTI_AGENT_ENABLED === "1";
+const multiAgentDataRoot = path.resolve(
+  root,
+  process.env.KOUBO_MULTI_AGENT_DATA_ROOT || "data/multi-agent"
+);
+const multiAgentPython = path.resolve(
+  root,
+  process.env.KOUBO_MULTI_AGENT_PYTHON || ".runtime-multi-agent/Scripts/python.exe"
+);
+const multiAgentBridge = path.join(here, "multi_agent_bridge.py");
+const multiAgentStore = openDomainStore({
+  dbPath: path.join(multiAgentDataRoot, "runtime", "memory.sqlite"),
+  exportRoot: path.join(multiAgentDataRoot, "library"),
+});
+const multiAgentProfiles = await loadAgentProfiles(root);
+const multiAgentMemory = createMemoryService(multiAgentStore, multiAgentProfiles);
+const multiAgentBridgeRoot = path.join(multiAgentDataRoot, "runtime", "bridge");
+const multiAgentArtifactRoot = path.join(multiAgentDataRoot, "runtime", "artifacts");
+const configuredTutorialRoots = String(process.env.KOUBO_TUTORIAL_ROOTS || "")
+  .split(path.delimiter)
+  .map(item => item.trim())
+  .filter(Boolean)
+  .map(item => path.resolve(item));
+const allowedTutorialRoots = [
+  path.join(root, ".cache"),
+  jobsRoot,
+  ...configuredTutorialRoots,
+];
+
+function multiAgentSafeInput(value, seen = new WeakSet()) {
+  if (value === null || ["string", "number", "boolean"].includes(typeof value)) return value;
+  if (Array.isArray(value)) return value.map(item => multiAgentSafeInput(item, seen)).filter(item => item !== undefined);
+  if (!value || typeof value !== "object") return undefined;
+  if (seen.has(value)) return undefined;
+  seen.add(value);
+  const output = {};
+  for (const key of Object.keys(value).sort()) {
+    if (key === "signal" || /(api.?key|access.?token|password|authorization|cookie|secret)/i.test(key)) continue;
+    const item = multiAgentSafeInput(value[key], seen);
+    if (item !== undefined) output[key] = item;
+  }
+  seen.delete(value);
+  return output;
+}
+
+async function invokeMultiAgentBridge(request) {
+  if (!fs.existsSync(multiAgentPython) || !fs.existsSync(multiAgentBridge)) {
+    throw new Error("multi-agent Python runtime is unavailable");
+  }
+  await fsp.mkdir(multiAgentBridgeRoot, { recursive: true });
+  const id = crypto.randomUUID();
+  const requestFile = path.join(multiAgentBridgeRoot, `${id}.request.json`);
+  const responseFile = path.join(multiAgentBridgeRoot, `${id}.response.json`);
+  const safe = multiAgentSafeInput(request);
+  const payload = {
+    operation: safe.operation,
+    agent_id: safe.agentId,
+    prompt: canonicalJson(safe),
+  };
+  if (safe.fixture_response !== undefined) payload.fixture_response = safe.fixture_response;
+  await writeJson(requestFile, payload);
+  try {
+    try {
+      await run(
+        multiAgentPython,
+        [multiAgentBridge, "--request", requestFile, "--response", responseFile],
+        { cwd: root, env: process.env, signal: request.signal }
+      );
+    } catch (error) {
+      if (!fs.existsSync(responseFile)) throw error;
+    }
+    const response = await readJsonFile(responseFile);
+    if (!response.success) throw new Error(response.error || "multi-agent bridge failed");
+    return response;
+  } finally {
+    await Promise.all([
+      fsp.rm(requestFile, { force: true }),
+      fsp.rm(responseFile, { force: true }),
+    ]);
+  }
+}
+
+const multiAgentOrchestrator = createOrchestrator({
+  invokeAgent: invokeMultiAgentBridge,
+  memory: multiAgentMemory,
+});
+
+async function writeMultiAgentArtifact(kind, id, value) {
+  const safeKind = safeName(kind).replace(/\./g, "_");
+  const safeId = safeName(id).replace(/\//g, "_");
+  const directory = confined(multiAgentArtifactRoot, safeKind);
+  await fsp.mkdir(directory, { recursive: true });
+  const file = path.join(directory, `${safeId}.json`);
+  await writeJson(file, multiAgentSafeInput(value));
+  return `/api/multi-agent/artifacts/${encodeURIComponent(safeKind)}/${encodeURIComponent(safeId)}`;
+}
+
+async function readMultiAgentArtifact(kind, id) {
+  const safeKind = safeName(kind).replace(/\./g, "_");
+  const safeId = safeName(id).replace(/\//g, "_");
+  const file = confined(path.join(multiAgentArtifactRoot, safeKind), `${safeId}.json`);
+  try {
+    return multiAgentSafeInput(await readJsonFile(file));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function listMultiAgentMemory({ kind, status } = {}) {
+  const conditions = [];
+  const values = [];
+  if (kind) {
+    conditions.push("kind = ?");
+    values.push(kind);
+  }
+  if (status) {
+    conditions.push("status = ?");
+    values.push(status);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  return multiAgentStore.db.prepare(
+    `SELECT kind, json FROM records ${where} ORDER BY updated_at DESC, kind, id LIMIT 500`
+  ).all(...values).map(row => ({ kind: row.kind, ...multiAgentSafeInput(JSON.parse(row.json)) }));
+}
+
+function parseLastJson(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("tutorial runner returned no JSON");
+  return JSON.parse(text.slice(start, end + 1));
+}
+
+const multiAgentTutorials = {
+  async ingest({ inputPath, author, license, resume }) {
+    const args = [
+      path.join(root, "scripts", "ingest_tutorial.mjs"),
+      "--input", inputPath,
+      "--author", author,
+      "--license", license,
+      ...(resume ? ["--resume"] : []),
+    ];
+    const result = await run(process.execPath, args, {
+      cwd: root,
+      env: {
+        ...process.env,
+        KOUBO_MULTI_AGENT_DATA_ROOT: multiAgentDataRoot,
+        KOUBO_MULTI_AGENT_PYTHON: multiAgentPython,
+      },
+      timeoutMs: 90 * 60 * 1000,
+    });
+    return parseLastJson(result.stdout);
+  },
+  async get(id) {
+    const directory = path.join(multiAgentDataRoot, "runtime", "tutorial-ingest", "checkpoints");
+    let entries;
+    try { entries = await fsp.readdir(directory); } catch { return null; }
+    for (const name of entries.filter(item => item.endsWith(".json"))) {
+      try {
+        const checkpoint = await readJsonFile(path.join(directory, name));
+        if (checkpoint.id === id || checkpoint.sourceHash === id) return multiAgentSafeInput(checkpoint);
+      } catch {}
+    }
+    return null;
+  },
+};
+
+const multiAgentApi = createMultiAgentApi({
+  enabled: multiAgentEnabled,
+  defaultPipeline: VISUAL_WORKFLOW_VERSION,
+  allowedTutorialRoots,
+  readJob,
+  writeArtifact: writeMultiAgentArtifact,
+  readArtifact: readMultiAgentArtifact,
+  listMemory: listMultiAgentMemory,
+  memory: multiAgentMemory,
+  tutorials: multiAgentTutorials,
+  orchestrator: multiAgentOrchestrator,
+  buildBlindReviewBundle,
+});
+
 const server = http.createServer(async (req, res) => {
   try {
     cors(res); if (req.method === "OPTIONS") return res.writeHead(204).end();
     const url = new URL(req.url, `http://${host}:${port}`), pathname = decodeURIComponent(url.pathname);
+    if (await multiAgentApi.handle(req, res, url)) return;
     if (req.method === "GET" && pathname === "/api/health") {
       let ffmpeg = false, hyperframes = false, ai = null;
       try { await run("ffmpeg", ["-version"]); ffmpeg = true; } catch {}
@@ -2921,6 +3109,13 @@ const server = http.createServer(async (req, res) => {
           keyframeReviewRequired: true,
           sampleReviewRequired: true,
           finalMaster: visualWorkflowDefaults.rendering.final,
+        },
+        multiAgent: {
+          enabled: multiAgentEnabled,
+          pipeline: "controlled-multi-agent-v1",
+          default: false,
+          humanApprovalRequired: true,
+          autoPublish: false,
         },
         jobsRoot,
         contentRoot,
@@ -3236,6 +3431,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 server.on("error", error => { if (error.code === "EADDRINUSE") process.exit(0); console.error(error); process.exit(1); });
+server.on("close", () => multiAgentStore.close());
 if (process.env.KOUBO_NO_LISTEN !== "1") server.listen(port, host, () => console.log(`AI口播工作台：http://${host}:${port}/`));
 
 export { normalizeAssetRecord, assetComplianceIssues, assetReviewSummary, candidatePlacement };

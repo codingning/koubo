@@ -637,6 +637,7 @@ git commit -m "feat: evaluate multi-agent video proposals"
 - Routes:
   - `GET /api/multi-agent/status`
   - `GET /api/multi-agent/memory`
+  - `GET /api/multi-agent/artifacts/:kind/:id`
   - `POST /api/multi-agent/memory/:kind/:id/:action`
   - `POST /api/multi-agent/tutorials`
   - `GET /api/multi-agent/tutorials/:id`
@@ -644,7 +645,7 @@ git commit -m "feat: evaluate multi-agent video proposals"
   - `POST /api/jobs/:id/multi-agent/ab`
   - `POST /api/jobs/:id/multi-agent/reviews`
 
-- [ ] **Step 1: Write failing authorization-boundary and v4-gate tests**
+- [x] **Step 1: Write failing authorization-boundary and v4-gate tests**
 
 ```js
 test("proposal route cannot mutate job approval or output", async () => {
@@ -662,16 +663,16 @@ test("memory promotion rejects non-human approval", async () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test tests/multi-agent/api.test.mjs`
 Expected: FAIL because API handler does not exist.
 
-- [ ] **Step 3: Implement confined paths, request limits, redaction, idempotency keys, local-only bind, and handler mount before static fallback**
+- [x] **Step 3: Implement confined paths, request limits, redaction, idempotency keys, local-only bind, and handler mount before static fallback**
 
 Add health capabilities without making multi-agent the default pipeline.
 
-- [ ] **Step 4: Run GREEN and existing regression**
+- [x] **Step 4: Run GREEN and existing regression**
 
 Run:
 
