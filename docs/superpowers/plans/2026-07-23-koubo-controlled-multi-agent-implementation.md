@@ -739,7 +739,7 @@ node scripts/verify_workbench.mjs --url=http://127.0.0.1:8787
 
 Expected: offline and online verification pass; no console errors; existing v4 jobs open; multi-agent failure leaves v4 usable.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```text
 git add web/index.html web/app.js web/styles.css scripts/verify_workbench.mjs
@@ -757,7 +757,7 @@ git commit -m "feat: review multi-agent proposals in workbench"
 **Interfaces:**
 - Acceptance runner produces `acceptance-manifest.json`, technical QA, blind labels, scorecards, memory-before/after/rollback snapshots, hashes, and residual risks.
 
-- [ ] **Step 1: Run all unit and integration suites**
+- [x] **Step 1: Run all unit and integration suites**
 
 Run:
 
@@ -770,7 +770,7 @@ node scripts/verify_workbench.mjs
 
 Expected: 0 failures and no warnings other than the documented Node 22 `node:sqlite` experimental warning.
 
-- [ ] **Step 2: Run one legal tutorial through the complete governed lifecycle**
+- [x] **Step 2: Run one legal tutorial through the complete governed lifecycle**
 
 Verify:
 
@@ -785,11 +785,11 @@ registered → scenes → transcribed → extracted/inbox
 
 No scripted test actor may be represented as the real user; acceptance documentation must label fixture approvals.
 
-- [ ] **Step 3: Produce v4 and multi-agent 15–25 second samples for every frozen baseline entry**
+- [x] **Step 3: Produce v4 and multi-agent 15–25 second samples for every frozen baseline entry**
 
 Use the same source segment, transcript, approved local media, dimensions, frame rate, renderer, and technical QA. Produce at least two meaningfully different multi-agent candidates per entry. Decode every output and inspect representative frames/contact sheets.
 
-- [ ] **Step 4: Perform two evidence-led iterations at most**
+- [x] **Step 4: Perform two evidence-led iterations at most**
 
 If the first multi-agent run does not improve diversity, critic coverage, or repair effort without regressions, locate the failing subsystem and make one focused TDD change per iteration. After two unsuccessful iterations, retain v4 as production and document the evidence without fabricating a win.
 
@@ -797,15 +797,15 @@ If the first multi-agent run does not improve diversity, critic coverage, or rep
 
 The bundle must hide A/B authors, preserve hashes, include synchronized samples, and ask the user for one final consolidated subjective review only after automated checks pass.
 
-- [ ] **Step 6: Update operations, migration, rollback, privacy, dependency, and residual-risk documentation**
+- [x] **Step 6: Update operations, migration, rollback, privacy, dependency, and residual-risk documentation**
 
 Document exact start, test, ingest, recreate, propose, evaluate, review, promote, rollback, and disable commands.
 
-- [ ] **Step 7: Run completion audit**
+- [x] **Step 7: Run completion audit**
 
 Map each of the 15 goal completion criteria to authoritative evidence. Any missing, indirect, or unverified row remains incomplete.
 
-- [ ] **Step 8: Final verification and commit**
+- [x] **Step 8: Final verification and commit**
 
 Run:
 

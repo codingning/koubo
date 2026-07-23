@@ -1,0 +1,241 @@
+# Koubo 受控多 Agent 视频工作流
+
+## 当前定位
+
+`controlled-multi-agent-v1` 是 Visual Director v4 旁边的可关闭影子实验，不是新的默认生产管线。
+
+- v4 继续拥有任务状态、阶段门、超时、重试、渲染、版本、最终批准和发布边界。
+- Caption、Motion、Sound 只提案；Director 只组合；Blind Critic 和 Retention Critic 只评审。
+- Agent 不能批准成片、发布、修改品牌骨架或晋升记忆。
+- 新能力失败或关闭时，v4 可独立运行。
+- 当前真实媒体验收未批准扩大到生产，原因见
+  `docs/acceptance/multi-agent-v1-acceptance.md`。
+
+## 架构
+
+```text
+Visual Director v4（生产总控）
+  ├─ 冻结输入、逐字稿、已批准素材、QA 与审核门
+  ├─ Caption Agent ─ caption.private
+  ├─ Motion Agent  ─ motion.private
+  ├─ Sound Agent   ─ sound.private
+  ├─ Director      ─ 最多组合两个结构候选
+  ├─ Blind Critic  ─ 隐藏作者、理由、提示词和顺序
+  └─ Retention Critic ─ 必须给出时间码与观看理由
+
+SQLite（权威索引和状态）
+  ↕ 原子导出
+JSON（审阅、迁移、Git diff）
+  ↕
+本地资产目录（复刻工程、截图、短样片和 QA）
+```
+
+## 固定依赖
+
+| 组件 | 固定版本 | 用途 | 许可证 | 退出方案 |
+| --- | ---: | --- | --- | --- |
+| OpenAI Agents SDK | 0.18.3 | Python Agent 运行边界 | MIT | 回退现有 v4 / 直接调用兼容模型 |
+| PySceneDetect | 0.7.1 | 本地镜头检测 | BSD-3-Clause | FFmpeg scene filter |
+| HyperFrames | 0.7.68 | 技法隔离复刻与短样片 | Apache-2.0 | FFmpeg/ASS 与现有 v4 |
+| Promptfoo | 0.120.0 | 离线提示词/结构回归 | MIT | Node 测试与固定夹具 |
+| SQLite | Node 22 内置 | 权威本地状态和事件 | Public Domain | JSON 导出后迁移 |
+
+版本、维护状态、兼容性、安全和候选取舍记录在
+`docs/research/2026-07-23-koubo-multi-agent-open-source-landscape.md`。
+Python 精确依赖在 `config/multi-agent/requirements.lock`。
+
+## 启动与关闭
+
+默认不启用写操作：
+
+```powershell
+node video/server.mjs
+```
+
+显式开启本地影子实验：
+
+```powershell
+$env:KOUBO_MULTI_AGENT_ENABLED = "1"
+$env:KOUBO_MULTI_AGENT_DATA_ROOT = "data/multi-agent"
+node video/server.mjs
+```
+
+关闭时移除 `KOUBO_MULTI_AGENT_ENABLED` 或设为 `0`，重启本地服务即可。关闭不会删除记忆或历史产物。
+
+可选的教程允许目录使用 Windows 路径分隔符连接：
+
+```powershell
+$env:KOUBO_TUTORIAL_ROOTS = "F:\approved-tutorials;D:\self-created-lessons"
+```
+
+## 教程：从视频到候选记忆
+
+教程必须是本人所有、明确授权或许可可用的本地文件。摄取不会复制原视频。
+
+```powershell
+$env:KOUBO_MULTI_AGENT_DATA_ROOT = "data/multi-agent"
+$env:KOUBO_MULTI_AGENT_PYTHON = ".runtime-multi-agent\Scripts\python.exe"
+
+node scripts/ingest_tutorial.mjs `
+  --input "F:\approved-tutorials\lesson.mp4" `
+  --author "作者或来源" `
+  --license "self-created" `
+  --resume
+```
+
+输出检查点后，在隔离环境复刻：
+
+```powershell
+node scripts/recreate_tutorial_techniques.mjs `
+  --checkpoint "data\multi-agent\runtime\tutorial-ingest\checkpoints\<source-hash>.json" `
+  --output ".cache\technique-reconstructions" `
+  --data-root "data\multi-agent"
+```
+
+摄取链：
+
+```text
+来源哈希登记
+→ PySceneDetect
+→ 本地 sidecar / faster-whisper
+→ 带时间码的技巧候选
+→ inbox
+→ 抽象复刻（不执行教程代码）
+→ HyperFrames lint / validate / strict inspect / render
+→ FFmpeg 技术 QA
+→ recreated
+```
+
+允许的复刻 primitive 只有经过审计的六种；教程工程文件、字体、音效和代码不会被直接复制。
+
+## 记忆治理
+
+状态机：
+
+```text
+inbox → extracted → recreated → trial → approved → promoted
+                    ↘ rejected / expired / disabled
+```
+
+关键约束：
+
+- 自动提取只能进入 `inbox`。
+- `trial` 前必须有复刻与媒体 QA。
+- `approved` 必须有真实的人类审批证据。
+- `promoted` 必须有两个不同项目的已批准试用记录。
+- Agent 默认只读取 `approved` 和 `promoted`。
+- `brand.core` 在 v1 完全不支持写入。
+- 每次写入必须提交当前 `contentHash` 作为 `expectedHash`。
+- 失败记录保留为负面记忆，不做静默删除。
+
+本地 API 示例：
+
+```text
+GET  /api/multi-agent/memory
+POST /api/multi-agent/memory/:kind/:id/extract
+POST /api/multi-agent/memory/:kind/:id/recreate
+POST /api/multi-agent/memory/:kind/:id/trial
+POST /api/multi-agent/memory/:kind/:id/approve
+POST /api/multi-agent/memory/:kind/:id/promote
+POST /api/multi-agent/memory/:kind/:id/reject
+POST /api/multi-agent/memory/:kind/:id/expire
+POST /api/multi-agent/memory/:kind/:id/disable
+POST /api/multi-agent/memory/:kind/:id/rollback
+```
+
+所有 POST 都要求 `Idempotency-Key`。人工批准/晋级还要求 `actor.type=human` 和完整证据。
+
+## 提案、组合和评审
+
+打开一个现有 job 后：
+
+```text
+POST /api/jobs/:id/multi-agent/proposals
+POST /api/jobs/:id/multi-agent/ab
+POST /api/jobs/:id/multi-agent/reviews
+```
+
+提案接口：
+
+- 只读取 job 的逐字稿、当前计划和已批准素材元数据。
+- 每个专家只拿到自己的 role input 和命名空间。
+- 每个专家最多两个提案，超时重试一次。
+- 引用不存在或哈希不匹配时，逐项回退 v4。
+- Director 最多输出两个结构差异候选，不能带批准、发布或记忆晋升字段。
+
+匿名评审：
+
+- 必须有真实渲染的 SHA-256 `renderHash`。
+- 隐藏候选 ID、作者、Agent、理由、提示词和提案顺序。
+- Blind Critic 与 Retention Critic 都必须返回时间码。
+- Retention Critic 不得执行“每秒一个效果”规则，并可标记必要停顿。
+
+## 基线与验收
+
+冻结样本：
+
+```powershell
+$env:KOUBO_VIDEO_JOBS_ROOT = "F:\code\koubo\video-jobs"
+node --test tests/baseline/*.test.mjs
+```
+
+生成本地验收材料：
+
+```powershell
+node scripts/run_multi_agent_acceptance.mjs `
+  --jobs-root "F:\code\koubo\video-jobs" `
+  --run-id "YYYYMMDD-run"
+```
+
+验收器会：
+
+1. 重算冻结清单哈希；
+2. 运行合法教程摄取、复刻、试用、夹具审批、晋级、回滚和恢复；
+3. 为每个冻结样本生成一个控制轨和两个结构候选；
+4. 使用同一源片段、尺寸、帧率和 FFmpeg 编码器；
+5. 执行解码、时长、H.264/AAC、BT.709、响度、黑帧和冻结回归；
+6. 生成联络表、匿名媒体、Critic 记录和版本清单；
+7. 只在媒体与人工视觉门都通过后进入最终主观盲审。
+
+`.cache/multi-agent-acceptance/` 是本地忽略目录，不进入 Git。已完成的 run 不会被覆盖。
+
+## 迁移、回滚和恢复
+
+迁移文件位于 `video/multi-agent/migrations/`：
+
+- 按序执行；
+- 校验文件 SHA-256；
+- 已应用迁移不可静默修改；
+- v1 没有删除列、删除表或不可逆数据变换。
+
+记忆回滚只允许最近且未被后续变更覆盖的 transition。回滚会恢复旧 JSON 与旧 `contentHash`，并追加 `memory_transition_rolled_back` 事件。
+
+恢复顺序：
+
+1. 关闭多 Agent 开关，继续使用 v4；
+2. 检查 `events` 和 `transitions`；
+3. 回滚最近 transition；
+4. 从 `data/multi-agent/library/` 的 JSON 导出核对；
+5. 必要时使用新数据库导入 JSON，不覆盖旧数据库。
+
+不要删除 `memory.sqlite`、历史 JSON、原片或旧 job。
+
+## 隐私和安全
+
+- 服务只绑定 `127.0.0.1`。
+- 多 Agent API 拒绝非 loopback 请求。
+- 原视频不发给文本模型；确定性媒体处理保持本地。
+- API 和导出会剔除 token、API key、Cookie、密码、私钥、raw media 等字段。
+- 错误消息隐藏绝对本地路径和 secret-shaped 值。
+- 第三方 tracing 未启用。
+- 没有自动发布路由；真实任务最终批准仍由 v4 门控制。
+
+## 当前生产决策
+
+截至 2026-07-23：
+
+- 数据层、记忆闭环、教程复刻、角色隔离、A/B、双 Critic、回滚和工作台影子模式均已实现并验证。
+- 真实样片的编码技术门通过。
+- 人工联络表检查发现候选字幕重复和证据卡长句溢出。
+- 已达到两轮证据修正上限，因此多 Agent 视觉候选不进入生产，v4 继续作为默认和回退。
+- 下一轮工作必须新建评测周期，先解决“从原始时间线重渲染而不是叠加已烧录字幕”和“文本测量/换行门”，不能增加更多 Agent 掩盖问题。
