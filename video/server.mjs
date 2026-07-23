@@ -5,10 +5,27 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import {
+  VISUAL_WORKFLOW_VERSION,
+  VISUAL_STAGE_ORDER,
+  loadVisualWorkflowDefaults,
+  normalizeVisualWorkflowConfig,
+  createVisualWorkflowState,
+  ensureVisualWorkflowState,
+  invalidateVisualStages,
+  visualStageProgress,
+  normalizeVisualStyleReport,
+  normalizeContentBreakdown,
+  normalizeKeyframeDirection,
+  normalizeMotionDirection,
+  normalizeFullDirection,
+  buildHyperframesDirectorProject,
+} from "./visual_director.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const envFile = path.join(root, ".env");
+const requestedPort = process.env.KOUBO_PORT;
 if (typeof process.loadEnvFile === "function" && fs.existsSync(envFile)) process.loadEnvFile(envFile);
 const webRoot = path.join(root, "web");
 const jobsRoot = path.join(root, "video-jobs");
@@ -19,10 +36,12 @@ const aiBridge = path.join(here, "ai_bridge.py");
 const referenceCollector = path.join(root, "scripts", "collect_douyin_references.mjs");
 const referenceLibraryFile = path.join(root, "config", "reference_video_library.json");
 const referenceCreatorsFile = path.join(root, "config", "reference_creators.json");
+const visualWorkflowDefaults = await loadVisualWorkflowDefaults(root);
 const host = "127.0.0.1";
-const port = Number(process.env.KOUBO_PORT || 8787);
+const port = Number(requestedPort || process.env.KOUBO_PORT || 8787);
 if (fs.existsSync(runtimeFfmpeg)) process.env.PATH = `${runtimeFfmpeg}${path.delimiter}${process.env.PATH || ""}`;
 const running = new Map();
+const workflowDrafts = new Map();
 const mime = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
@@ -37,7 +56,7 @@ await Promise.all([fsp.mkdir(jobsRoot, { recursive: true }), fsp.mkdir(contentRo
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,X-File-Name,X-Content-Id,X-Options");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,X-File-Name,X-Content-Id,X-Options,X-Workflow-Draft");
   res.setHeader("Access-Control-Expose-Headers", "Content-Length");
 }
 function json(res, status, value) {
@@ -1568,6 +1587,7 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
   const sdrBt709 = metadata.colorPrimaries === "bt709" && metadata.colorTransfer === "bt709" && metadata.colorSpace === "bt709";
   const captionSafeArea = job.options.captions === false
     || ["ass-static", "ass-fallback"].includes(captionPackaging.engine)
+    || (captionPackaging.engine === "hyperframes" && captionPackaging.integrated === true && captionPackaging.safeArea === true)
     || (captionPackaging.engine === "hyperframes" && captionPackaging.metadata?.width === 1080 && captionPackaging.metadata?.height === 1920 && captionPackaging.metadata?.alpha === true);
   const variantDimensions = Object.fromEntries(Object.entries(variants).map(([name, item]) => [name, item.available === false ? { available: false, reason: item.reason } : {
     available: true,
@@ -1667,7 +1687,10 @@ async function createReviewBundle(job, version, outputPath, outputDuration) {
   const previewName = `review-preview-v${version}.mp4`;
   const previewPath = path.join(jobDir, previewName);
   const outputMetadata = await probe(outputPath);
-  const previewSize = outputMetadata.width > outputMetadata.height ? "960:540" : "720:1280";
+  const finalSettings = job.workflow?.version === VISUAL_WORKFLOW_VERSION ? job.workflow?.config?.stages?.full_render?.settings || {} : {};
+  const previewSize = job.workflow?.version === VISUAL_WORKFLOW_VERSION && outputMetadata.width > outputMetadata.height
+    ? `${Number(finalSettings.reviewWidth || 1920)}:${Number(finalSettings.reviewHeight || 1080)}`
+    : outputMetadata.width > outputMetadata.height ? "960:540" : "720:1280";
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", outputPath,
     "-vf", `scale=${previewSize}:force_original_aspect_ratio=decrease,pad=${previewSize}:(ow-iw)/2:(oh-ih)/2:color=0x07131D,fps=30,format=yuv420p`,
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
@@ -1699,6 +1722,744 @@ async function createReviewBundle(job, version, outputPath, outputDuration) {
   await writeJson(path.join(jobDir, `review-bundle-v${version}.json`), bundle);
   return bundle;
 }
+
+function workflowUrl(job, relative) {
+  return `/video-jobs/${job.id}/${String(relative).replaceAll("\\", "/").split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function visualStageConfig(job, stageId) {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  return workflow.config.stages[stageId];
+}
+
+async function saveVisualWorkflowConfig(job) {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  workflow.updatedAt = new Date().toISOString();
+  const name = `workflow-config-v${workflow.configVersion || 1}.json`;
+  await writeJson(path.join(confined(jobsRoot, job.id), name), workflow.config);
+  workflow.configArtifact = workflowUrl(job, name);
+  return name;
+}
+
+function visualTopicForJob(job, settings = {}) {
+  const topic = String(job.contentDirection?.mainTopic || job.options?.contentTitle || job.script || "AI口播剪辑").trim();
+  const configured = Array.isArray(settings.searchQueries) ? settings.searchQueries.map(value => String(value || "").trim()).filter(Boolean) : [];
+  const searchQueries = configured.length ? configured.slice(0, 3) : [topic, `${topic} AI实操`, `${topic} 前后对比`].slice(0, 3);
+  const keywords = [...new Set(`${topic} ${job.contentDirection?.audienceBenefit || ""}`.split(/[\s，。！？、：；/]+/).map(value => value.trim()).filter(value => value.length >= 2))].slice(0, 12);
+  return {
+    topic,
+    shortTopic: topic.slice(0, 20),
+    aiAngle: String(job.contentDirection?.audienceBenefit || "用AI得到可见结果"),
+    viewerUseCase: "观众如何复用这套AI方法得到具体结果",
+    searchQueries,
+    keywords,
+    requiredSourceIds: (settings.manualReferenceUrls || []).map(url => String(url).match(/\d{12,}/)?.[0]).filter(Boolean).map(id => `douyin-${id}`),
+  };
+}
+
+async function collectVisualReferences(job, stageVersion, stageConfig) {
+  const jobDir = confined(jobsRoot, job.id);
+  const topicPlan = visualTopicForJob(job, stageConfig.settings || {});
+  const planName = `visual-topic-plan-v${stageVersion}.json`;
+  const researchName = `visual-reference-research-v${stageVersion}.json`;
+  const planPath = path.join(jobDir, planName);
+  const researchPath = path.join(jobDir, researchName);
+  await writeJson(planPath, topicPlan);
+  let liveResearch = { status: "skipped", fullContentSources: [], metadataOnlySources: [], warnings: [] };
+  if (stageConfig.settings?.autoSearchDouyin !== false) {
+    try {
+      await run(process.execPath, [referenceCollector, "--plan", planPath, "--output", researchPath], {
+        cwd: root,
+        env: process.env,
+        timeoutMs: Math.max(60, Number(stageConfig.settings?.liveResearchTimeoutSeconds || 240)) * 1000,
+      });
+      liveResearch = await readJsonFile(researchPath);
+    } catch (error) {
+      try { liveResearch = await readJsonFile(researchPath); }
+      catch { liveResearch = { status: "fallback", fullContentSources: [], metadataOnlySources: [], warnings: [`实时抖音搜索失败：${error.message}`] }; }
+    }
+  }
+  const catalog = await referenceCatalog();
+  const manual = (stageConfig.settings?.manualReferenceUrls || []).map((url, index) => ({
+    sourceId: `manual-${String(url).match(/\d{12,}/)?.[0] || index + 1}`,
+    platform: "douyin",
+    sourceUrl: String(url),
+    url: String(url),
+    title: "用户手动指定的参考视频",
+    evidenceLevel: "manual-url-pending-live-verification",
+  }));
+  const live = [...(liveResearch.fullContentSources || []), ...(liveResearch.metadataOnlySources || [])];
+  const references = [...manual, ...live, ...catalog].filter((item, index, items) => {
+    const key = item.sourceId || item.sourceUrl || item.url;
+    return key && items.findIndex(other => (other.sourceId || other.sourceUrl || other.url) === key) === index;
+  }).slice(0, Math.max(3, Number(stageConfig.settings?.maxReferences || 5) + 3));
+  const researchBundle = {
+    ...liveResearch,
+    topicPlan,
+    manualReferences: manual,
+    curatedFallbackCount: catalog.length,
+    references,
+    generatedAt: new Date().toISOString(),
+  };
+  await writeJson(researchPath, researchBundle);
+  return { topicPlan, researchBundle, planName, researchName };
+}
+
+function fallbackBreakdownSegments(job, timeline, count = 6) {
+  const outputDuration = Math.max(1, Number(timeline.outputDuration || 1));
+  const transcriptSegments = Array.isArray(job.transcript?.segments) ? job.transcript.segments : [];
+  return Array.from({ length: count }, (_, index) => {
+    const editedStart = outputDuration * index / count;
+    const editedEnd = outputDuration * (index + 1) / count;
+    const sourceStart = outputToSource(editedStart, job.currentPlan.keepSegments);
+    const sourceEnd = outputToSource(Math.max(editedStart + 0.35, editedEnd - 0.01), job.currentPlan.keepSegments);
+    const spoken = transcriptSegments.filter(item => Number(item.end) > sourceStart && Number(item.start) < sourceEnd).map(item => String(item.text || "").trim()).join("");
+    const gist = spoken || `第${index + 1}段口播信息`;
+    return {
+      id: `S${String(index + 1).padStart(2, "0")}`,
+      sourceTime: { start: sourceStart, end: sourceEnd },
+      editedTime: { start: editedStart, end: editedEnd },
+      gist,
+      upperLeftTitle: [...gist].slice(0, 16).join("") || `信息段${index + 1}`,
+      subtitleOrKeyLine: [...gist].slice(0, 24).join(""),
+      oneSentenceSummary: [...gist].slice(0, 70).join(""),
+      factCards: [
+        { label: "主题", value: [...gist].slice(0, 16).join("") },
+        { label: "方法", value: "按口播语义组织" },
+        { label: "证据", value: "使用真人原片" },
+      ],
+      rightVisual: { type: "二维信息动效", description: "把本段核心信息转成可视化层级", data: [], motionOrder: [] },
+      referencePackaging: { pattern: "标题→摘要→事实卡→证据", reason: "本地降级拆解" },
+    };
+  });
+}
+
+function alignBreakdownToTimeline(breakdown, job, timeline) {
+  const duration = timeline.outputDuration;
+  const segments = breakdown.segments.sort((a, b) => a.sourceTime.start - b.sourceTime.start);
+  let previousEnd = 0;
+  for (const [index, segment] of segments.entries()) {
+    const mappedStart = sourceToOutput(segment.sourceTime.start, job.currentPlan.keepSegments);
+    const mappedEnd = sourceToOutput(Math.max(segment.sourceTime.start, segment.sourceTime.end - 0.01), job.currentPlan.keepSegments);
+    const fallbackStart = duration * index / segments.length;
+    const fallbackEnd = duration * (index + 1) / segments.length;
+    const start = Math.max(previousEnd, Number.isFinite(mappedStart) ? mappedStart : fallbackStart);
+    const end = Math.max(start + 0.35, Math.min(duration, Number.isFinite(mappedEnd) ? mappedEnd + 0.01 : fallbackEnd));
+    segment.editedTime = { start: Number(start.toFixed(3)), end: Number(end.toFixed(3)) };
+    previousEnd = segment.editedTime.end;
+  }
+  if (segments.length) segments.at(-1).editedTime.end = Number(duration.toFixed(3));
+  return breakdown;
+}
+
+async function ensureWorkflowCleanSource(job) {
+  const jobDir = confined(jobsRoot, job.id);
+  const mediaDir = path.join(jobDir, "workflow", "media");
+  await fsp.mkdir(mediaDir, { recursive: true });
+  const editVersion = Number(job.currentPlan?.version || 1);
+  const videoPath = path.join(mediaDir, `clean-source-v${editVersion}.mp4`);
+  const audioPath = path.join(mediaDir, `clean-source-v${editVersion}.m4a`);
+  if (fs.existsSync(videoPath) && fs.existsSync(audioPath)) {
+    try {
+      const metadata = await probe(videoPath);
+      if (metadata.videoCodec && metadata.duration > 0.5) return { videoPath, audioPath, metadata };
+    } catch {}
+  }
+  const segments = job.currentPlan?.keepSegments || [];
+  if (!segments.length) throw new Error("缺少可生成干净口播源的保留片段");
+  const filters = [];
+  const hasAudio = job.source?.hasAudio !== false;
+  for (const [index, segment] of segments.entries()) {
+    const segmentDuration = Number(segment.end) - Number(segment.start);
+    filters.push(`[0:v]trim=start=${Number(segment.start).toFixed(3)}:end=${Number(segment.end).toFixed(3)},setpts=PTS-STARTPTS[v${index}]`);
+    if (hasAudio) filters.push(`[0:a]atrim=start=${Number(segment.start).toFixed(3)}:end=${Number(segment.end).toFixed(3)},asetpts=PTS-STARTPTS,afade=t=in:st=0:d=${Math.min(0.03, segmentDuration / 3).toFixed(3)},afade=t=out:st=${Math.max(0, segmentDuration - 0.03).toFixed(3)}:d=${Math.min(0.03, segmentDuration / 3).toFixed(3)}[a${index}]`);
+  }
+  if (hasAudio) filters.push(`${segments.map((_, index) => `[v${index}][a${index}]`).join("")}concat=n=${segments.length}:v=1:a=1[vcat][acat]`);
+  else filters.push(`${segments.map((_, index) => `[v${index}]`).join("")}concat=n=${segments.length}:v=1:a=0[vcat]`);
+  const color = videoColorPipeline(job.source);
+  filters.push(`[vcat]${color.filter},fps=30,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709[vout]`);
+  if (hasAudio) filters.push("[acat]highpass=f=80,lowpass=f=15000,loudnorm=I=-16:TP=-1.5:LRA=11[aout]");
+  const filterPath = path.join(mediaDir, `clean-source-v${editVersion}.ffscript`);
+  await fsp.writeFile(filterPath, filters.join(";\r\n") + ";\r\n", "utf8");
+  const args = ["-y", "-hide_banner", "-loglevel", "error", "-i", job.sourcePath, "-/filter_complex", filterPath, "-map", "[vout]", ...(hasAudio ? ["-map", "[aout]"] : []), "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-g", "30", "-keyint_min", "30", "-sc_threshold", "0", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", ...(hasAudio ? ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"] : []), "-movflags", "+faststart", videoPath];
+  await run("ffmpeg", args, { cwd: mediaDir, timeoutMs: 30 * 60 * 1000 });
+  const metadata = await probe(videoPath);
+  if (hasAudio) await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", videoPath, "-vn", "-c:a", "copy", audioPath]);
+  else await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", metadata.duration.toFixed(3), "-c:a", "aac", "-b:a", "192k", audioPath]);
+  await writeJson(path.join(mediaDir, `clean-source-v${editVersion}.json`), { videoPath, audioPath, metadata, timelineVersion: editVersion, generatedAt: new Date().toISOString() });
+  return { videoPath, audioPath, metadata };
+}
+
+async function runHyperframes(args, cwd, timeoutMs = 30 * 60 * 1000) {
+  return run("npx", ["--yes", "hyperframes@0.7.68", ...args], { cwd, shell: true, timeoutMs, env: process.env });
+}
+
+async function inspectHyperframesProject(projectDir, timestamps = []) {
+  const qaDir = path.join(projectDir, "qa");
+  await fsp.mkdir(qaDir, { recursive: true });
+  let check;
+  try {
+    check = await runHyperframes(["check", "."], projectDir, 10 * 60 * 1000);
+  } catch (error) {
+    await fsp.writeFile(
+      path.join(qaDir, "check.txt"),
+      `${error.message}\n${error.stdout || ""}\n${error.stderr || ""}`,
+      "utf8",
+    );
+    throw error;
+  }
+  await fsp.writeFile(path.join(qaDir, "check.txt"), `${check.stdout}\n${check.stderr}`, "utf8");
+  try {
+    const args = ["inspect", ".", "--json"];
+    if (timestamps.length) args.push("--at", timestamps.slice(0, 10).join(","));
+    const inspect = await runHyperframes(args, projectDir, 10 * 60 * 1000);
+    await fsp.writeFile(path.join(qaDir, "inspect.json"), inspect.stdout || "{}", "utf8");
+  } catch (error) {
+    await fsp.writeFile(path.join(qaDir, "inspect-error.txt"), `${error.message}\n${error.stdout || ""}\n${error.stderr || ""}`, "utf8");
+  }
+}
+
+async function runStyleResearchStage(job, version, stageConfig) {
+  const jobDir = confined(jobsRoot, job.id);
+  const research = await collectVisualReferences(job, version, stageConfig);
+  let modelResult = null;
+  try {
+    modelResult = await runAi({
+      operation: "analyze_visual_style",
+      topic: { ...research.topicPlan, contentDirection: job.contentDirection || {}, script: job.script },
+      references: research.researchBundle.references,
+      visual_defaults: job.workflow.config.visualDefaults,
+      custom_prompt: stageConfig.prompt,
+    }, jobDir, `visual-style-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `视觉风格模型分析失败，已使用可审查默认规则：${error.message}`];
+  }
+  const report = normalizeVisualStyleReport(modelResult?.data || {}, research.researchBundle.references, job.workflow.config);
+  report.model = modelResult?.model || null;
+  report.researchWarnings = research.researchBundle.warnings || [];
+  const reportName = `visual-style-report-v${version}.json`;
+  await writeJson(path.join(jobDir, reportName), report);
+  job.visualStyleReport = report;
+  return {
+    report,
+    reportUrl: workflowUrl(job, reportName),
+    researchUrl: workflowUrl(job, research.researchName),
+    topicPlanUrl: workflowUrl(job, research.planName),
+    referenceCount: report.selectedReferences.length,
+    model: modelResult?.model || null,
+  };
+}
+
+async function runContentBreakdownStage(job, version, stageConfig) {
+  const jobDir = confined(jobsRoot, job.id);
+  job.status = "analyzing"; job.progress = 18; await saveJob(job);
+  job.source = await probe(job.sourcePath);
+  let silences = [];
+  if (stageConfig.settings?.removeSilence !== false) {
+    const result = await run("ffmpeg", ["-hide_banner", "-i", job.sourcePath, "-af", `silencedetect=noise=${Number(job.options.silenceDb ?? -36)}dB:d=${Number(stageConfig.settings?.silenceDuration ?? 0.45)}`, "-f", "null", "-"]);
+    silences = parseSilences(result.stderr, job.source.duration);
+  }
+  const fallback = buildKeepSegments(job.source.duration, silences, Number(stageConfig.settings?.pauseKeep ?? 0.12));
+  job.analysis = { silences, baseKeepSegments: fallback, removedDuration: job.source.duration - fallback.reduce((sum, item) => sum + item.end - item.start, 0) };
+  job.status = "transcribing"; job.progress = 22; await saveJob(job);
+  if (!job.transcript || job.transcriptionModel !== `faster-whisper/${stageConfig.settings?.transcriptionModel || "small"}`) {
+    try {
+      const transcription = await runAi({ operation: "transcribe", input_path: job.sourcePath, output_dir: jobDir, model_size: stageConfig.settings?.transcriptionModel || "small", language: stageConfig.settings?.language || "zh" }, jobDir, `transcribe-v${version}`);
+      job.transcript = transcription.data;
+      job.transcriptionModel = transcription.model;
+    } catch (error) {
+      job.degraded = [...(job.degraded || []), `本地转录失败，退回口播稿时间估算：${error.message}`];
+      job.transcript = { text: job.script || "", segments: [{ start: 0, end: job.source.duration, text: job.script || "" }], words: [], model: "script-fallback" };
+      job.transcriptionModel = "script-fallback";
+    }
+  }
+  job.status = "breaking_down_content"; job.progress = 31; await saveJob(job);
+  let planResult = null;
+  try {
+    planResult = await runAi({ operation: "edit_plan", script: job.script, content_direction: job.contentDirection, source: job.source, transcript: job.transcript, base_plan: { silences, keepSegments: fallback }, custom_prompt: stageConfig.prompt }, jobDir, `edit-plan-visual-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `语义剪辑计划失败，使用停顿剪辑：${error.message}`];
+  }
+  const validation = validatePlan(planResult?.data, job.source.duration, fallback, planResult ? "semantic" : "silence-fallback");
+  const editVersion = Number(job.currentPlan?.version || 0) + 1;
+  job.currentPlan = { version: editVersion, ...validation, editSummary: planResult?.data?.editSummary || "本地停顿剪辑", removedReasons: planResult?.data?.removedReasons || [], createdAt: new Date().toISOString() };
+  job.currentVersion = Math.max(1, Number(job.currentVersion || 0));
+  job.planModel = planResult?.model || null;
+  await writeJson(path.join(jobDir, `edit-plan-v${editVersion}.json`), job.currentPlan);
+  const timeline = buildTimeline(job, job.currentPlan, editVersion);
+  await writeTimelineArtifacts(jobDir, timeline, editVersion);
+  let breakdownResult = null;
+  try {
+    breakdownResult = await runAi({
+      operation: "content_breakdown",
+      script: job.script,
+      transcript: job.transcript,
+      timeline,
+      style_report: job.visualStyleReport || {},
+      minimum_segments: stageConfig.settings?.minimumSegments || 5,
+      maximum_segments: stageConfig.settings?.maximumSegments || 12,
+      custom_prompt: stageConfig.prompt,
+    }, jobDir, `content-breakdown-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `内容拆解模型失败，已生成可继续审核的本地分段：${error.message}`];
+  }
+  const fallbackSegments = fallbackBreakdownSegments(job, timeline, Math.max(5, Math.min(8, Number(stageConfig.settings?.minimumSegments || 5))));
+  let breakdown = normalizeContentBreakdown(breakdownResult?.data || {}, {
+    sourceDuration: job.source.duration,
+    outputDuration: timeline.outputDuration,
+    minimumSegments: stageConfig.settings?.minimumSegments || 5,
+    maximumSegments: stageConfig.settings?.maximumSegments || 12,
+    fallbackSegments,
+  });
+  breakdown = alignBreakdownToTimeline(breakdown, job, timeline);
+  breakdown.model = breakdownResult?.model || null;
+  breakdown.editPlanVersion = editVersion;
+  const transcriptName = `transcript-v${version}.json`;
+  const breakdownName = `content-breakdown-v${version}.json`;
+  await writeJson(path.join(jobDir, transcriptName), job.transcript);
+  await writeJson(path.join(jobDir, breakdownName), breakdown);
+  job.contentBreakdown = breakdown;
+  await prepareAssetCandidates(job, { force: version > 1, reason: "视觉导演内容拆解完成，按信息段发现素材" });
+  return {
+    breakdown,
+    breakdownUrl: workflowUrl(job, breakdownName),
+    transcriptUrl: workflowUrl(job, transcriptName),
+    editPlanUrl: workflowUrl(job, `edit-plan-v${editVersion}.json`),
+    timelineUrl: workflowUrl(job, `timeline-v${editVersion}.json`),
+    segmentCount: breakdown.segments.length,
+    outputDuration: timeline.outputDuration,
+    model: breakdownResult?.model || null,
+  };
+}
+
+async function runKeyframeStage(job, version, stageConfig, feedback = "") {
+  const jobDir = confined(jobsRoot, job.id);
+  const previous = job.workflow.stages.keyframes?.artifacts?.direction || {};
+  let result = null;
+  try {
+    result = await runAi({
+      operation: "keyframe_direction",
+      style_report: job.visualStyleReport || {},
+      breakdown: job.contentBreakdown || {},
+      count: stageConfig.settings?.count || 4,
+      previous,
+      feedback,
+      custom_prompt: feedback ? job.workflow.config.stages.keyframe_review.prompt : stageConfig.prompt,
+    }, jobDir, `keyframe-direction-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `关键帧导演方案失败，使用均匀选择：${error.message}`];
+  }
+  const direction = normalizeKeyframeDirection(result?.data || {}, job.contentBreakdown, stageConfig.settings?.count || 4);
+  const directionName = `keyframe-direction-v${version}.json`;
+  await writeJson(path.join(jobDir, directionName), direction);
+  const clean = await ensureWorkflowCleanSource(job);
+  const projectRelative = path.join("workflow", `keyframes-v${version}`);
+  const projectDir = path.join(jobDir, projectRelative);
+  const project = await buildHyperframesDirectorProject({
+    projectDir,
+    sourceVideo: clean.videoPath,
+    sourceAudio: clean.audioPath,
+    breakdown: job.contentBreakdown,
+    styleReport: job.visualStyleReport,
+    mode: "keyframes",
+    keyframeDirection: direction,
+    renderSpec: { ...job.workflow.config.rendering.keyframes, count: direction.frames.length },
+    promptSnapshot: { stage: "keyframes", version, prompt: stageConfig.prompt, feedback, settings: stageConfig.settings, model: result?.model || null },
+  });
+  await inspectHyperframesProject(projectDir, project.snapshotTimes);
+  const snapshotDir = path.join(projectDir, "snapshots");
+  await runHyperframes(["snapshot", ".", "--output", snapshotDir, "--at", project.snapshotTimes.join(","), "--no-end", "--describe", "false"], projectDir, 20 * 60 * 1000);
+  const frameFiles = (await fsp.readdir(snapshotDir)).filter(name => /\.png$/i.test(name)).sort().slice(0, 5);
+  if (frameFiles.length < 3) throw new Error(`HyperFrames只生成了${frameFiles.length}张关键帧，未达到3张门禁`);
+  const frames = frameFiles.map((name, index) => ({
+    id: direction.frames[index]?.id || `KF${index + 1}`,
+    segmentId: direction.frames[index]?.segmentId || null,
+    sourceTime: direction.frames[index]?.sourceTime ?? null,
+    path: path.join(snapshotDir, name),
+    url: workflowUrl(job, path.relative(jobDir, path.join(snapshotDir, name))),
+    purpose: direction.frames[index]?.purpose || "关键帧审核",
+  }));
+  return {
+    direction,
+    directionUrl: workflowUrl(job, directionName),
+    frames,
+    frameCount: frames.length,
+    projectUrl: workflowUrl(job, path.join(projectRelative, "index.html")),
+    manifestUrl: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")),
+    qaUrl: workflowUrl(job, path.join(projectRelative, "qa", "check.txt")),
+    model: result?.model || null,
+  };
+}
+
+async function ensurePreviewAssetDecisions(job) {
+  const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+  const review = assetReviewSummary(job, duration);
+  if (review.reviewComplete && review.renderReady) return review;
+  const decision = await autoReviewLocalAssetsForPreview(job);
+  return decision.review;
+}
+
+async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
+  const jobDir = confined(jobsRoot, job.id);
+  const keyframes = job.workflow.stages.keyframes?.artifacts;
+  let modelResult = null;
+  try {
+    modelResult = await runAi({
+      operation: "motion_sample_direction",
+      keyframes,
+      breakdown: job.contentBreakdown,
+      style_report: job.visualStyleReport,
+      settings: stageConfig.settings,
+      feedback,
+      custom_prompt: stageConfig.prompt,
+    }, jobDir, `motion-sample-direction-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `动态样片导演方案失败，使用默认有序动效：${error.message}`];
+  }
+  const outputDuration = job.currentPlan.keepSegments.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0);
+  const direction = normalizeMotionDirection(modelResult?.data || {}, job.contentBreakdown, { ...stageConfig.settings, outputDuration });
+  const directionName = `motion-sample-direction-v${version}.json`;
+  await writeJson(path.join(jobDir, directionName), direction);
+  await ensurePreviewAssetDecisions(job);
+  const clean = await ensureWorkflowCleanSource(job);
+  const captions = transcriptCues(job.transcript, job.currentPlan.keepSegments, job.script);
+  const approvedAssets = (job.assets || []).filter(asset => asset.reviewStatus === "approved" && !assetComplianceIssues(asset, job, outputDuration).length);
+  const projectRelative = path.join("workflow", `sample-v${version}`);
+  const projectDir = path.join(jobDir, projectRelative);
+  const project = await buildHyperframesDirectorProject({
+    projectDir,
+    sourceVideo: clean.videoPath,
+    sourceAudio: clean.audioPath,
+    breakdown: job.contentBreakdown,
+    styleReport: job.visualStyleReport,
+    mode: "sample",
+    rangeStart: direction.sampleStart,
+    rangeEnd: direction.sampleEnd,
+    motionDirection: direction,
+    captions,
+    approvedAssets,
+    renderSpec: job.workflow.config.rendering.sample,
+    promptSnapshot: { stage: "motion_sample", version, prompt: stageConfig.prompt, feedback, settings: stageConfig.settings, model: modelResult?.model || null },
+  });
+  await inspectHyperframesProject(projectDir, project.snapshotTimes);
+  const rendersDir = path.join(projectDir, "renders");
+  await fsp.mkdir(rendersDir, { recursive: true });
+  const outputPath = path.join(rendersDir, `motion-sample-v${version}.mp4`);
+  await runHyperframes(["render", ".", "--skill=talking-head-recut", "--output", outputPath, "--fps", String(project.fps), "--quality", "standard", "--workers", "2"], projectDir, 45 * 60 * 1000);
+  await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
+  const metadata = await probe(outputPath);
+  if (metadata.duration < 14.5 || metadata.duration > 25.8) throw new Error(`动态样片时长${metadata.duration.toFixed(1)}秒，不在15—25秒门禁内`);
+  const thumbnailPath = path.join(rendersDir, `motion-sample-v${version}.jpg`);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(3, metadata.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnailPath]);
+  return {
+    direction,
+    directionUrl: workflowUrl(job, directionName),
+    path: outputPath,
+    url: workflowUrl(job, path.relative(jobDir, outputPath)),
+    thumbnailUrl: workflowUrl(job, path.relative(jobDir, thumbnailPath)),
+    metadata,
+    projectUrl: workflowUrl(job, path.join(projectRelative, "index.html")),
+    manifestUrl: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")),
+    qaUrl: workflowUrl(job, path.join(projectRelative, "qa", "check.txt")),
+    sampleStart: direction.sampleStart,
+    sampleEnd: direction.sampleEnd,
+    model: modelResult?.model || null,
+  };
+}
+
+async function normalizeHyperframesMaster(inputPath, outputPath, width, height, fps) {
+  const metadata = await probe(inputPath);
+  const alreadyCompatible = metadata.videoCodec === "h264" && metadata.audioCodec === "aac" && metadata.pixelFormat === "yuv420p" && metadata.width === width && metadata.height === height;
+  if (alreadyCompatible) {
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", "-movflags", "+faststart", outputPath]);
+  } else {
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=0x07090F,fps=${fps},format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709`, "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", outputPath], { timeoutMs: 90 * 60 * 1000 });
+  }
+  await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
+  return probe(outputPath);
+}
+
+async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "") {
+  const jobDir = confined(jobsRoot, job.id);
+  const outputDuration = job.currentPlan.keepSegments.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0);
+  const review = assetReviewSummary(job, outputDuration);
+  if (!review.reviewComplete || !review.renderReady) throw new Error("素材审核状态在样片批准后发生变化，请先处理所有素材再生成完整视频");
+  let modelResult = null;
+  try {
+    modelResult = await runAi({
+      operation: "full_video_direction",
+      style_report: job.visualStyleReport,
+      breakdown: job.contentBreakdown,
+      keyframes: job.workflow.stages.keyframes?.artifacts,
+      sample_direction: job.workflow.stages.motion_sample?.artifacts?.direction,
+      settings: stageConfig.settings,
+      feedback,
+      custom_prompt: stageConfig.prompt,
+    }, jobDir, `full-video-direction-v${stageVersion}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `完整视频导演方案失败，使用批准样片的默认动效语法：${error.message}`];
+  }
+  const direction = normalizeFullDirection(modelResult?.data || {}, job.contentBreakdown);
+  const directionName = `full-video-direction-v${stageVersion}.json`;
+  await writeJson(path.join(jobDir, directionName), direction);
+  const clean = await ensureWorkflowCleanSource(job);
+  const captions = transcriptCues(job.transcript, job.currentPlan.keepSegments, job.script);
+  const approvedAssets = (job.assets || []).filter(asset => asset.reviewStatus === "approved" && !assetComplianceIssues(asset, job, outputDuration).length);
+  const videoVersion = Math.max(0, ...(job.versions || []).map(item => Number(item.version) || 0), Number(job.currentVersion || 0)) + 1;
+  job.currentVersion = videoVersion;
+  const finalSettings = stageConfig.settings;
+  const width = Number(finalSettings.masterWidth || 2560);
+  const height = Number(finalSettings.masterHeight || (width === 2560 ? 1440 : 1080));
+  const fps = Number(finalSettings.fps || 30);
+  const projectRelative = path.join("workflow", `full-v${videoVersion}`);
+  const projectDir = path.join(jobDir, projectRelative);
+  const project = await buildHyperframesDirectorProject({
+    projectDir,
+    sourceVideo: clean.videoPath,
+    sourceAudio: clean.audioPath,
+    breakdown: job.contentBreakdown,
+    styleReport: job.visualStyleReport,
+    mode: "full",
+    rangeStart: 0,
+    rangeEnd: outputDuration,
+    fullDirection: direction,
+    captions,
+    approvedAssets,
+    renderSpec: { width, height, fps },
+    promptSnapshot: { stage: "full_render", stageVersion, videoVersion, prompt: stageConfig.prompt, feedback, settings: finalSettings, model: modelResult?.model || null },
+  });
+  await inspectHyperframesProject(projectDir, project.snapshotTimes);
+  const rendersDir = path.join(projectDir, "renders");
+  await fsp.mkdir(rendersDir, { recursive: true });
+  const rawPath = path.join(rendersDir, `full-hyperframes-v${videoVersion}-raw.mp4`);
+  await runHyperframes(["render", ".", "--skill=talking-head-recut", "--output", rawPath, "--fps", String(fps), "--quality", "high", "--workers", "2"], projectDir, 4 * 60 * 60 * 1000);
+  const outputPath = path.join(jobDir, `final-v${videoVersion}.mp4`);
+  const metadata = await normalizeHyperframesMaster(rawPath, outputPath, width, height, fps);
+  await fsp.copyFile(outputPath, path.join(jobDir, "final.mp4"));
+  const thumbnail = path.join(jobDir, `thumbnail-v${videoVersion}.jpg`);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(1.5, metadata.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnail]);
+  const timeline = buildTimeline(job, job.currentPlan, videoVersion);
+  await writeTimelineArtifacts(jobDir, timeline, videoVersion);
+  const manifest = await ensureMediaManifest(job, videoVersion);
+  const composited = new Set(project.compositedAssetIds);
+  for (const asset of manifest.assets) asset.composited = composited.has(asset.id);
+  manifest.renderedAssetIds = [...composited];
+  manifest.attributionTrack = manifest.assets.some(asset => asset.composited && EXTERNAL_SOURCE_TYPES.has(asset.sourceType)) ? "hyperframes-integrated" : null;
+  manifest.renderCompletedAt = new Date().toISOString();
+  await writeJson(path.join(jobDir, `media-manifest-v${videoVersion}.json`), manifest);
+  let coverPackaging = { requested: job.options?.generateCover !== false, available: false, engine: "none", fallbackReason: null };
+  if (coverPackaging.requested) {
+    try { coverPackaging = await renderCover(job, videoVersion); }
+    catch (error) { coverPackaging = { requested: true, available: false, engine: "failed", fallbackReason: error.message }; }
+  }
+  const variants = await renderVariants(job, videoVersion, outputPath);
+  const packaging = { requested: "hyperframes", engine: "hyperframes", cards: job.contentBreakdown?.segments?.length || 0, panels: job.contentBreakdown?.segments?.length || 0, project: projectRelative };
+  const captionPackaging = { requested: job.options.captions === false ? "none" : "keyword-pop", engine: job.options.captions === false ? "none" : "hyperframes", style: "keyword-pop", cues: captions.length, integrated: true, safeArea: true };
+  const qaReport = await runQa(job, videoVersion, outputPath, outputDuration, timeline, variants, packaging, captionPackaging, coverPackaging, manifest, videoColorPipeline(job.source));
+  const reviewBundle = await createReviewBundle(job, videoVersion, outputPath, outputDuration);
+  const artifactUrl = name => `/video-jobs/${job.id}/${name}`;
+  const output = {
+    version: videoVersion,
+    path: outputPath,
+    url: artifactUrl(`final-v${videoVersion}.mp4`),
+    thumbnailUrl: artifactUrl(`thumbnail-v${videoVersion}.jpg`),
+    metadata,
+    qa: qaReport.checks,
+    qaPass: qaReport.pass,
+    provenance: job.currentPlan.provenance,
+    planEngine: job.currentPlan.engine,
+    packaging,
+    captionPackaging,
+    cover: coverPackaging,
+    colorManagement: videoColorPipeline(job.source),
+    variants,
+    reviewBundle,
+    media: { policy: manifest.policy, approvedAssets: manifest.assets.filter(asset => asset.approved).length },
+    artifacts: {
+      editPlan: artifactUrl(`edit-plan-v${job.currentPlan.version}.json`),
+      timeline: artifactUrl(`timeline-v${videoVersion}.json`),
+      edl: artifactUrl(`timeline-v${videoVersion}.edl`),
+      qa: artifactUrl(`qa-report-v${videoVersion}.json`),
+      mediaManifest: artifactUrl(`media-manifest-v${videoVersion}.json`),
+      reviewBundle: artifactUrl(`review-bundle-v${videoVersion}.json`),
+      reviewPreview: reviewBundle.preview.url,
+      styleReport: job.workflow.stages.style_research?.artifacts?.reportUrl,
+      contentBreakdown: job.workflow.stages.content_breakdown?.artifacts?.breakdownUrl,
+      keyframeDirection: job.workflow.stages.keyframes?.artifacts?.directionUrl,
+      motionSample: job.workflow.stages.motion_sample?.artifacts?.url,
+      fullDirection: artifactUrl(directionName),
+      hyperframesProject: workflowUrl(job, path.join(projectRelative, "index.html")),
+      hyperframesManifest: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")),
+      ...(coverPackaging.available ? { coverDesign: artifactUrl(`cover-design-v${videoVersion}.json`), coverVertical: coverPackaging.vertical.url, coverGrid: coverPackaging.grid.url, coverWide16x9: coverPackaging.wide16x9.url, coverLandscape4x3: coverPackaging.landscape4x3.url } : {}),
+    },
+    createdAt: new Date().toISOString(),
+    model: modelResult?.model || null,
+  };
+  job.versions = [...(job.versions || []).filter(item => Number(item.version) !== videoVersion), output];
+  job.output = output;
+  return { output, direction, directionUrl: artifactUrl(directionName), projectUrl: workflowUrl(job, path.join(projectRelative, "index.html")), manifestUrl: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")), videoVersion };
+}
+
+function visualJobStatus(stageId) {
+  return {
+    style_research: "researching_style",
+    content_breakdown: "breaking_down_content",
+    keyframes: "generating_keyframes",
+    motion_sample: "rendering_sample",
+    full_render: "rendering_final",
+  }[stageId] || "planning";
+}
+
+async function executeVisualStage(job, stageId, feedback = "") {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  const stage = workflow.stages[stageId];
+  if (!stage || !["style_research", "content_breakdown", "keyframes", "motion_sample", "full_render"].includes(stageId)) throw new Error(`不可执行的视觉阶段：${stageId}`);
+  invalidateVisualStages(workflow, stageId, `阶段 ${stageId} 开始生成新版本`);
+  const version = Number(stage.currentVersion || 0) + 1;
+  const config = workflow.config.stages[stageId];
+  const runRecord = { version, status: "running", feedback: String(feedback || ""), prompt: config.prompt, settings: config.settings, startedAt: new Date().toISOString() };
+  stage.currentVersion = version;
+  stage.status = "running";
+  stage.approvedVersion = null;
+  stage.runs = [...(stage.runs || []), runRecord];
+  stage.updatedAt = new Date().toISOString();
+  workflow.currentStage = stageId;
+  workflow.updatedAt = new Date().toISOString();
+  job.status = visualJobStatus(stageId);
+  job.progress = visualStageProgress(stageId);
+  delete job.error;
+  delete job.errorDetail;
+  delete job.errorStage;
+  await saveVisualWorkflowConfig(job);
+  await saveJob(job);
+  try {
+    let artifacts;
+    if (stageId === "style_research") artifacts = await runStyleResearchStage(job, version, config);
+    else if (stageId === "content_breakdown") artifacts = await runContentBreakdownStage(job, version, config);
+    else if (stageId === "keyframes") artifacts = await runKeyframeStage(job, version, config, feedback);
+    else if (stageId === "motion_sample") artifacts = await runMotionSampleStage(job, version, config, feedback);
+    else artifacts = await runFullRenderStage(job, version, config, feedback);
+    stage.artifacts = artifacts;
+    stage.status = ["motion_sample", "full_render"].includes(stageId) ? "awaiting_review" : "completed";
+    stage.updatedAt = new Date().toISOString();
+    runRecord.status = "completed";
+    runRecord.completedAt = stage.updatedAt;
+    runRecord.artifacts = artifacts;
+    if (stageId === "keyframes") {
+      const gate = workflow.stages.keyframe_review;
+      gate.status = "awaiting_review";
+      gate.currentVersion = version;
+      gate.artifacts = artifacts;
+      gate.updatedAt = stage.updatedAt;
+      workflow.currentStage = "keyframe_review";
+      job.status = "awaiting_keyframe_review";
+    } else if (stageId === "motion_sample") {
+      workflow.currentStage = "motion_sample";
+      job.status = "awaiting_sample_review";
+    } else if (stageId === "full_render") {
+      workflow.currentStage = "full_render";
+      job.status = "awaiting_review";
+    }
+    job.progress = visualStageProgress(stageId, "complete");
+    workflow.updatedAt = new Date().toISOString();
+    await saveJob(job);
+    return artifacts;
+  } catch (error) {
+    stage.status = "error";
+    stage.updatedAt = new Date().toISOString();
+    runRecord.status = "error";
+    runRecord.completedAt = stage.updatedAt;
+    runRecord.error = error.message;
+    job.status = "error";
+    job.error = error.message;
+    job.errorDetail = String(error.stderr || error.stdout || error.message || "").slice(-8000);
+    job.errorStage = stageId;
+    await saveJob(job);
+    throw error;
+  }
+}
+
+async function runVisualWorkflowChain(job, startStage = "style_research", feedback = "") {
+  if (running.has(job.id)) return;
+  running.set(job.id, true);
+  try {
+    const startIndex = VISUAL_STAGE_ORDER.indexOf(startStage);
+    if (startIndex < 0) throw new Error(`未知视觉工作流阶段：${startStage}`);
+    if (startStage === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") throw new Error("关键帧尚未批准，不能生成动态样片");
+    if (startStage === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") throw new Error("动态样片尚未批准，不能生成完整视频");
+    if (startIndex <= VISUAL_STAGE_ORDER.indexOf("style_research")) await executeVisualStage(job, "style_research", feedback);
+    if (startIndex <= VISUAL_STAGE_ORDER.indexOf("content_breakdown") && startStage !== "motion_sample" && startStage !== "full_render") await executeVisualStage(job, "content_breakdown", feedback);
+    if (startIndex <= VISUAL_STAGE_ORDER.indexOf("keyframes") && startStage !== "motion_sample" && startStage !== "full_render") await executeVisualStage(job, "keyframes", feedback);
+    if (startStage === "motion_sample") await executeVisualStage(job, "motion_sample", feedback);
+    if (startStage === "full_render") await executeVisualStage(job, "full_render", feedback);
+  } catch (error) {
+    if (job.status !== "error") {
+      job.status = "error";
+      job.error = error.message;
+      job.errorDetail = String(error.stderr || error.stdout || error.message || "").slice(-8000);
+      await saveJob(job);
+    }
+  } finally {
+    running.delete(job.id);
+  }
+}
+
+async function updateVisualStageConfig(job, stageId, body = {}) {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  if (!VISUAL_STAGE_ORDER.includes(stageId)) throw Object.assign(new Error("未知工作流阶段"), { statusCode: 404 });
+  const current = workflow.config.stages[stageId];
+  const overrides = cloneVisualConfig(workflow.config);
+  overrides.stages[stageId] = {
+    ...overrides.stages[stageId],
+    settings: { ...overrides.stages[stageId].settings, ...(body.settings || {}) },
+    ...(body.prompt === undefined ? {} : { prompt: String(body.prompt || "") }),
+  };
+  workflow.config = normalizeVisualWorkflowConfig(visualWorkflowDefaults, overrides);
+  workflow.configVersion = Number(workflow.configVersion || 1) + 1;
+  workflow.audit ||= [];
+  workflow.audit.push({ type: "stage-config-updated", stageId, configVersion: workflow.configVersion, changedPrompt: body.prompt !== undefined && body.prompt !== current.prompt, at: new Date().toISOString() });
+  await saveVisualWorkflowConfig(job);
+  await saveJob(job);
+  return workflow.config.stages[stageId];
+}
+
+function cloneVisualConfig(value) {
+  return JSON.parse(JSON.stringify(value || {}));
+}
+
+async function approveVisualGate(job, stageId, body = {}) {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  const now = new Date().toISOString();
+  if (stageId === "keyframe_review") {
+    const source = workflow.stages.keyframes;
+    if (!source?.artifacts?.frames?.length || source.status === "error") throw Object.assign(new Error("还没有可批准的关键帧"), { statusCode: 409 });
+    const gate = workflow.stages.keyframe_review;
+    gate.status = "approved";
+    gate.approvedVersion = source.currentVersion;
+    gate.feedback = String(body.feedback || "");
+    gate.approvedAt = now;
+    source.status = "approved";
+    source.approvedVersion = source.currentVersion;
+    workflow.audit.push({ type: "stage-approved", stageId, version: source.currentVersion, at: now });
+    await saveJob(job);
+    runVisualWorkflowChain(job, "motion_sample");
+    return;
+  }
+  if (stageId === "motion_sample") {
+    const stage = workflow.stages.motion_sample;
+    if (!stage?.artifacts?.url || stage.status === "error") throw Object.assign(new Error("还没有可批准的动态样片"), { statusCode: 409 });
+    stage.status = "approved";
+    stage.approvedVersion = stage.currentVersion;
+    stage.feedback = String(body.feedback || "");
+    stage.approvedAt = now;
+    workflow.audit.push({ type: "stage-approved", stageId, version: stage.currentVersion, at: now });
+    await saveJob(job);
+    runVisualWorkflowChain(job, "full_render");
+    return;
+  }
+  throw Object.assign(new Error("该阶段不使用此批准接口"), { statusCode: 400 });
+}
+
 async function renderVersion(job, version) {
   const jobDir = confined(jobsRoot, job.id), plan = job.currentPlan, segments = plan.keepSegments;
   job.status = version > 1 ? "revising" : "rendering"; job.progress = 2; await saveJob(job);
@@ -2028,8 +2789,9 @@ async function autoReviewLocalAssetsForPreview(job) {
   job.options = { ...job.options, reviewMode: "full-preview-with-context-segments", autoReviewLocalAssets: true };
   job.assetDecisions = [...(job.assetDecisions || []), ...decisions];
   job.assetReview = assetReviewSummary(job, duration);
-  job.status = "awaiting_asset_review";
-  job.progress = 60;
+  const visualSampleInProgress = job.workflow?.version === VISUAL_WORKFLOW_VERSION && job.workflow?.currentStage === "motion_sample";
+  job.status = visualSampleInProgress ? "rendering_sample" : "awaiting_asset_review";
+  job.progress = visualSampleInProgress ? visualStageProgress("motion_sample") : 60;
   const jobDir = confined(jobsRoot, job.id);
   await writeJson(path.join(jobDir, "asset-decisions.json"), job.assetDecisions);
   await writeJson(path.join(jobDir, "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
@@ -2142,7 +2904,37 @@ const server = http.createServer(async (req, res) => {
       try { await run("ffmpeg", ["-version"]); ffmpeg = true; } catch {}
       try { await run("npx", ["-y", "hyperframes", "--version"], { shell: true }); hyperframes = true; } catch {}
       try { ai = await runAi({ operation: "config" }, contentRoot, "model-config"); } catch (error) { ai = { success: false, error: error.message }; }
-      return json(res, 200, { ok: true, service: "koubo-ai-workflow", version: 3, localOnlyVideo: true, ffmpeg, hyperframes, ai: { configured: !!ai?.success, model: ai?.model || null, transcriptionModel: ai?.transcription_model || "faster-whisper/small" }, jobsRoot, contentRoot });
+      return json(res, 200, {
+        ok: true,
+        service: "koubo-ai-workflow",
+        version: 4,
+        defaultPipeline: VISUAL_WORKFLOW_VERSION,
+        legacyPipeline: "ffmpeg-v3",
+        localOnlyVideo: true,
+        ffmpeg,
+        hyperframes,
+        ai: { configured: !!ai?.success, model: ai?.model || null, transcriptionModel: ai?.transcription_model || "faster-whisper/small" },
+        workflow: {
+          version: visualWorkflowDefaults.workflowVersion,
+          engine: visualWorkflowDefaults.defaultEngine,
+          stages: VISUAL_STAGE_ORDER,
+          keyframeReviewRequired: true,
+          sampleReviewRequired: true,
+          finalMaster: visualWorkflowDefaults.rendering.final,
+        },
+        jobsRoot,
+        contentRoot,
+      });
+    }
+    if (req.method === "GET" && pathname === "/api/video-workflow/defaults") {
+      return json(res, 200, { workflow: visualWorkflowDefaults });
+    }
+    if (req.method === "POST" && pathname === "/api/video-workflow/drafts") {
+      const options = await readBodyJson(req, 512 * 1024);
+      const draftId = crypto.randomBytes(16).toString("hex");
+      workflowDrafts.set(draftId, { options, createdAt: Date.now() });
+      for (const [id, draft] of workflowDrafts) if (Date.now() - draft.createdAt > 30 * 60 * 1000) workflowDrafts.delete(id);
+      return json(res, 201, { draftId, expiresInSeconds: 1800 });
     }
     if (req.method === "GET" && pathname === "/api/contents") return json(res, 200, { items: await listGeneratedContents() });
     if (req.method === "POST" && pathname === "/api/contents/generate") {
@@ -2158,37 +2950,82 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && pathname === "/api/jobs") {
       const id = timestampId(), dir = confined(jobsRoot, id); await fsp.mkdir(dir, { recursive: false });
       const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "video.mp4")), sourcePath = path.join(dir, fileName);
-      let options = {}; try { options = JSON.parse(decodeURIComponent(req.headers["x-options"] || "%7B%7D")); } catch {}
+      const workflowDraftId = String(req.headers["x-workflow-draft"] || "");
+      let options = workflowDrafts.get(workflowDraftId)?.options || {};
+      if (!workflowDraftId || !workflowDrafts.has(workflowDraftId)) {
+        try { options = JSON.parse(decodeURIComponent(req.headers["x-options"] || "%7B%7D")); } catch {}
+      }
+      if (workflowDraftId) workflowDrafts.delete(workflowDraftId);
       const sizeBytes = await receiveUpload(req, sourcePath);
       const contentId = decodeURIComponent(req.headers["x-content-id"] || "");
+      const pipeline = options.pipeline === "ffmpeg-v3" || options.pipeline === "legacy-ffmpeg-v3" ? "ffmpeg-v3" : VISUAL_WORKFLOW_VERSION;
+      const workflowConfig = pipeline === VISUAL_WORKFLOW_VERSION
+        ? normalizeVisualWorkflowConfig(visualWorkflowDefaults, options.workflowConfig || {})
+        : null;
+      const contentSettings = workflowConfig?.stages?.content_breakdown?.settings || {};
       const job = {
         id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "uploaded", progress: 0,
+        pipeline,
         fileName, sizeBytes, sourcePath, contentId, contentDirection: await contentDirectionFor(contentId), script: String(options.script || ""),
         options: {
-          removeSilence: options.removeSilence !== false, captions: options.captions !== false,
+          removeSilence: contentSettings.removeSilence === undefined ? options.removeSilence !== false : contentSettings.removeSilence !== false,
+          captions: options.captions !== false,
           captionStyle: normalizeCaptionStyle(options.captionStyle), informationPanels: options.informationPanels !== false,
-          layout: ["landscape-tech", "original", "vertical", "square"].includes(options.layout) ? options.layout : "landscape-tech",
+          layout: pipeline === VISUAL_WORKFLOW_VERSION ? "landscape-tech" : ["landscape-tech", "original", "vertical", "square"].includes(options.layout) ? options.layout : "landscape-tech",
           generateVariants: options.generateVariants !== false, generateCover: options.generateCover !== false,
           coverTitle: cleanCoverCopy(options.coverTitle, 42), contentTitle: cleanCoverCopy(options.contentTitle, 42),
-          silenceDb: Number(options.silenceDb ?? -36), silenceDuration: Number(options.silenceDuration ?? 0.45),
-          pauseKeep: Number(options.pauseKeep ?? 0.12), transcriptionModel: options.transcriptionModel || "small", aiMode: "full-auto",
+          silenceDb: Number(options.silenceDb ?? -36), silenceDuration: Number(contentSettings.silenceDuration ?? options.silenceDuration ?? 0.45),
+          pauseKeep: Number(contentSettings.pauseKeep ?? options.pauseKeep ?? 0.12), transcriptionModel: contentSettings.transcriptionModel || options.transcriptionModel || "small", aiMode: "full-auto",
           visualStrategy: "rich-media-first",
           cloudImageGenerationEnabled: options.cloudImageGenerationEnabled === true,
           paidImageGenerationConfirmation: options.paidImageGenerationConfirmation !== false,
           rightsReviewMode: options.rightsReviewMode === "advisory" ? "advisory" : "strict"
         },
-        versions: [], reviews: [], assets: [], jobDir: dir
+        versions: [], reviews: [], assets: [], jobDir: dir,
+        ...(workflowConfig ? { workflow: createVisualWorkflowState(workflowConfig) } : {}),
       };
-      await saveJob(job); processJob(job); return json(res, 202, { job });
+      if (workflowConfig) await saveVisualWorkflowConfig(job);
+      await saveJob(job);
+      if (pipeline === VISUAL_WORKFLOW_VERSION) runVisualWorkflowChain(job, "style_research");
+      else processJob(job);
+      return json(res, 202, { job });
     }
     const jobMatch = pathname.match(/^\/api\/jobs\/([^/]+)$/);
     if (req.method === "GET" && jobMatch) return json(res, 200, { job: await readJob(jobMatch[1]) });
+    const workflowStageMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/workflow\/stages\/([^/]+)\/(config|run|approve)$/);
+    if (req.method === "POST" && workflowStageMatch) {
+      const [, jobId, requestedStageId, action] = workflowStageMatch;
+      const body = await readBodyJson(req, 256 * 1024);
+      const job = await readJob(jobId);
+      if (job.pipeline !== VISUAL_WORKFLOW_VERSION && job.workflow?.version !== VISUAL_WORKFLOW_VERSION) return json(res, 409, { error: "该任务不是视觉导演 v4 工作流" });
+      const stageId = requestedStageId === "keyframe_review" && action === "run" ? "keyframes" : requestedStageId;
+      if (!VISUAL_STAGE_ORDER.includes(requestedStageId)) return json(res, 404, { error: "未知工作流阶段" });
+      if (action === "config") {
+        const stage = await updateVisualStageConfig(job, requestedStageId, body);
+        return json(res, 200, { job, stage });
+      }
+      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
+      if (body.settings !== undefined || body.prompt !== undefined) await updateVisualStageConfig(job, requestedStageId, body);
+      if (action === "approve") {
+        await approveVisualGate(job, requestedStageId, body);
+        return json(res, 202, { job, nextStage: requestedStageId === "keyframe_review" ? "motion_sample" : "full_render" });
+      }
+      const feedback = String(body.feedback || "").trim();
+      if (stageId === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") return json(res, 409, { error: "请先批准关键帧" });
+      if (stageId === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+      runVisualWorkflowChain(job, stageId, feedback);
+      return json(res, 202, { job, stageId });
+    }
     const retryMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/retry$/);
     if (req.method === "POST" && retryMatch) {
       const job = await readJob(retryMatch[1]);
       if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
       delete job.error; delete job.errorDetail; delete job.revisionError;
-      processJob(job);
+      if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+        const failedStage = job.errorStage || job.workflow?.currentStage || "style_research";
+        const retryStage = failedStage === "keyframe_review" ? "keyframes" : failedStage;
+        runVisualWorkflowChain(job, retryStage);
+      } else processJob(job);
       return json(res, 202, { job });
     }
     const reviseMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/revise$/);
@@ -2196,6 +3033,15 @@ const server = http.createServer(async (req, res) => {
       const body = await readBodyJson(req); const feedback = String(body.feedback || "").trim();
       if (!feedback) return json(res, 400, { error: "请填写修改意见" });
       const job = await readJob(reviseMatch[1]);
+      if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+        if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
+        if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "动态样片尚未批准，不能返修完整视频" });
+        job.reviews = [...(job.reviews || []), { version: job.output?.version || job.currentVersion || null, feedback, createdAt: new Date().toISOString() }];
+        delete job.approvedAt;
+        await saveJob(job);
+        runVisualWorkflowChain(job, "full_render", feedback);
+        return json(res, 202, { job, reusedTranscript: true, reusedDesign: true });
+      }
       const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
       if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行成片返修" });
       reviseJob(job, feedback); return json(res, 202, { job });
@@ -2205,7 +3051,8 @@ const server = http.createServer(async (req, res) => {
       const body = await readBodyJson(req);
       const job = await readJob(replanMatch[1]);
       if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      replanJob(job, String(body.feedback || ""));
+      if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) runVisualWorkflowChain(job, "content_breakdown", String(body.feedback || ""));
+      else replanJob(job, String(body.feedback || ""));
       return json(res, 202, { job, reusedTranscript: true });
     }
     const rerenderMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/rerender$/);
@@ -2213,6 +3060,11 @@ const server = http.createServer(async (req, res) => {
       const body = await readBodyJson(req);
       const job = await readJob(rerenderMatch[1]);
       if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
+      if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+        if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+        runVisualWorkflowChain(job, "full_render", String(body.reason || "本地重渲染"));
+        return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
+      }
       const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
       if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行本地重渲染" });
       rerenderJob(job, String(body.reason || ""), body);
@@ -2359,7 +3211,16 @@ const server = http.createServer(async (req, res) => {
       if (job.output.qaPass !== true) return json(res, 409, { error: "当前成片QA未通过，不能最终审核" });
       const manifest = await readJsonFile(path.join(confined(jobsRoot, job.id), `media-manifest-v${job.output.version}.json`));
       if (manifest.review?.reviewComplete !== true || manifest.assets.some(asset => asset.approved && asset.composited !== true)) return json(res, 409, { error: "素材审核或实际合成状态不完整，不能最终审核" });
-      job.status = "approved"; job.approvedAt = new Date().toISOString(); await saveJob(job);
+      job.status = "approved"; job.approvedAt = new Date().toISOString();
+      if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+        const stage = job.workflow.stages.full_render;
+        stage.status = "approved";
+        stage.approvedVersion = stage.currentVersion;
+        stage.approvedAt = job.approvedAt;
+        job.workflow.audit ||= [];
+        job.workflow.audit.push({ type: "stage-approved", stageId: "full_render", version: stage.currentVersion, at: job.approvedAt });
+      }
+      await saveJob(job);
       await writeJson(path.join(confined(jobsRoot, job.id), "final-review.json"), { status: "approved", version: job.currentVersion, qaPass: true, mediaReview: manifest.review, renderedAssetIds: manifest.renderedAssetIds || [], approvedAt: job.approvedAt, autoPublish: false });
       return json(res, 200, { job });
     }

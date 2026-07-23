@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "workflowVersion": "visual-director-v4",
+  "label": "AI 视觉导演剪辑流程",
+  "defaultEngine": "hyperframes",
+  "legacyFallback": "ffmpeg-v3",
+  "execution": {
+    "autoAdvanceUntilGate": true,
+    "preserveLegacyJobs": true,
+    "preserveEveryVersion": true,
+    "autoPublish": false,
+    "firstHardGate": "keyframe_review",
+    "secondHardGate": "motion_sample"
+  },
+  "rendering": {
+    "keyframes": {
+      "count": 4,
+      "minCount": 3,
+      "maxCount": 5,
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "quality": "standard"
+    },
+    "sample": {
+      "durationSeconds": 20,
+      "minDurationSeconds": 15,
+      "maxDurationSeconds": 25,
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "quality": "standard"
+    },
+    "final": {
+      "width": 2560,
+      "height": 1440,
+      "fps": 30,
+      "quality": "high",
+      "codec": "h264",
+      "audioCodec": "aac",
+      "pixelFormat": "yuv420p",
+      "colorSpace": "bt709",
+      "loudnessTarget": "-16 LUFS",
+      "truePeakTarget": "-1.5 dBTP"
+    }
+  },
+  "visualDefaults": {
+    "aspectRatio": "16:9",
+    "layout": "speaker-right-information-left",
+    "titlePosition": "upper-left",
+    "summaryPosition": "middle-left",
+    "factsPosition": "lower-left",
+    "speakerPosition": "right",
+    "avoidFaceCenterline": true,
+    "palette": {
+      "background": "#07090F",
+      "surface": "#111621",
+      "primary": "#FF6A3D",
+      "secondary": "#55D6FF",
+      "warning": "#FFD166",
+      "text": "#F7F9FC",
+      "muted": "#9FA9B8"
+    },
+    "motionOrder": [
+      "左上主标题最先出现",
+      "摘要条随后滑入",
+      "三张事实卡依次弹出",
+      "右侧二维动效或真实证据最后展开",
+      "人物缩放和推拉只服务于信息层级"
+    ]
+  },
+  "stages": {
+    "style_research": {
+      "number": 1,
+      "label": "同题视频搜索与风格分析",
+      "description": "自动搜索抖音同题高质量视频，也接受手动参考链接；只提炼包装规律，不复刻文案和人设。",
+      "autoRun": true,
+      "reviewGate": false,
+      "settings": {
+        "autoSearchDouyin": true,
+        "manualReferenceUrls": [],
+        "searchQueries": [],
+        "preferredCreatorUrls": [],
+        "maxReferences": 5,
+        "minimumFullReferences": 1,
+        "includeComments": true,
+        "liveResearchTimeoutSeconds": 240
+      },
+      "uiFields": [
+        { "key": "autoSearchDouyin", "label": "自动搜索抖音同题视频", "type": "checkbox", "help": "不可用时自动回退到已核验参考库。" },
+        { "key": "manualReferenceUrls", "label": "指定参考视频", "type": "lines", "help": "每行一个抖音视频或创作者主页链接，可留空。" },
+        { "key": "searchQueries", "label": "补充搜索词", "type": "lines", "help": "每行一个搜索词；留空时根据主题自动生成。" },
+        { "key": "maxReferences", "label": "最多分析视频数", "type": "number", "min": 1, "max": 8, "step": 1 }
+      ],
+      "prompt": "你是一名短视频视觉导演。请先围绕本条口播的AI主题寻找抖音同题高质量视频，再基于完整可核验的视频、关键画面和公开信息分析：1.视频比例和构图；2.人物主体位置；3.字幕与信息卡位置；4.动效出现顺序；5.标题、摘要、事实卡、图表的层级；6.颜色系统；7.节奏快慢；8.值得借鉴与不适合照搬的元素。必须把结论整理成可复用到本人口播的包装规则，并记录实际参考来源、证据级别和选择理由。不要复制原作者文案、标题、人设、案例或核心表达；无法完整核验的视频只能作为候选，不能假装已经分析完整内容。"
+    },
+    "content_breakdown": {
+      "number": 2,
+      "label": "ASR、语义剪辑与内容拆解",
+      "description": "本地逐字转录、保守删错句，再把口播拆成真正的信息段。",
+      "autoRun": true,
+      "reviewGate": false,
+      "settings": {
+        "transcriptionModel": "small",
+        "language": "zh",
+        "removeSilence": true,
+        "silenceDuration": 0.45,
+        "pauseKeep": 0.12,
+        "minimumSegments": 5,
+        "maximumSegments": 12,
+        "factCardsPerSegment": 3,
+        "preserveSpokenMeaning": true
+      },
+      "uiFields": [
+        { "key": "transcriptionModel", "label": "中文转录模型", "type": "select", "options": [{ "value": "small", "label": "标准 small" }, { "value": "medium", "label": "高精度 medium" }] },
+        { "key": "removeSilence", "label": "删除长停顿与明显重复", "type": "checkbox" },
+        { "key": "silenceDuration", "label": "长停顿阈值（秒）", "type": "number", "min": 0.3, "max": 1.2, "step": 0.05 },
+        { "key": "minimumSegments", "label": "最少信息段", "type": "number", "min": 3, "max": 12, "step": 1 },
+        { "key": "maximumSegments", "label": "最多信息段", "type": "number", "min": 5, "max": 16, "step": 1 }
+      ],
+      "prompt": "你是一名口播内容导演和剪辑导演。先根据带时间戳的逐字稿识别假启动、错句、重复、口头禅和自然停顿，只做保守删减，不得改变原意或补写没有说过的话。再按语义把成片拆成5—12个信息段。每段必须输出：1.这一段口播的大意；2.左上大标题；3.副标题或重点句；4.一句摘要；5.三张事实卡；6.适合放在右侧的图表、二维动效或真实证据；7.应参考风格报告中的哪种包装方式；8.源视频与成片时间段。必须区分字幕和信息卡：字幕只呈现说了什么，信息卡提炼这段真正想表达什么。标题、摘要和事实卡不能机械复述同一句话；事实卡要形成可扫读的信息层级。"
+    },
+    "keyframes": {
+      "number": 3,
+      "label": "生成3—5张关键帧",
+      "description": "先用真人口播关键画面验证构图、层级和颜色，不直接渲染完整视频。",
+      "autoRun": true,
+      "reviewGate": false,
+      "settings": {
+        "count": 4,
+        "selection": "cover-opening-method-proof-close",
+        "useRealSpeakerFrames": true,
+        "includeTitle": true,
+        "includeSummary": true,
+        "includeFacts": true,
+        "includeRightVisual": true,
+        "avoidFaceCenterline": true
+      },
+      "uiFields": [
+        { "key": "count", "label": "关键帧数量", "type": "number", "min": 3, "max": 5, "step": 1 },
+        { "key": "useRealSpeakerFrames", "label": "使用真人原片关键画面", "type": "checkbox" },
+        { "key": "includeRightVisual", "label": "展示右侧图表或二维动效终态", "type": "checkbox" },
+        { "key": "avoidFaceCenterline", "label": "禁止信息遮挡人物脸部中轴", "type": "checkbox" }
+      ],
+      "prompt": "请基于已批准的风格规则、逐字稿和内容拆解，选择3—5个最能代表开场钩子、核心方法、结果证据和结尾互动的信息段，生成横版16:9关键帧设计。每张必须使用我的真人口播画面，并包含左上大标题、左中摘要条、左下三张事实卡、右侧真人口播或证据画面。主标题清晰、信息层级明确、颜色系统统一；不得挡住人物脸部中轴。关键帧不是海报拼贴，而是未来动态视频在某一时刻的真实落地帧，所以还要注明前后动效状态、人物缩放状态和该帧验证的问题。"
+    },
+    "keyframe_review": {
+      "number": 4,
+      "label": "关键帧审核",
+      "description": "逐张批准或写修改意见；未批准不会生成动态样片。",
+      "autoRun": false,
+      "reviewGate": true,
+      "settings": {
+        "approvalMode": "all-frames",
+        "invalidateDownstreamOnRevision": true
+      },
+      "uiFields": [],
+      "prompt": "根据用户对关键帧的逐条反馈，只修改被指出的构图、字号、信息层级、颜色、人物位置或视觉类型。保留已经认可的设计，不重写口播事实，不扩大改动范围。重新输出3—5张完整关键帧方案，并明确列出本版相对上一版的变化。"
+    },
+    "motion_sample": {
+      "number": 5,
+      "label": "15—25秒动态样片",
+      "description": "把批准的关键帧变成有顺序、有推拉和弹出的真实视频小样。",
+      "autoRun": true,
+      "reviewGate": true,
+      "settings": {
+        "durationSeconds": 20,
+        "sampleAnchor": "opening",
+        "titleLeadSeconds": 0.15,
+        "summaryDelaySeconds": 0.85,
+        "factStaggerSeconds": 0.32,
+        "usePushPull": true,
+        "useNumberCount": true,
+        "useFade": true
+      },
+      "uiFields": [
+        { "key": "durationSeconds", "label": "样片时长（秒）", "type": "number", "min": 15, "max": 25, "step": 1 },
+        { "key": "sampleAnchor", "label": "样片位置", "type": "select", "options": [{ "value": "opening", "label": "开场（推荐）" }, { "value": "strongest-segment", "label": "信息最强段" }, { "value": "custom", "label": "自定义时间段" }] },
+        { "key": "usePushPull", "label": "吸收参考视频的推拉节奏", "type": "checkbox" },
+        { "key": "useNumberCount", "label": "数字或进度变化", "type": "checkbox" }
+      ],
+      "prompt": "把已批准关键帧渲染成15—25秒HyperFrames动态样片。左上大标题最先出现；摘要条随后滑入；左下三张事实卡一张一张弹出；右侧二维动效或真实证据最后展开。整体节奏必须有序推进，不能所有元素同时出现。可以吸收参考视频里优秀的推拉、弹出、淡入、数字变化和窗口切换节奏，但不能简单复制画面。人物始终保持可见且脸部中轴安全；每个动效都要服务于当前口播含义。输出逐秒动效表、缓动方式、镜头缩放和样片起止时间。"
+    },
+    "full_render": {
+      "number": 6,
+      "label": "完整视频与2K母版",
+      "description": "样片批准后扩展到全片，输出2K母版、1080p审核版、QA和完整版本记录。",
+      "autoRun": true,
+      "reviewGate": true,
+      "settings": {
+        "masterWidth": 2560,
+        "masterHeight": 1440,
+        "reviewWidth": 1920,
+        "reviewHeight": 1080,
+        "fps": 30,
+        "quality": "high",
+        "renderApprovedAssetsOnly": true,
+        "generateContextSegments": true,
+        "contextSegmentMinSeconds": 15,
+        "contextSegmentMaxSeconds": 30,
+        "runTechnicalQa": true,
+        "runEditorialQa": true,
+        "autoPublish": false
+      },
+      "uiFields": [
+        { "key": "masterWidth", "label": "最终母版宽度", "type": "select", "options": [{ "value": 2560, "label": "2560（2K，推荐）" }, { "value": 1920, "label": "1920（1080p）" }] },
+        { "key": "fps", "label": "帧率", "type": "select", "options": [{ "value": 30, "label": "30 fps（推荐）" }, { "value": 60, "label": "60 fps" }] },
+        { "key": "generateContextSegments", "label": "生成15—30秒分段上下文小样", "type": "checkbox" },
+        { "key": "runEditorialQa", "label": "执行信息层级与遮挡QA", "type": "checkbox" }
+      ],
+      "prompt": "把已经批准的风格规则、内容拆解、关键帧和动态样片扩展到完整口播视频。保持同一颜色、字体、构图、安全区和动效语法，但不能把同一模板机械重复到每一段。每个信息段都要按内容选择真人主画面、标题摘要事实卡、真实证据、前后对比、图表或二维动效；字幕与信息卡继续分轨。只合成已批准素材，来源署名必须真实进入画面。先输出完整HyperFrames故事板和逐段动效时间线，再渲染2560×1440、30fps的2K母版以及1920×1080审核版。最终QA必须检查完整解码、H.264/AAC/yuv420p、BT.709、时长、音量、黑帧/冻结、字幕安全区、人物脸部中轴、信息层级、批准素材实际合成和来源署名。任何未通过项都不得进入最终审核；不得自动发布。"
+    }
+  }
+}

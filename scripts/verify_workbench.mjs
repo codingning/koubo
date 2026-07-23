@@ -11,17 +11,32 @@ const assert = (condition, message) => { if (!condition) failures.push(message);
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8").replace(/^\uFEFF/, "");
 const normalizeSpokenText = value => String(value || "").replace(/[，。！？、；：,.!?;:\s]/g, "");
 
-for (const file of ["video/server.mjs", "video/ai_bridge.py", "scripts/collect_douyin_references.mjs", "config/reference_creators.json", "config/reference_video_library.json", "video/hyperframes-captions/index.html", "video/hyperframes-overlay/index.html", "web/index.html", "web/app.js", "web/styles.css", "打开AI口播工作台.vbs"]) {
+for (const file of ["video/server.mjs", "video/visual_director.mjs", "video/ai_bridge.py", "scripts/collect_douyin_references.mjs", "config/reference_creators.json", "config/reference_video_library.json", "config/video_workflow_v4.json", "docs/VISUAL_DIRECTOR_WORKFLOW_V4.md", "video/hyperframes-captions/index.html", "video/hyperframes-overlay/index.html", "web/index.html", "web/app.js", "web/styles.css", "打开AI口播工作台.vbs"]) {
   assert(fs.existsSync(path.join(root, file)), `缺少文件：${file}`);
 }
 
-for (const file of ["video/server.mjs", "scripts/collect_douyin_references.mjs", "web/app.js"]) {
+for (const file of ["video/server.mjs", "video/visual_director.mjs", "scripts/collect_douyin_references.mjs", "web/app.js"]) {
   const result = spawnSync(process.execPath, ["--check", path.join(root, file)], { encoding: "utf8" });
   assert(result.status === 0, `${file} 语法检查失败：${result.stderr.trim()}`);
 }
 
 process.env.KOUBO_NO_LISTEN = "1";
 const mediaPolicy = await import(`${new URL("../video/server.mjs", import.meta.url).href}?policy-test=${Date.now()}`);
+const visualDirector = await import(`${new URL("../video/visual_director.mjs", import.meta.url).href}?director-test=${Date.now()}`);
+const visualDefaults = JSON.parse(read("config/video_workflow_v4.json"));
+const visualConfig = visualDirector.normalizeVisualWorkflowConfig(visualDefaults, { stages: { keyframes: { settings: { count: 9 } }, motion_sample: { settings: { durationSeconds: 8 } }, full_render: { settings: { masterWidth: 2560, fps: 30 } } } });
+assert(visualConfig.stages.keyframes.settings.count === 5, "关键帧数量未限制在3—5张");
+assert(visualConfig.stages.motion_sample.settings.durationSeconds === 15, "动态样片未限制在15—25秒");
+assert(visualConfig.stages.full_render.settings.masterWidth === 2560 && visualConfig.stages.full_render.settings.masterHeight === 1440, "最终母版默认尺寸不是2560×1440");
+const visualState = visualDirector.createVisualWorkflowState(visualConfig);
+visualState.stages.keyframes.status = "approved";
+visualState.stages.motion_sample.status = "approved";
+visualDirector.invalidateVisualStages(visualState, "content_breakdown", "test");
+assert(visualState.stages.keyframes.status === "pending" && visualState.stages.motion_sample.status === "pending", "上游重做没有作废下游视觉版本");
+const normalizedBreakdown = visualDirector.normalizeContentBreakdown({ segments: [{ sourceTime: { start: 99, end: 120 }, title: "边界测试" }] }, { sourceDuration: 10, outputDuration: 10, minimumSegments: 3, maximumSegments: 5 });
+assert(normalizedBreakdown.segments.every(segment => segment.sourceTime.end <= 10 && segment.sourceTime.end > segment.sourceTime.start), "内容拆解时间段越过源视频边界");
+const normalizedFrames = visualDirector.normalizeKeyframeDirection({}, normalizedBreakdown, 4);
+assert(normalizedFrames.frames.length >= 3 && normalizedFrames.frames.length <= 5, "关键帧方案数量不符合3—5张门禁");
 const existingFixture = path.join(root, "README.md");
 const externalFixture = {
   id: "external-test",
@@ -75,6 +90,12 @@ for (const capability of [
 for (const route of ["/replan", "/rerender", "/cover", "/assets", "/approve"]) {
   assert(serverSource.includes(route), `Missing workflow endpoint: ${route}`);
 }
+for (const route of ["/api/video-workflow/defaults", "/api/video-workflow/drafts", "workflow\\/stages\\/"]) assert(serverSource.includes(route), `Missing visual-director v4 endpoint: ${route}`);
+for (const capability of ["runStyleResearchStage", "runContentBreakdownStage", "runKeyframeStage", "runMotionSampleStage", "runFullRenderStage", "runVisualWorkflowChain", "approveVisualGate"]) assert(serverSource.includes(`function ${capability}`), `Missing visual-director stage implementation: ${capability}`);
+assert(serverSource.includes('pipeline === VISUAL_WORKFLOW_VERSION') && serverSource.includes('runVisualWorkflowChain(job, "style_research")'), "新任务没有默认进入视觉导演v4流程");
+assert(serverSource.includes('runVisualWorkflowChain(job, "motion_sample")') && serverSource.includes('runVisualWorkflowChain(job, "full_render")'), "关键帧或动态样片审核门没有驱动下一阶段");
+assert(serverSource.includes('masterWidth || 2560') && serverSource.includes('masterHeight || (width === 2560 ? 1440 : 1080)'), "完整视频渲染没有保留2K母版路径");
+for (const operation of ["analyze_visual_style", "content_breakdown", "keyframe_direction", "motion_sample_direction", "full_video_direction"]) assert(bridgeSource.includes(operation), `AI bridge missing visual operation: ${operation}`);
 assert(serverSource.includes("assets\\/rediscover"), "Missing rich-media rediscovery endpoint");
 assert(serverSource.includes("auto-review-preview"), "Missing automatic local-media preview endpoint");
 assert(serverSource.includes("assetRenderMatch") && serverSource.includes("renderReviewedAssets"), "Missing reviewed-assets render endpoint");
@@ -86,7 +107,7 @@ assert(serverSource.includes("job.options.generateVariants === false"), "Promoti
 assert(serverSource.includes("tonemap=tonemap=hable"), "HLG/HDR source is not tone-mapped for SDR delivery");
 assert(serverSource.includes('"-color_primaries", "bt709"'), "Rendered video is not tagged as BT.709");
 assert(serverSource.includes('captionStyle: normalizeCaptionStyle(options.captionStyle)'), "新任务未默认启用可控字幕包装");
-assert(serverSource.includes('layout: ["landscape-tech", "original", "vertical", "square"].includes(options.layout) ? options.layout : "landscape-tech"'), "新任务未默认启用 16:9 科技感横版");
+assert(serverSource.includes('pipeline === VISUAL_WORKFLOW_VERSION ? "landscape-tech"'), "新视觉导演任务未固定使用 16:9 横版");
 assert(serverSource.includes('if (layout === "landscape-tech")') && serverSource.includes('ffmpeg-landscape-tech-motion'), "缺少横版科技画布或对应富媒体候选渲染");
 assert(serverSource.includes('renderHorizontal(1920, "16x9")') && serverSource.includes('renderHorizontal(1440, "4x3")'), "封面流程缺少 16:9 或 4:3 横版产物");
 assert(serverSource.includes("coverPackaging.wide16x9?.metadata?.width === 1920") && serverSource.includes("coverPackaging.landscape4x3?.metadata?.width === 1440"), "四画幅封面尺寸没有进入 QA 门禁");
@@ -220,7 +241,11 @@ assert(app.includes("/api/contents/generate"), "网页未接入口播生成接�
 assert(app.includes("/revise`"), "网页未接入自然语言返修接口");
 assert(app.includes("/approve`"), "网页未接入最终审核接口");
 assert(ids.has("edit-caption-style") && ids.has("edit-information-panels"), "网页缺少动态字幕或分屏信息板控制项");
-assert(html.includes('<option value="landscape-tech">16:9 科技感横版</option>'), "网页未把 16:9 科技感横版设为首选");
+assert(html.includes('<option value="landscape-tech">16:9 视觉导演横版</option>'), "网页未把 16:9 视觉导演横版设为首选");
+assert(ids.has("director-workflow-panel") && ids.has("director-stage-cards") && ids.has("director-workflow-version"), "网页缺少六阶段配置与审核面板");
+for (const stageId of ["style_research", "content_breakdown", "keyframes", "keyframe_review", "motion_sample", "full_render"]) assert(html.includes(`data-stage="${stageId}"`), `网页进度轨缺少 ${stageId}`);
+assert(app.includes("collectDirectorWorkflowOverrides") && app.includes("handleDirectorAction") && app.includes("/api/video-workflow/drafts"), "网页没有把逐阶段配置安全传给服务端");
+assert(app.includes("批准并生成动态样片") && app.includes("批准并生成2K全片"), "网页缺少关键帧或动态样片审核门按钮");
 assert(app.includes("captionStyle") && app.includes("informationPanels"), "网页未把字幕包装选项发送给服务端");
 assert(ids.has("edit-generate-cover") && ids.has("edit-cover-title") && ids.has("regenerate-cover"), "网页缺少自动封面开关、标题覆盖或单独重做入口");
 assert(app.includes("generateCover") && app.includes("coverWide16x9") && app.includes("coverLandscape4x3"), "网页未完整接入四画幅封面流程");
@@ -282,7 +307,10 @@ if (urlArg) {
   const base = urlArg.slice(6).replace(/\/$/, "");
   const health = await fetch(`${base}/api/health`).then(async response => ({ response, data: await response.json() }));
   assert(health.response.ok && health.data.ok, "健康检查失败");
-  assert(health.data.version === 3, `服务版本不是 v3：${health.data.version}`);
+  assert(health.data.version === 4, `服务版本不是 v4：${health.data.version}`);
+  assert(health.data.defaultPipeline === "visual-director-v4", "服务未声明视觉导演v4为默认流程");
+  const workflowDefaults = await fetch(`${base}/api/video-workflow/defaults`).then(async response => ({ response, data: await response.json() }));
+  assert(workflowDefaults.response.ok && workflowDefaults.data.workflow?.stages?.full_render?.settings?.masterWidth === 2560, "在线默认工作流接口缺少2K配置");
   assert(health.data.localOnlyVideo === true, "服务未声明原视频本地处理边界");
   assert(health.data.ffmpeg === true, "FFmpeg 不可用");
   const contents = await fetch(`${base}/api/contents`).then(async response => ({ response, data: await response.json() }));
@@ -299,4 +327,4 @@ if (failures.length) {
   console.error(failures.map(item => `- ${item}`).join("\n"));
   process.exit(1);
 }
-console.log(`工作台验证通过：${referenced.size} 个页面控件引用有效${urlArg ? "，v3 服务在线" : ""}。`);
+console.log(`工作台验证通过：${referenced.size} 个页面控件引用有效${urlArg ? "，v4 服务在线" : ""}。`);

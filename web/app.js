@@ -54,6 +54,11 @@
   let selectedVideoFile = null;
   let currentVideoJob = null;
   let videoPollTimer = null;
+  const directorStageOrder = ["style_research", "content_breakdown", "keyframes", "keyframe_review", "motion_sample", "full_render"];
+  const videoRunningStatuses = ["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising", "researching_style", "breaking_down_content", "generating_keyframes", "rendering_sample", "rendering_final"];
+  let directorWorkflowDefaults = null;
+  let directorDraftConfig = null;
+  let directorRenderSignature = "";
 
   function itemState(item = currentItem) {
     if (!persisted.items[item.id]) {
@@ -516,6 +521,187 @@
     }
   }
 
+  function cloneJson(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+  }
+
+  function visualWorkflowJob(job = currentVideoJob) {
+    return !!job && (job.pipeline === "visual-director-v4" || job.workflow?.version === "visual-director-v4");
+  }
+
+  function directorStageStatusLabel(status) {
+    return ({
+      pending: "等待中",
+      running: "生成中",
+      completed: "已生成",
+      awaiting_review: "待审核",
+      approved: "已批准",
+      error: "失败"
+    })[status] || status || "等待中";
+  }
+
+  function directorFieldMarkup(stageId, field, settings) {
+    const value = settings?.[field.key];
+    const id = `director-${stageId}-${field.key}`;
+    const help = field.help ? `<small>${htmlEscape(field.help)}</small>` : "";
+    if (field.type === "checkbox") return `<label class="director-field director-field-check" for="${id}"><span><strong>${htmlEscape(field.label)}</strong>${help}</span><input id="${id}" data-director-setting="${htmlEscape(field.key)}" data-field-type="checkbox" type="checkbox" ${value !== false ? "checked" : ""}></label>`;
+    if (field.type === "lines") return `<label class="director-field director-field-lines" for="${id}"><span><strong>${htmlEscape(field.label)}</strong>${help}</span><textarea id="${id}" data-director-setting="${htmlEscape(field.key)}" data-field-type="lines" rows="3" placeholder="每行一项，可留空">${htmlEscape(Array.isArray(value) ? value.join("\n") : value || "")}</textarea></label>`;
+    if (field.type === "select") return `<label class="director-field" for="${id}"><span><strong>${htmlEscape(field.label)}</strong>${help}</span><select id="${id}" data-director-setting="${htmlEscape(field.key)}" data-field-type="select">${(field.options || []).map(option => `<option value="${htmlEscape(option.value)}" ${String(option.value) === String(value) ? "selected" : ""}>${htmlEscape(option.label)}</option>`).join("")}</select></label>`;
+    return `<label class="director-field" for="${id}"><span><strong>${htmlEscape(field.label)}</strong>${help}</span><input id="${id}" data-director-setting="${htmlEscape(field.key)}" data-field-type="number" type="number" value="${htmlEscape(value ?? "")}" ${field.min === undefined ? "" : `min="${htmlEscape(field.min)}"`} ${field.max === undefined ? "" : `max="${htmlEscape(field.max)}"`} ${field.step === undefined ? "" : `step="${htmlEscape(field.step)}"`}></label>`;
+  }
+
+  function directorStyleOutput(stage) {
+    const report = stage?.artifacts?.report;
+    if (!report) return "";
+    const references = (report.selectedReferences || []).map(item => item.sourceUrl
+      ? `<a href="${htmlEscape(item.sourceUrl)}" target="_blank" rel="noreferrer">${htmlEscape(item.creatorName || item.workTitle || "参考视频")}</a>`
+      : `<span>${htmlEscape(item.creatorName || item.workTitle || "参考来源")}</span>`).join("");
+    return `<div class="director-output"><strong>风格结论</strong><p>${htmlEscape(report.summary || "已完成视觉风格分析")}</p><div class="director-reference-links">${references}</div>${stage.artifacts.reportUrl ? `<a class="director-artifact-link" href="${videoApiBase}${htmlEscape(stage.artifacts.reportUrl)}" target="_blank">打开完整风格报告</a>` : ""}</div>`;
+  }
+
+  function directorBreakdownOutput(stage) {
+    const breakdown = stage?.artifacts?.breakdown;
+    if (!breakdown?.segments?.length) return "";
+    return `<div class="director-output"><strong>已拆成 ${breakdown.segments.length} 个信息段</strong><div class="director-segment-strip">${breakdown.segments.slice(0, 12).map(segment => `<article><b>${htmlEscape(segment.id)} · ${htmlEscape(segment.upperLeftTitle)}</b><span>${htmlEscape(segment.oneSentenceSummary)}</span><small>${Number(segment.editedTime?.start || 0).toFixed(1)}—${Number(segment.editedTime?.end || 0).toFixed(1)}秒</small></article>`).join("")}</div>${stage.artifacts.breakdownUrl ? `<a class="director-artifact-link" href="${videoApiBase}${htmlEscape(stage.artifacts.breakdownUrl)}" target="_blank">打开完整内容拆解</a>` : ""}</div>`;
+  }
+
+  function directorKeyframeOutput(workflow) {
+    const artifacts = workflow?.stages?.keyframes?.artifacts;
+    if (!artifacts?.frames?.length) return "";
+    return `<div class="director-output"><strong>${artifacts.frames.length} 张 1920×1080 关键帧</strong><div class="director-keyframe-grid">${artifacts.frames.map((frame, index) => `<a href="${videoApiBase}${htmlEscape(frame.url)}" target="_blank" title="打开原图"><img src="${videoApiBase}${htmlEscape(frame.url)}?v=${Number(workflow.stages.keyframes.currentVersion || 1)}" alt="关键帧 ${index + 1}"><span>${htmlEscape(frame.id || `关键帧 ${index + 1}`)} · ${htmlEscape(frame.purpose || "构图审核")}</span></a>`).join("")}</div></div>`;
+  }
+
+  function directorSampleOutput(stage) {
+    const artifacts = stage?.artifacts;
+    if (!artifacts?.url) return "";
+    return `<div class="director-output director-sample-output"><strong>15—25秒动态样片</strong><video controls playsinline preload="metadata" poster="${artifacts.thumbnailUrl ? `${videoApiBase}${htmlEscape(artifacts.thumbnailUrl)}` : ""}" src="${videoApiBase}${htmlEscape(artifacts.url)}"></video><small>成片时间 ${Number(artifacts.sampleStart || 0).toFixed(1)}—${Number(artifacts.sampleEnd || 0).toFixed(1)} 秒 · ${artifacts.metadata?.width || 1920}×${artifacts.metadata?.height || 1080}</small></div>`;
+  }
+
+  function directorFullOutput(stage, job) {
+    if (!stage?.artifacts?.output && !job?.output) return "";
+    const output = stage?.artifacts?.output || job.output;
+    return `<div class="director-output"><strong>完整视频已生成</strong><p>${output.metadata?.width || 2560}×${output.metadata?.height || 1440} · ${formatDuration(output.metadata?.duration)} · QA ${output.qaPass ? "通过" : "需检查"}</p><span>请在下方“完整预览与分段审核”里观看、返修或最终批准。</span></div>`;
+  }
+
+  function directorStageOutput(stageId, stage, workflow, job) {
+    if (stageId === "style_research") return directorStyleOutput(stage);
+    if (stageId === "content_breakdown") return directorBreakdownOutput(stage);
+    if (stageId === "keyframe_review") return directorKeyframeOutput(workflow);
+    if (stageId === "motion_sample") return directorSampleOutput(stage);
+    if (stageId === "full_render") return directorFullOutput(stage, job);
+    return "";
+  }
+
+  function directorStageActions(stageId, stage, workflow, hasJob) {
+    const running = Object.values(workflow?.stages || {}).some(item => item.status === "running");
+    const save = `<button class="btn btn-secondary" data-director-save="${stageId}">${hasJob ? "保存本步配置" : "保留本步设置"}</button>`;
+    if (!hasJob) return save;
+    const feedback = `<textarea class="director-feedback" data-director-feedback rows="2" placeholder="可选：写本次重做意见；留空按当前配置生成"></textarea>`;
+    if (stageId === "keyframe_review") return `${feedback}<div class="inline-actions"><button class="btn btn-secondary" data-director-run="${stageId}" ${running ? "disabled" : ""}>按意见重做关键帧</button><button class="btn btn-primary" data-director-approve="${stageId}" ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>批准并生成动态样片</button></div>`;
+    if (stageId === "motion_sample") return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}" ${workflow?.stages?.keyframe_review?.status !== "approved" || running ? "disabled" : ""}>重做动态样片</button><button class="btn btn-primary" data-director-approve="${stageId}" ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>批准并生成2K全片</button></div>`;
+    if (stageId === "full_render") return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}" ${workflow?.stages?.motion_sample?.status !== "approved" || running ? "disabled" : ""}>重新渲染全片</button></div>`;
+    return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}" ${running ? "disabled" : ""}>从本步重新生成</button></div>`;
+  }
+
+  function renderDirectorWorkflow(job = currentVideoJob, force = false) {
+    const panel = byId("director-workflow-panel");
+    const container = byId("director-stage-cards");
+    if (!panel || !container) return;
+    if (!directorWorkflowDefaults) {
+      container.innerHTML = `<div class="empty-state">视觉导演默认配置尚未加载，请确认本地服务已启动。</div>`;
+      return;
+    }
+    const activeJob = visualWorkflowJob(job) ? job : null;
+    const workflow = activeJob?.workflow || null;
+    const config = workflow?.config || directorDraftConfig || directorWorkflowDefaults;
+    const signature = JSON.stringify({ id: activeJob?.id || "draft", configVersion: workflow?.configVersion || 0, stages: directorStageOrder.map(id => [workflow?.stages?.[id]?.status || "pending", workflow?.stages?.[id]?.currentVersion || 0]) });
+    if (!force && directorRenderSignature === signature) return;
+    if (!force && panel.contains(document.activeElement)) return;
+    directorRenderSignature = signature;
+    if (workflow?.config) directorDraftConfig = cloneJson(workflow.config);
+    byId("director-workflow-version").textContent = activeJob ? `任务 ${activeJob.id} · 配置 v${workflow.configVersion || 1}` : "默认配置 · 未改即直接使用";
+    container.innerHTML = directorStageOrder.map(stageId => {
+      const stageConfig = config.stages[stageId];
+      const stage = workflow?.stages?.[stageId] || { status: "pending", currentVersion: 0 };
+      const fields = (stageConfig.uiFields || []).map(field => directorFieldMarkup(stageId, field, stageConfig.settings || {})).join("");
+      const statusClass = `is-${String(stage.status || "pending").replaceAll("_", "-")}`;
+      const output = directorStageOutput(stageId, stage, workflow, activeJob);
+      return `<section class="director-stage-card ${statusClass}" data-director-stage="${stageId}">
+        <header><b>${htmlEscape(stageConfig.number)}</b><div><h4>${htmlEscape(stageConfig.label)}</h4><p>${htmlEscape(stageConfig.description)}</p></div><span>${htmlEscape(directorStageStatusLabel(stage.status))}${stage.currentVersion ? ` · v${Number(stage.currentVersion)}` : ""}</span></header>
+        ${fields ? `<div class="director-fields">${fields}</div>` : ""}
+        <details class="director-prompt"><summary>高级：查看或修改本步提示词</summary><textarea data-director-prompt rows="8">${htmlEscape(stageConfig.prompt || "")}</textarea><small>只影响当前步骤。留空不会调用隐藏提示词，而是明确使用空提示词，请谨慎。</small></details>
+        ${output}
+        <div class="director-actions">${directorStageActions(stageId, stage, workflow, !!activeJob)}</div>
+      </section>`;
+    }).join("");
+  }
+
+  function readDirectorStageCard(stageId) {
+    const card = $(`[data-director-stage="${stageId}"]`, byId("director-stage-cards"));
+    if (!card) return { settings: {}, prompt: "", feedback: "" };
+    const baseSettings = (currentVideoJob?.workflow?.config || directorDraftConfig || directorWorkflowDefaults)?.stages?.[stageId]?.settings || {};
+    const settings = { ...baseSettings };
+    $$('[data-director-setting]', card).forEach(input => {
+      const key = input.dataset.directorSetting;
+      if (input.dataset.fieldType === "checkbox") settings[key] = input.checked;
+      else if (input.dataset.fieldType === "lines") settings[key] = input.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+      else if (input.dataset.fieldType === "number") settings[key] = Number(input.value);
+      else settings[key] = typeof baseSettings[key] === "number" ? Number(input.value) : input.value;
+    });
+    return { settings, prompt: $('[data-director-prompt]', card)?.value || "", feedback: $('[data-director-feedback]', card)?.value.trim() || "" };
+  }
+
+  function collectDirectorWorkflowOverrides() {
+    if (!directorWorkflowDefaults) return {};
+    const overrides = { stages: {} };
+    for (const stageId of directorStageOrder) {
+      const card = $(`[data-director-stage="${stageId}"]`, byId("director-stage-cards"));
+      if (!card) continue;
+      const value = readDirectorStageCard(stageId);
+      const defaultStage = directorWorkflowDefaults.stages[stageId];
+      const visibleKeys = new Set((defaultStage.uiFields || []).map(field => field.key));
+      const settings = Object.fromEntries(Object.entries(value.settings).filter(([key]) => visibleKeys.has(key)));
+      overrides.stages[stageId] = { settings };
+      if (value.prompt !== defaultStage.prompt) overrides.stages[stageId].prompt = value.prompt;
+    }
+    return overrides;
+  }
+
+  async function handleDirectorAction(button) {
+    const stageId = button.dataset.directorSave || button.dataset.directorRun || button.dataset.directorApprove;
+    if (!stageId) return;
+    const value = readDirectorStageCard(stageId);
+    if (!visualWorkflowJob()) {
+      directorDraftConfig ||= cloneJson(directorWorkflowDefaults);
+      directorDraftConfig.stages[stageId].settings = value.settings;
+      directorDraftConfig.stages[stageId].prompt = value.prompt;
+      toast("本步设置已保留，上传后生效");
+      return;
+    }
+    const action = button.dataset.directorSave ? "config" : button.dataset.directorApprove ? "approve" : "run";
+    button.disabled = true;
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/workflow/stages/${encodeURIComponent(stageId)}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: value.settings, prompt: value.prompt, feedback: value.feedback })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "阶段操作失败");
+      currentVideoJob = payload.job || currentVideoJob;
+      directorRenderSignature = "";
+      renderDirectorWorkflow(currentVideoJob, true);
+      if (action === "config") toast("本步配置已保存，未自动重跑");
+      else {
+        toast(action === "approve" ? "已批准，工作流开始下一步" : "已启动本步重新生成");
+        pollVideoJob(currentVideoJob.id);
+      }
+    } catch (error) {
+      toast(`操作失败：${error.message}`);
+      button.disabled = false;
+    }
+  }
+
   async function checkVideoService() {
     const status = byId("video-service-status");
     const detail = byId("video-service-detail");
@@ -524,16 +710,27 @@
       if (!response.ok) throw new Error("服务响应异常");
       serviceHealth = await response.json();
       videoServiceOnline = !!serviceHealth.ok && !!serviceHealth.ffmpeg;
-      status.textContent = videoServiceOnline ? "全自动口播工作流已就绪" : "已连接，但FFmpeg不可用";
+      status.textContent = videoServiceOnline ? "视觉导演 v4 工作流已就绪" : "已连接，但FFmpeg不可用";
       status.className = `service-status ${videoServiceOnline ? "is-online" : "is-offline"}`;
       const modelText = serviceHealth.ai?.configured ? `文本模型 ${serviceHealth.ai.model}` : "文本模型未配置";
       detail.textContent = videoServiceOnline
-        ? `本地视频处理 · ${modelText} · 本地转录 ${serviceHealth.ai?.transcriptionModel || "faster-whisper/small"}`
+        ? `HyperFrames默认 · 2K母版 · 两道审核门 · ${modelText} · 本地转录 ${serviceHealth.ai?.transcriptionModel || "faster-whisper/small"}`
         : "请确认 FFmpeg 已安装并重新打开工作台。";
       byId("generation-status").textContent = serviceHealth.ai?.configured
         ? `已连接 ${serviceHealth.ai.model}；点击即可根据最近真实进展生成新口播。`
         : "视频仍可本地处理，但AI口播生成和语义剪辑需要文本模型配置。";
       byId("generate-content").disabled = !(videoServiceOnline && serviceHealth.ai?.configured);
+      try {
+        const workflowResponse = await fetch(`${videoApiBase}/api/video-workflow/defaults`, { cache: "no-store" });
+        const workflowPayload = await workflowResponse.json();
+        if (!workflowResponse.ok || !workflowPayload.workflow) throw new Error(workflowPayload.error || "默认配置读取失败");
+        directorWorkflowDefaults = workflowPayload.workflow;
+        directorDraftConfig ||= cloneJson(directorWorkflowDefaults);
+        directorRenderSignature = "";
+        renderDirectorWorkflow(currentVideoJob, true);
+      } catch (error) {
+        byId("director-stage-cards").innerHTML = `<div class="empty-state">六阶段配置读取失败：${htmlEscape(error.message)}</div>`;
+      }
       await refreshGeneratedContents();
       if (!currentVideoJob) await restoreLatestVideoJob();
     } catch (_) {
@@ -549,8 +746,12 @@
   }
 
   function handleVideoSelection(file) {
+    const hadActiveJob = !!currentVideoJob;
     selectedVideoFile = file || null;
     currentVideoJob = null;
+    if (hadActiveJob && directorWorkflowDefaults) directorDraftConfig = cloneJson(directorWorkflowDefaults);
+    directorRenderSignature = "";
+    renderDirectorWorkflow(null, true);
     clearTimeout(videoPollTimer);
     byId("edit-results").classList.add("is-hidden");
     byId("edit-analysis").classList.add("is-hidden");
@@ -577,9 +778,13 @@
 
   function currentEditOptions() {
     const editedScript = String(itemState().editedScript || "").trim();
+    const workflowConfig = collectDirectorWorkflowOverrides();
+    const contentSettings = workflowConfig.stages?.content_breakdown?.settings || {};
     return {
+      pipeline: "visual-director-v4",
+      workflowConfig,
       layout: byId("edit-layout").value,
-      removeSilence: byId("edit-remove-silence").checked,
+      removeSilence: contentSettings.removeSilence !== false,
       captions: byId("edit-captions").checked,
       captionStyle: byId("edit-caption-style").value,
       informationPanels: byId("edit-information-panels").checked,
@@ -587,8 +792,8 @@
       generateCover: byId("edit-generate-cover").checked,
       coverTitle: byId("edit-cover-title").value.trim(),
       contentTitle: String(itemState().selectedTitle || currentItem.mainTopic || currentItem.shortTopic || "").trim(),
-      silenceDuration: Number(byId("edit-silence-duration").value),
-      transcriptionModel: byId("edit-transcription-model").value,
+      silenceDuration: Number(contentSettings.silenceDuration ?? 0.45),
+      transcriptionModel: contentSettings.transcriptionModel || "small",
       visualStrategy: "rich-media-first",
       cloudImageGenerationEnabled: true,
       paidImageGenerationConfirmation: false,
@@ -602,13 +807,21 @@
     byId("analyze-video").disabled = true;
     setEditProgress(1, `正在把 ${selectedVideoFile.name} 复制到本地任务目录……`);
     try {
+      const options = currentEditOptions();
+      const draftResponse = await fetch(`${videoApiBase}/api/video-workflow/drafts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(options)
+      });
+      const draftPayload = await draftResponse.json();
+      if (!draftResponse.ok) throw new Error(draftPayload.error || "工作流配置保存失败");
       const response = await fetch(`${videoApiBase}/api/jobs`, {
         method: "POST",
         headers: {
           "Content-Type": selectedVideoFile.type || "application/octet-stream",
           "X-File-Name": encodeURIComponent(selectedVideoFile.name),
           "X-Content-Id": encodeURIComponent(currentItem.id),
-          "X-Options": encodeURIComponent(JSON.stringify(currentEditOptions()))
+          "X-Workflow-Draft": draftPayload.draftId
         },
         body: selectedVideoFile
       });
@@ -627,18 +840,38 @@
     const labels = {
       uploaded: "视频已上传", analyzing: "正在分析画面、音轨和停顿", transcribing: "正在本地逐字转录（首次可能下载模型）",
       planning: "AI正在根据逐字稿生成剪辑决策", rendering: "正在生成完整剪辑预览与分段上下文小样",
-      awaiting_asset_review: "素材候选已准备，可自动采用本地素材生成完整预览", revising: "正在按你的意见生成新版本", awaiting_review: "完整预览与分段小样已完成，请从头到尾检查", approved: "已审核通过", error: "自动处理失败"
+      researching_style: "正在搜索同题视频并提炼可复用包装规则",
+      breaking_down_content: "正在转录、保守删错句并拆解信息段",
+      generating_keyframes: "正在用真人原片生成3—5张关键帧",
+      awaiting_keyframe_review: "关键帧已完成，请逐张检查后批准",
+      rendering_sample: "正在渲染15—25秒HyperFrames动态样片",
+      awaiting_sample_review: "动态样片已完成，请观看后批准",
+      rendering_final: "正在把批准的设计扩展到2K完整视频并执行QA",
+      awaiting_asset_review: "素材候选已准备，可逐条审核", revising: "正在按你的意见生成新版本", awaiting_review: "2K全片与1080p审核版已完成，请从头到尾检查", approved: "已审核通过", error: "自动处理失败"
     };
     return labels[job.status] || job.status || "处理中";
   }
 
-  function renderAutomationRail(status) {
-    const stageByStatus = { uploaded: "upload", analyzing: "upload", transcribing: "transcribe", planning: "plan", awaiting_asset_review: "assets", rendering: "render", revising: "render", awaiting_review: "review", approved: "review", error: "render" };
-    const order = ["upload", "transcribe", "plan", "assets", "render", "review"];
-    const current = stageByStatus[status] || status || "upload";
-    const currentIndex = Math.max(0, order.indexOf(current));
+  function renderAutomationRail(input) {
+    const job = typeof input === "object" ? input : null;
+    const status = job?.status || input;
+    if (visualWorkflowJob(job)) {
+      const current = job.workflow?.currentStage || "style_research";
+      $$(".automation-rail [data-stage]").forEach(node => {
+        const stageId = node.dataset.stage;
+        const stage = job.workflow?.stages?.[stageId] || {};
+        const done = job.status === "approved" || ["completed", "approved"].includes(stage.status) || (stageId === "keyframes" && job.workflow?.stages?.keyframe_review?.status === "awaiting_review");
+        node.classList.toggle("is-active", stageId === current && job.status !== "approved");
+        node.classList.toggle("is-done", done && !(stageId === current && ["awaiting_review", "running"].includes(stage.status)));
+        node.classList.toggle("is-error", job.status === "error" && (job.errorStage || current) === stageId);
+      });
+      return;
+    }
+    const legacyStageByStatus = { uploaded: "style_research", analyzing: "content_breakdown", transcribing: "content_breakdown", planning: "content_breakdown", awaiting_asset_review: "keyframe_review", rendering: "full_render", revising: "full_render", awaiting_review: "full_render", approved: "full_render", error: "full_render" };
+    const current = legacyStageByStatus[status] || "style_research";
+    const currentIndex = Math.max(0, directorStageOrder.indexOf(current));
     $$(".automation-rail [data-stage]").forEach((node, index) => {
-      node.classList.toggle("is-active", index === currentIndex);
+      node.classList.toggle("is-active", index === currentIndex && status !== "approved");
       node.classList.toggle("is-done", index < currentIndex || status === "approved");
       node.classList.toggle("is-error", status === "error" && index === currentIndex);
     });
@@ -652,7 +885,7 @@
       if (!response.ok) throw new Error(payload.error || "任务读取失败");
       currentVideoJob = payload.job;
       renderVideoJob(currentVideoJob);
-      if (["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising"].includes(currentVideoJob.status)) {
+      if (videoRunningStatuses.includes(currentVideoJob.status)) {
         videoPollTimer = setTimeout(() => pollVideoJob(id), 1400);
       }
     } catch (error) {
@@ -662,12 +895,13 @@
   }
 
   function renderVideoJob(job) {
-    renderAutomationRail(job.status);
+    renderAutomationRail(job);
     const detail = job.revisionError ? `；最近一次返修失败：${job.revisionError}` : "";
     setEditProgress(job.progress || 0, `${statusLabel(job)}${detail}`);
     if (job.analysis) renderEditAnalysis(job);
     byId("retry-video").classList.toggle("is-hidden", job.status !== "error");
-    byId("replan-video").classList.toggle("is-hidden", !(job.transcript && !["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising"].includes(job.status)));
+    byId("replan-video").classList.toggle("is-hidden", !(job.transcript && !videoRunningStatuses.includes(job.status)));
+    renderDirectorWorkflow(job);
     renderMediaAssets(job);
     if (job.output) renderEditResult(job);
     if (job.status === "error") byId("analyze-video").disabled = false;
@@ -743,7 +977,7 @@
       byId("cover-downloads").innerHTML = "";
     }
     const variantLabels = { vertical: "9:16 竖屏", square: "1:1 方形", original: "原比例" };
-    const artifactLabels = { editPlan: "剪辑计划", timeline: "时间线 JSON", edl: "CMX 3600 EDL", captions: "字幕 ASS", captionStoryboard: "动态字幕分镜", filter: "FFmpeg 脚本", qa: "QA 报告", mediaManifest: "素材清单", coverDesign: "封面设计 JSON", coverVertical: "封面 9:16", coverGrid: "封面 3:4", coverWide16x9: "封面 16:9", coverLandscape4x3: "封面 4:3" };
+    const artifactLabels = { editPlan: "剪辑计划", timeline: "时间线 JSON", edl: "CMX 3600 EDL", captions: "字幕 ASS", captionStoryboard: "动态字幕分镜", filter: "FFmpeg 脚本", qa: "QA 报告", mediaManifest: "素材清单", coverDesign: "封面设计 JSON", coverVertical: "封面 9:16", coverGrid: "封面 3:4", coverWide16x9: "封面 16:9", coverLandscape4x3: "封面 4:3", styleReport: "视觉风格分析", contentBreakdown: "内容拆解", keyframeDirection: "关键帧导演方案", motionSample: "动态样片", fullDirection: "全片导演方案", hyperframesProject: "HyperFrames 工程", hyperframesManifest: "HyperFrames 清单" };
     byId("variant-downloads").innerHTML = Object.entries(output.variants || {}).map(([name, item]) => item.available === false
       ? `<span class="variant-unavailable" title="${htmlEscape(item.reason || "当前母版无法生成")}">${variantLabels[name] || name}不可用</span>`
       : `<a href="${videoApiBase}${htmlEscape(item.url)}" download>下载 ${variantLabels[name] || name}</a>`).join("");
@@ -844,7 +1078,7 @@
       if (!response.ok || !job) return;
       currentVideoJob = job;
       renderVideoJob(job);
-      if (["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising"].includes(job.status)) pollVideoJob(job.id);
+      if (videoRunningStatuses.includes(job.status)) pollVideoJob(job.id);
     } catch (_) {}
   }
 
@@ -1138,6 +1372,10 @@
   byId("rediscover-media").addEventListener("click", rediscoverMediaAssets);
   byId("auto-review-preview").addEventListener("click", autoReviewAndPreview);
   byId("render-with-assets").addEventListener("click", renderWithApprovedAssets);
+  byId("director-stage-cards").addEventListener("click", event => {
+    const button = event.target.closest("[data-director-save],[data-director-run],[data-director-approve]");
+    if (button) handleDirectorAction(button);
+  });
   byId("media-assets").addEventListener("click", event => {
     const approve = event.target.closest("[data-approve-media]");
     const reject = event.target.closest("[data-reject-media]");

@@ -269,12 +269,12 @@
           </div>
         </section>
 
-        <section id="view-edit" class="view" data-title="拍完AI剪辑" data-eyebrow="上传后全自动处理，只在最后审核">
+        <section id="view-edit" class="view" data-title="拍完AI剪辑" data-eyebrow="先看关键帧，再看动态样片，最后看全片">
           <div class="edit-intro">
             <div>
-              <span class="start-kicker">只做两件事：上传原片，最后审核</span>
-              <h2>转录、删错句、字幕、重点卡片、调音量、渲染和QA由工作流自动完成</h2>
-              <p>原视频始终留在本机。文本模型只接收脱敏后的口播稿与文字转录，用来生成剪辑决策，不会收到原视频文件。</p>
+              <span class="start-kicker">默认视觉导演 v4 · 每一步可配置</span>
+              <h2>先分析同题高质量视频，再拆解口播、审关键帧、审动态样片，最后渲染2K全片</h2>
+              <p>不改设置就使用默认提示词。关键帧和15—25秒动态样片分别是硬审核门；未批准不会继续生成完整视频。旧任务仍可按原 FFmpeg v3 流程打开。</p>
             </div>
             <div class="service-card">
               <span id="video-service-status" class="service-status is-checking">正在检查自动化工作流</span>
@@ -283,12 +283,12 @@
           </div>
 
           <div class="automation-rail" aria-label="自动化阶段">
-            <div data-stage="upload"><b>1</b><span>上传原片</span></div>
-            <div data-stage="transcribe"><b>2</b><span>本地逐字转录</span></div>
-            <div data-stage="plan"><b>3</b><span>AI剪辑决策</span></div>
-            <div data-stage="assets"><b>4</b><span>你审核素材</span></div>
-            <div data-stage="render"><b>5</b><span>字幕包装与渲染</span></div>
-            <div data-stage="review"><b>6</b><span>你最终审核</span></div>
+            <div data-stage="style_research"><b>1</b><span>同题风格分析</span></div>
+            <div data-stage="content_breakdown"><b>2</b><span>ASR与内容拆解</span></div>
+            <div data-stage="keyframes"><b>3</b><span>关键帧生成</span></div>
+            <div data-stage="keyframe_review"><b>4</b><span>关键帧审核</span></div>
+            <div data-stage="motion_sample"><b>5</b><span>动态样片审核</span></div>
+            <div data-stage="full_render"><b>6</b><span>2K全片与QA</span></div>
           </div>
 
           <div class="edit-layout-grid">
@@ -305,18 +305,15 @@
             </article>
 
             <article class="panel edit-options-panel">
-              <div class="panel-head"><h3>2. 自动处理设置</h3><span class="mini-label">默认值可直接使用</span></div>
-              <label class="edit-option-row"><span><strong>输出画面</strong><small>默认按参考博主风格重构为 16:9 科技感横版</small></span><select id="edit-layout"><option value="landscape-tech">16:9 科技感横版</option><option value="vertical">9:16 竖屏</option><option value="original">保持原比例</option><option value="square">1:1 方形</option></select></label>
-              <label class="edit-option-row"><span><strong>删除长停顿和明显重复</strong><small>先检测停顿，再由AI根据逐字稿保守删减</small></span><input id="edit-remove-silence" type="checkbox" checked></label>
+              <div class="panel-head"><h3>2. 通用输出设置</h3><span class="mini-label">阶段参数在下方逐步配置</span></div>
+              <label class="edit-option-row"><span><strong>输出画面</strong><small>视觉导演流程固定先生成 16:9 横版；平台变体从审核母版派生</small></span><select id="edit-layout"><option value="landscape-tech">16:9 视觉导演横版</option></select></label>
               <label class="edit-option-row"><span><strong>动态逐字字幕</strong><small>按真实语音时间轴切短句，重点词自动高亮</small></span><input id="edit-captions" type="checkbox" checked></label>
               <label class="edit-option-row"><span><strong>字幕包装</strong><small>关键词弹入接近参考视频的节奏，失败会自动降级</small></span><select id="edit-caption-style"><option value="keyword-pop" selected>关键词弹入（推荐）</option><option value="clean-card">卡片字幕</option><option value="static">简洁静态</option></select></label>
               <label class="edit-option-row"><span><strong>结构化分屏信息板</strong><small>只在步骤、清单等关键段落出现，条目依次滑入</small></span><input id="edit-information-panels" type="checkbox" checked></label>
               <label class="edit-option-row"><span><strong>生成三种平台画幅</strong><small>竖屏、方形和原比例均从同一审核母版派生</small></span><input id="edit-generate-variants" type="checkbox" checked></label>
               <label class="edit-option-row"><span><strong>生成醒目文字封面</strong><small>自动独立排版 9:16、3:4、16:9 横版和 4:3 横版</small></span><input id="edit-generate-cover" type="checkbox" checked></label>
               <label class="edit-option-row"><span><strong>封面主标题（可选）</strong><small>用“/”分行；留空时由 AI 从口播稿提炼</small></span><input id="edit-cover-title" type="text" maxlength="42" placeholder="例如：我用 Codex / 做了一个 / AI口播工作台"></label>
-              <label class="edit-option-row"><span><strong>剪辑节奏</strong><small>自然模式会保留必要呼吸</small></span><select id="edit-silence-duration"><option value="0.35">更紧凑</option><option value="0.45" selected>自然</option><option value="0.65">更保守</option></select></label>
-              <label class="edit-option-row"><span><strong>中文转录精度</strong><small>small 更快，medium 更准但更慢</small></span><select id="edit-transcription-model"><option value="small" selected>标准（推荐）</option><option value="medium">高精度</option></select></label>
-              <button id="analyze-video" class="btn btn-primary btn-block" disabled>上传并开始全自动剪辑</button>
+              <button id="analyze-video" class="btn btn-primary btn-block" disabled>上传并启动视觉导演流程</button>
             </article>
           </div>
 
@@ -328,6 +325,14 @@
             <div class="job-progress"><div id="edit-progress-bar"></div></div>
             <div id="edit-job-status" class="job-status">等待选择视频</div>
             <div id="edit-analysis" class="edit-analysis is-hidden"></div>
+          </article>
+
+          <article id="director-workflow-panel" class="panel director-workflow-panel">
+            <div class="panel-head director-workflow-head">
+              <div><h3>视觉导演流程配置与审核</h3><p>六步都有默认参数和默认提示词。需要调整时只改当前步骤；上游重做会自动作废下游旧版本，但不会覆盖文件。</p></div>
+              <span id="director-workflow-version" class="mini-label">正在读取默认配置</span>
+            </div>
+            <div id="director-stage-cards" class="director-stage-cards"><div class="empty-state">正在加载六阶段配置……</div></div>
           </article>
 
           <article id="asset-review-panel" class="panel asset-review-panel is-hidden">
