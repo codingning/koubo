@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "koubo://schemas/combination-recipe/v1",
+  "title": "Koubo Combination Recipe v1",
+  "type": "object",
+  "x-koubo-common-record": true,
+  "required": [
+    "id", "schemaVersion", "createdAt", "createdBy", "status", "source", "evidence",
+    "applicability", "prohibitions", "versions", "contentHash",
+    "title", "techniqueIds", "timing", "conflicts"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "status": { "type": "string" },
+    "title": { "type": "string" },
+    "techniqueIds": { "type": "array", "minItems": 2, "items": { "type": "string" } },
+    "timing": { "type": "object" },
+    "conflicts": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,5 @@
+# Direct runtime dependencies for the isolated multi-agent bridge.
+# Every package here is an audited, exact top-level pin. Transitive versions are
+# captured after installation in requirements-multi-agent.resolved.txt.
+openai-agents==0.18.3
+scenedetect==0.7.1

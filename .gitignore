@@ -18,12 +18,19 @@ Thumbs.db
 *.tmp
 .superpowers/
 .cache/
+.promptfoo/
 # Generated AI content and local runtime
 content-items/
 .runtime/
 .runtime-downloads/
+.runtime-multi-agent/
 __pycache__/
 *.pyc
+
+# Local governed memory, private evidence, and generated indexes
+data/multi-agent/runtime/
+data/multi-agent/library/
+data/multi-agent/assets/raw/
 
 # Isolated local visual-engine experiment; not part of the v4 baseline
 video/remotion-day2-comparison/

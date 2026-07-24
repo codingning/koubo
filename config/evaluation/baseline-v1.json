@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "baselineId": "koubo-v4-baseline-v1",
+  "frozenAt": "2026-07-23T05:24:29.184Z",
+  "sourceRootPolicy": {
+    "type": "external-local-jobs-root",
+    "environmentVariable": "KOUBO_VIDEO_JOBS_ROOT",
+    "repositoryDefault": "video-jobs",
+    "mediaCopiedIntoGit": false
+  },
+  "samples": [
+    {
+      "jobId": "20260716100244-18cd59",
+      "pipeline": "legacy-ffmpeg-v3",
+      "status": "approved",
+      "source": "自动口播端到端测试.mp4",
+      "coverage": [
+        "captions",
+        "legacy",
+        "method"
+      ],
+      "artifacts": [
+        {
+          "path": "edit-plan-v3.json",
+          "bytes": 1603,
+          "sha256": "49ad6147825d9194f9ee6a09be2ebd4446b6dc27d174512cfef48ac082c7f891"
+        },
+        {
+          "path": "job.json",
+          "bytes": 16494,
+          "sha256": "49b2caf0f8d6499188233c35872dd3e5eca46a601f148972e8f999fe3eea68e6"
+        },
+        {
+          "path": "自动口播端到端测试.mp4",
+          "bytes": 156432,
+          "sha256": "08d6bb8f57be7a84275161de4577dd0723a35fc544366524bcb422bc276b27c0"
+        }
+      ]
+    },
+    {
+      "jobId": "20260721132116-0831f6",
+      "pipeline": "legacy-ffmpeg-v3",
+      "status": "awaiting_review",
+      "source": "day2-merged-source.mp4",
+      "coverage": [
+        "captions",
+        "evidence",
+        "legacy",
+        "method",
+        "motion"
+      ],
+      "artifacts": [
+        {
+          "path": "asset-decisions.json",
+          "bytes": 9378,
+          "sha256": "8058a7fc654943b14b4261803745745a6d59bf34c56a42131b4dcb2d6ae2d52c"
+        },
+        {
+          "path": "captions-v1.json",
+          "bytes": 13063,
+          "sha256": "0b10c7a6c49d398a7bec191f51be46da4a6ddeb6280210e7fc7aeab24af69f77"
+        },
+        {
+          "path": "content-breakdown-v1.md",
+          "bytes": 16420,
+          "sha256": "568e82f75752acab3e1f2bd8b2106db03a2aed82a3ec5109f56dd76432e7d854"
+        },
+        {
+          "path": "day2-merged-source.mp4",
+          "bytes": 43742974,
+          "sha256": "8bda52901955dc9a4a2a2454ee2928bf1b12d3709001a33cbcbe79dc0f318cbf"
+        },
+        {
+          "path": "edit-plan-v5.json",
+          "bytes": 6757,
+          "sha256": "c742cb27b4232f683eebcf069aa7dfdeb178e90c89a365ff3afc0ffd0a7dd3f6"
+        },
+        {
+          "path": "job.json",
+          "bytes": 438283,
+          "sha256": "9e6e2d5bba43e4630199dd41d4879f5fa36173a28044b9cc21165ac6723f33d2"
+        },
+        {
+          "path": "media-manifest-v5.json",
+          "bytes": 16760,
+          "sha256": "8c56b8f3fdd56ab330c134788d02841b9a10be0a0ffb61394ea5ed85f9008f25"
+        },
+        {
+          "path": "qa-report-v5.json",
+          "bytes": 5541,
+          "sha256": "c5f5f80c067626a2d678797de95bac7a2bb1b4a65982b3b840b019481063b82c"
+        },
+        {
+          "path": "review-bundle-v5.json",
+          "bytes": 4909,
+          "sha256": "cd1284489af6533ce67703e5ad687193c6c6d48fa30e22902242286416bec8d9"
+        },
+        {
+          "path": "review-preview-v5.mp4",
+          "bytes": 7253389,
+          "sha256": "b259b9243c7d6fd15d8cb9a37897ad7f34a8c0bde7415d9d5d807761ce6fdbac"
+        },
+        {
+          "path": "sample-18s-v1/renders/day2-opening-sample-v2.mp4",
+          "bytes": 5082592,
+          "sha256": "793134d916c69ddc2022d8b066fdfd5cd261875a2f69306d700b80810948bbf4"
+        },
+        {
+          "path": "timeline-v5.json",
+          "bytes": 14722,
+          "sha256": "05631f82e9e1b3aa1e30a8f3bc2994c16b0145649635dfe2e93a9d215561286a"
+        }
+      ]
+    },
+    {
+      "jobId": "20260722102313-1dbfa9",
+      "pipeline": "visual-director-v4",
+      "status": "awaiting_sample_review",
+      "source": "visual-smoke.mp4",
+      "coverage": [
+        "evidence",
+        "method",
+        "motion",
+        "v4"
+      ],
+      "artifacts": [
+        {
+          "path": "asset-decisions.json",
+          "bytes": 1135,
+          "sha256": "6c67d757ae718c3b1b331abe068344b2771ae50247cb3b52b28329cee61887f5"
+        },
+        {
+          "path": "content-breakdown-v1.json",
+          "bytes": 4569,
+          "sha256": "e95e493e78e2a45973da960a7aeee29f8e8505eda5aa3627e8e1db2bb606aa51"
+        },
+        {
+          "path": "edit-plan-visual-v1-response.json",
+          "bytes": 2820,
+          "sha256": "6d9a32d3bc36c3b490fb30bada931dad0f8a97c54b2d6dba27ff0c35fa1a40f3"
+        },
+        {
+          "path": "job.json",
+          "bytes": 151918,
+          "sha256": "844846c896c30c021e54af76d1ba342f2358c9f80795f0ffcc0ddf2aaad267a2"
+        },
+        {
+          "path": "motion-sample-direction-v5.json",
+          "bytes": 6463,
+          "sha256": "56bbc8946c8c18b741a8b7475d01fce07cf221e7a612d61f37be01fcf5bca931"
+        },
+        {
+          "path": "timeline-v1.json",
+          "bytes": 1477,
+          "sha256": "56e01c8119bafefecac38406b74793e385dba74cc857e1f38880b357ed967112"
+        },
+        {
+          "path": "visual-smoke.mp4",
+          "bytes": 1749371,
+          "sha256": "2a0dd44dcb7d98483fc22faa6df3359c3aa37b82242ac168d4e847f4af07cb55"
+        },
+        {
+          "path": "workflow/sample-v5/renders/motion-sample-v5.mp4",
+          "bytes": 5175896,
+          "sha256": "61b8238445f9aa67aec58cc48a8c6b579144c79788698262ff3654be69762f64"
+        }
+      ]
+    }
+  ]
+}

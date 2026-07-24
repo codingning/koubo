@@ -1,0 +1,34 @@
+{
+  "id": "v4-sample",
+  "pipeline": "visual-director-v4",
+  "status": "awaiting_sample_review",
+  "fileName": "visual-smoke.mp4",
+  "script": "视觉导演第四版动态样片。",
+  "transcript": {
+    "segments": [
+      {
+        "start": 0,
+        "end": 16,
+        "text": "视觉导演第四版动态样片。"
+      }
+    ]
+  },
+  "workflow": {
+    "version": "visual-director-v4",
+    "stages": {
+      "keyframe_review": {
+        "status": "approved"
+      },
+      "motion_sample": {
+        "status": "awaiting_review",
+        "artifacts": {
+          "sample": "motion-sample-v1.json"
+        }
+      }
+    }
+  },
+  "options": {
+    "captions": true,
+    "layout": "landscape-tech"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "koubo://schemas/production-event/v1",
+  "title": "Koubo Production Event v1",
+  "type": "object",
+  "x-koubo-common-record": true,
+  "required": [
+    "id", "schemaVersion", "createdAt", "createdBy", "status", "source", "evidence",
+    "applicability", "prohibitions", "versions", "contentHash",
+    "subjectId", "action", "payload"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "status": { "type": "string", "enum": ["recorded"] },
+    "subjectId": { "type": "string" },
+    "action": { "type": "string" },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": true
+}
