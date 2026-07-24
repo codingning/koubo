@@ -1,16 +1,27 @@
 # 多 Agent 训练首批抖音候选视频
 
-日期：2026-07-24  
-状态：`candidate_awaiting_user_video_approval`  
+日期：2026-07-24
+状态：`full_research_and_sandbox_complete_awaiting_second_level_review`
 执行规格：`docs/superpowers/specs/2026-07-24-koubo-agent-knowledge-training.md`
 
-## 研究边界
+用户批准记录：2026-07-24，用户明确回复“首批全部确认”。该批准允许对首批 12 条视频进行完整取证、转录、蒸馏和原创沙盒复刻；不等于接受视频中的观点、批准技巧晋升、允许复制原素材或批准生产使用。
 
-- 使用 Agent Reach 路由的 OpenCLI 抖音只读搜索，共检查约 300 条搜索结果。
-- 当前只依据标题、描述和搜索接口返回的公开元数据进行发现层筛选。
-- 尚未完整观看、下载、转录或蒸馏下列视频，不能把“值得确认”理解为内容已经验证。
-- OpenCLI 本轮未可靠披露播放、评论和分享数据；这些字段的占位 `0` 不代表真实为零。点赞数只作为发现信号，不作为教学质量证据。
-- 用户确认后，才允许完整取证、技巧卡蒸馏、原创沙盒复刻和第二级知识晋升审核。
+## 研究完成状态
+
+- 使用 Agent Reach 路由的 OpenCLI 抖音只读搜索，共检查约 300 条搜索结果；用户随后批准首批 12 条进入完整研究。
+- 12/12 均已完整冻结、解码、转录、抽帧或做相应波形/频谱检查，并记录媒体与转录 SHA-256。
+- 点赞、标题和作者自述只保留为来源上下文，不作为教学有效性或因果证据。
+- 原媒体、完整转录和抽帧仅保留在系统临时研究目录，不进入 Git，不允许再分发。
+- 四组研究报告：
+  - `docs/research/2026-07-24-content-strategy-training-batch-1.md`
+  - `docs/research/2026-07-24-motion-caption-training-batch-1.md`
+  - `docs/research/2026-07-24-sound-training-batch-1.md`
+  - `docs/research/2026-07-24-director-training-batch-1.md`
+- 原创验证报告：
+  - `docs/research/2026-07-24-candidate-principle-sandbox-batch-1.md`
+  - `docs/research/2026-07-24-motion-caption-recreation-batch-1.md`
+  - `docs/research/2026-07-24-sound-training-batch-1-recreation.md`
+- 当前只达到场景验证或 `Recreated candidate`，尚未取得用户第二级真实片段试用准入，也未进入生产 Agent、`approved / promoted` 默认检索或长期推荐库。
 
 ## A. 内容策略与普通观众评审
 
@@ -120,17 +131,17 @@
 
 ## 候选备选池
 
-- Motion：仪绘士 BY，Remotion 动画原理拆解  
+- Motion：仪绘士 BY，Remotion 动画原理拆解
   https://www.douyin.com/video/7663404633003461934
-- Caption：剪辑师小冯，字幕排版与关键帧跟练  
+- Caption：剪辑师小冯，字幕排版与关键帧跟练
   https://www.douyin.com/video/7588111715015854824
-- Sound：一帧，画面与音效共同控制松紧层次  
+- Sound：一帧，画面与音效共同控制松紧层次
   https://www.douyin.com/video/7661738925156879666
-- Sound：Alex聊混音，人声清晰三要素  
+- Sound：Alex聊混音，人声清晰三要素
   https://www.douyin.com/video/7584230010144214335
-- Director：上上发条，拆解百万博主的节奏、画面和玩梗  
+- Director：上上发条，拆解百万博主的节奏、画面和玩梗
   https://www.douyin.com/video/7592461556739443839
-- Director：Liam兄，HyperFrames 可视化编排台  
+- Director：Liam兄，HyperFrames 可视化编排台
   https://www.douyin.com/video/7657133495211042225
 
 ## 用户批量审核合同
