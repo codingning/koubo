@@ -1,5 +1,7 @@
 # 字幕与动效 Agent 训练批次 1：三条抖音教程完整研究
 
+> 历史状态说明：文中“等待第二级候选审核”已被内部技术治理取代；用户不再阅读规则页，只审核真实口播片段中的字幕与动效效果。
+
 日期：2026-07-24
 
 状态：`candidate_research_and_original_sandbox_complete / awaiting_real_clip_trial_admission_review`

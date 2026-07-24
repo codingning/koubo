@@ -1,5 +1,7 @@
 # Director Agent 训练批次 1：三条抖音教程蒸馏
 
+> 历史状态说明：文中“等待用户第二级审核”已于 2026-07-25 被新流程取代。未来技术 `trial` 由 Codex 内部治理，用户只审核真实视频效果。
+
 日期：2026-07-24
 状态：`candidate_research_and_scenario_validation_complete / awaiting_real_clip_trial_admission_review`
 用途：为 Director Agent 提供流程决策候选，不复制原作者的文案、画面、模板、参数或风格。

@@ -1,5 +1,7 @@
 # 字幕与动效训练批次 1：原创离线沙盒复刻
 
+> 历史状态说明：文中“等待第二级候选审核”已被内部技术治理取代；用户不再阅读规则页，只审核真实口播片段中的字幕与动效效果。
+
 日期：2026-07-24
 
 状态：`sandbox_recreation_complete / candidate_state_unchanged / awaiting_real_clip_trial_admission_review`

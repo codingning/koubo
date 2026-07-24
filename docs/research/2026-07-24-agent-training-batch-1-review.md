@@ -1,15 +1,17 @@
 # Koubo Agent 知识训练首批第二级候选审核包
 
+> 历史说明：本页记录首批 12 项曾使用的技术规则审核过程。2026-07-25 起不再把此类页面交给用户；未来由 Codex 完成技术准入，用户只审核真实口播片段和成片效果。
+
 日期：2026-07-24
 状态：`ready_for_second_level_candidate_review / real_clip_trial_admission_only / no_knowledge_promotion`
 来源批准：用户明确回复“首批全部确认”
-用途：汇总首批 12 条候选知识及其原创复刻证据，供用户决定哪些条目取得真实片段试用准入。它不是正式知识晋升审核。
+用途：保存首批 12 条候选知识、原创复刻证据和当时已发生的用户决定，作为历史审计；不再作为未来用户操作入口。
 
 ## 审核边界
 
 - 首批来源批准只授权完整取证、蒸馏和原创沙盒复刻，不等于接受作者观点。
 - 当前所有条目仍为 `Candidate`；通过沙盒后最高只进入 `Recreated`。
-- 未经用户本轮第二级候选审核，不允许任何条目进入真实片段试用；即使取得试用准入，也不修改 Agent 提示词、默认引擎、品牌骨架或长期知识状态。
+- 本批历史上曾经过用户第二级审核；未来批次改由 Codex 完成内部技术准入。即使进入 `trial`，也不修改 Agent 提示词、默认引擎、品牌骨架或长期知识状态。
 - 原作者的原句、案例、人设、画面、教程代码、模板、字体、音效和素材均不进入 Koubo。
 - HyperFrames、Remotion、FFmpeg 或组合路径由 Director 按当前镜头的同步、可复用组件、确定性、性能、兼容性和回滚成本选择，不设历史默认胜者。
 
@@ -130,3 +132,17 @@
 
 - 本页相关自动测试：`5/5`，覆盖确定性构建、12 项哈希链、标题/边界变更导致哈希变化、sound 路径越界拒绝、初始 12 项全未选择、错误证据集合不恢复 localStorage、6 个媒体的 HTTP Range 加载和 CLI 输出边界。
 - 本轮新鲜回归：`tests/multi-agent/*.test.mjs` 为 `160/160`，集中审核页与抓取安全专项合计 `23/23`，Python 多 Agent bridge 为 `13/13`。自动通过只证明合同、边界和技术路径成立，不替代用户对 12 项候选的第二级判断。
+
+## 2026-07-25 第二级审核结果与试用登记
+
+- 用户导出的审核记录完整覆盖 `12/12`，绑定审核号 `koubo-agent-training-batch-1-second-level-candidate-review-v2`、证据集合哈希 `06a6c7844bc5befca665a972b4dee4264c8724c22f6ef03e42b4a027860adbe5` 和 12 个候选内容哈希。
+- 原版直接进入试用：`C1 C2 C3 M1 M2 S1 D1 D2 D3`。
+- 用户明确回复“按建议改”，因此 M3/S2/S3 使用新版进入试用：
+  - `director-technique.plan-preview-promote-gates.v2`：只组合 D1 的结构门和 D3 的证据后冻结门，不再复制两条规则；
+  - `sound-technique.speech-aware-ducking.v2`：全带 duck 为基础，频谱让位必须由同 stem 测量和等响度对照触发；
+  - `sound-technique.semantic-sfx-cue.v2`：保留语义、授权、密度和峰值门，禁止固定词到固定音效的字典。
+- 用户进一步指出页面中的技术规则大多难以理解，不希望继续承担此类规则审核。后续固定为：Codex 负责来源、合同、参数、版权、测试和回滚；用户只审核真实口播片段中是否更清楚、更自然、更可信，以及字幕、动效和声音是否真正帮助理解。
+- 权威隔离试用库已升级为 `data/multi-agent/training-batches/agent-training-batch-1-trial-v3/`；状态精确为 `trial=12 / approved=0 / promoted=0`，旧 v1/v2 仅保留为不可覆盖故障审计。默认 Agent 检索返回 0 条；生产编排尚未开放候选入口，后续真实片段试验必须新增绑定 batch/catalog 的隔离适配层。
+- v3 把每条运行规则的技术语义哈希与完整 catalog 哈希分开固定，同时保持用户“按建议改”的决议哈希稳定为 `b0df2da07851ef64ee737afb4b438e1cef0f34b31bd755af0b2a8782cefdba5b`。catalog `agent-training-batch-1-trial-catalog.v3` 的技术哈希为 `d7a632c4e0ffa5dc1dbd5e383e42c97c6f3d4a66a835076cc59e1b218ad4ba1d`，完整哈希为 `8ac77e0c6d89cab16d7df28aa1e6244fffe653f996c62a392d195dbed3d3aa65`；运行目录同时冻结 exact catalog snapshot。
+- v3 不可覆盖记录哈希：首轮审核 `7deb9b8585ec09161604bd5d2ad1725065819ceb0b9d703344c08d4f12dd8804`；三项修改决议记录 `39bef0a1b2687d439ce32559f81486f9ce2539d924e31482057f7a4324f2a8ab`；试用 manifest `88531c7935d0072b97c3e747cdc995384f29a180644da2eed383afb8dcccb5cd`。
+- 本次登记没有修改生产 Agent 提示词、v4 默认、品牌骨架、成片批准或发布状态。下一门是用户先提供下一条真实视频方向，再按既定内容访谈流程制作一个全新真实片段测试。

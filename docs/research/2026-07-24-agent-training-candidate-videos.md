@@ -1,5 +1,7 @@
 # 多 Agent 训练首批抖音候选视频
 
+> 历史状态说明：本页保留首批来源确认过程。后续不再要求用户审核蒸馏后的规则和参数；Codex 完成内部技术准入，用户只审核真实视频效果。
+
 日期：2026-07-24
 状态：`full_research_and_sandbox_complete_awaiting_second_level_review`
 执行规格：`docs/superpowers/specs/2026-07-24-koubo-agent-knowledge-training.md`

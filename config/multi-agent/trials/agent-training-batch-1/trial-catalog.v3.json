@@ -1,0 +1,490 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-training-batch-1-trial-catalog.v3",
+  "status": "trial_catalog",
+  "catalogHash": "8ac77e0c6d89cab16d7df28aa1e6244fffe653f996c62a392d195dbed3d3aa65",
+  "technicalCatalogHash": "d7a632c4e0ffa5dc1dbd5e383e42c97c6f3d4a66a835076cc59e1b218ad4ba1d",
+  "sourceReview": {
+    "schemaVersion": 2,
+    "reviewId": "koubo-agent-training-batch-1-second-level-candidate-review-v2",
+    "evidenceSetHash": "06a6c7844bc5befca665a972b4dee4264c8724c22f6ef03e42b4a027860adbe5",
+    "decisionHash": "2631d1e130643b65e62d71e8c04724e51426447a1a8c0c411a85f86333d00a89",
+    "reviewStage": "second_level_candidate_review",
+    "admissionTarget": "real_clip_trial"
+  },
+  "resolution": {
+    "id": "agent-training-batch-1-recommended-revisions-resolution.v1",
+    "decision": "accept_recommended_revisions_for_trial",
+    "decisionHash": "b0df2da07851ef64ee737afb4b438e1cef0f34b31bd755af0b2a8782cefdba5b",
+    "reviewRuleTextAgain": false,
+    "nextHumanReview": "real_clip_outcome",
+    "revisedItems": [
+      {
+        "code": "M3",
+        "previousCandidateId": "director-technique.plan-preview-promote-gates.v1",
+        "previousContentHash": "0e474ec4e86f18b12ee47f21c3d19b3e9c5507990d63cc6638f165c8422b4ce6",
+        "candidateId": "director-technique.plan-preview-promote-gates.v2",
+        "candidateContentHash": "143259305332bc5e4cb7821c5cc5be4802f4be98d4e21f715b242423e99e92cd",
+        "candidateTechnicalContentHash": "b282e9a0a4d0632d562ec66e400f70f07f9266054e09d1d3a9c503761f6e9c64",
+        "acceptedChangeSummary": "只组合结构冻结与证据后冻结两道门，保留预览但不复制 D1/D3，也不授予批准或发布权限。"
+      },
+      {
+        "code": "S2",
+        "previousCandidateId": "sound-technique.speech-aware-ducking.v1",
+        "previousContentHash": "6584b3b614250341ef999386c7fc85924d3543f1080fc07f47c8aeb7ad3729dc",
+        "candidateId": "sound-technique.speech-aware-ducking.v2",
+        "candidateContentHash": "6a71ed5d73c28da241d25e6d3383efb36f297fd407d2f5cc46b1a1d5d00919a5",
+        "candidateTechnicalContentHash": "613a1f11f0283a5f7bb0385ea2ba59a7dc8b92fc12444364796ef16e8883bf59",
+        "acceptedChangeSummary": "全带 duck 作为基础，只允许同 stem 测量与等响度对照触发额外频谱让位。"
+      },
+      {
+        "code": "S3",
+        "previousCandidateId": "sound-technique.semantic-sfx-cue.v1",
+        "previousContentHash": "b3abaf8937d279213408998e8df28e618e693988bc2ba87864914c57142bcf42",
+        "candidateId": "sound-technique.semantic-sfx-cue.v2",
+        "candidateContentHash": "cf452c364d8fd2cd9df44bc9e927f36025af1eecfa3eb4b0dc10a6c8c824b986",
+        "candidateTechnicalContentHash": "80731c79e0952af7548399e50ebd02955c5b622c4f95a19d24efcc2bd51d32d6",
+        "acceptedChangeSummary": "保留语义、授权、密度和峰值门，禁止把固定关键词机械映射到固定音效。"
+      }
+    ]
+  },
+  "authority": {
+    "trialAdmissionOnly": true,
+    "approved": false,
+    "promoted": false,
+    "productionDefaultChanged": false,
+    "publishAuthority": false
+  },
+  "items": [
+    {
+      "code": "C1",
+      "sourceDecision": {
+        "candidateId": "content-principle.one-primary-audience-payoff.v1",
+        "contentHash": "b30bc2b9dcafc663c116fcaa042978bce53b10ee7022f167023d4136e5baf015",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "content-principle.one-primary-audience-payoff.v1",
+        "candidateContentHash": "b30bc2b9dcafc663c116fcaa042978bce53b10ee7022f167023d4136e5baf015",
+        "technicalContentHash": "de3d41a33748d136f897ba2099e8278264cb46eda1a83ddf85ef15c78dcfd397"
+      },
+      "record": {
+        "id": "content-principle.one-primary-audience-payoff.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-content-strategy-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7626073800933474041", "kind": "public-video-time-range", "start": 0, "end": 18, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7626073800933474041", "kind": "public-video-time-range", "start": 137, "end": 206.5, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "candidate-principle-scenarios", "kind": "scenario-suite", "scenarioCount": 3, "passed": true }
+        ],
+        "applicability": ["project sharing", "AI practice review", "tutorial and experience content"],
+        "prohibitions": ["force every video into a tool tutorial", "treat creator activity as viewer payoff", "approve or publish"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "content-distillation-v1", "memory": "schema-v1", "asset": "scenario-sandbox-v1", "recipe": "audience-payoff-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "content",
+        "namespace": "shared.content-principles",
+        "title": "一个主要观众收益",
+        "problem": "内容只记录创作者做了什么，却没有说明观众获得什么。",
+        "primitive": "one-primary-audience-payoff",
+        "parameters": { "primaryAudienceRequired": true, "restatablePayoffRequired": true, "nonToolPayoffsAllowed": true },
+        "tags": ["audience", "viewer-payoff", "content-strategy"]
+      }
+    },
+    {
+      "code": "C2",
+      "sourceDecision": {
+        "candidateId": "content-principle.opening-creates-audience-contract.v1",
+        "contentHash": "eebac515f23b42f7478a629f5542478d656798fac0a58dbac87b858ff69cb3bf",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "content-principle.opening-creates-audience-contract.v1",
+        "candidateContentHash": "eebac515f23b42f7478a629f5542478d656798fac0a58dbac87b858ff69cb3bf",
+        "technicalContentHash": "4cb4f00895a8c5ad517325945035c3bb70e5938d2ee0b7bc1a8bf1d1afb9d332"
+      },
+      "record": {
+        "id": "content-principle.opening-creates-audience-contract.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-content-strategy-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7572175107456568586", "kind": "public-video-time-range", "start": 21, "end": 101, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "candidate-principle-scenarios", "kind": "scenario-suite", "scenarioCount": 3, "passed": true }
+        ],
+        "applicability": ["strong-hook talking head", "problem-solving content", "project result presentation"],
+        "prohibitions": ["keep unrelated valuable segments without a bridge", "equate density with constant information", "approve or publish"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "content-distillation-v1", "memory": "schema-v1", "asset": "scenario-sandbox-v1", "recipe": "audience-contract-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "content",
+        "namespace": "shared.content-principles",
+        "title": "开头形成观众合同",
+        "problem": "开头承诺与后续主要段落或结尾证据错配。",
+        "primitive": "opening-audience-contract",
+        "parameters": { "openingPromiseRequired": true, "majorSectionTraceRequired": true, "causalBridgeForExpansion": true },
+        "tags": ["hook", "promise", "payoff", "content-strategy"]
+      }
+    },
+    {
+      "code": "C3",
+      "sourceDecision": {
+        "candidateId": "content-principle.voice-source-before-verbatim-draft.v1",
+        "contentHash": "3d7fc71d9d573bdb9527c86a97c1f90c5424b897f80b99994201fb3df3baa003",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "content-principle.voice-source-before-verbatim-draft.v1",
+        "candidateContentHash": "3d7fc71d9d573bdb9527c86a97c1f90c5424b897f80b99994201fb3df3baa003",
+        "technicalContentHash": "fba949f620e7b031eb4b714bd7c33dae15676b28ca13f1184b1628d4b5ca6902"
+      },
+      "record": {
+        "id": "content-principle.voice-source-before-verbatim-draft.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-content-strategy-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7664655273445089384", "kind": "public-video-time-range", "start": 33, "end": 115, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7664655273445089384", "kind": "public-video-time-range", "start": 146, "end": 170, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7664655273445089384", "kind": "public-video-time-range", "start": 223, "end": 278, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "candidate-principle-scenarios", "kind": "scenario-suite", "scenarioCount": 3, "passed": true }
+        ],
+        "applicability": ["personal project sharing", "creator interview", "talking-head drafting"],
+        "prohibitions": ["draft a generic full script before capturing creator language", "treat verbatim as universally correct", "approve or publish"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "content-distillation-v1", "memory": "schema-v1", "asset": "scenario-sandbox-v1", "recipe": "voice-source-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "content",
+        "namespace": "shared.content-principles",
+        "title": "先取得本人语言",
+        "problem": "AI 标准稿覆盖创作者真实观点、措辞和当前表达准备度。",
+        "primitive": "voice-source-before-verbatim",
+        "parameters": { "interviewFirst": true, "draftModes": ["outline", "self_rephrase", "verbatim_by_choice"], "markAiConnections": true },
+        "tags": ["creator-voice", "interview", "script"]
+      }
+    },
+    {
+      "code": "M1",
+      "sourceDecision": {
+        "candidateId": "caption-technique.pause-aware-follow-caption.v1",
+        "contentHash": "ed96ac4905231091e9d58b883bb47db982b7edbf3c10550d27265ef7c9c830b9",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "caption-technique.pause-aware-follow-caption.v1",
+        "candidateContentHash": "ed96ac4905231091e9d58b883bb47db982b7edbf3c10550d27265ef7c9c830b9",
+        "technicalContentHash": "289c0c5259f7b2d159af862952ac28dc30212e5ff622fdede2c440e3ed4782e5"
+      },
+      "record": {
+        "id": "caption-technique.pause-aware-follow-caption.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-motion-caption-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7598117995914874138", "kind": "public-video-time-range", "start": 70, "end": 135, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7598117995914874138", "kind": "public-video-time-range", "start": 144, "end": 297, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "motion-sandbox-pause-aware-follow-caption", "kind": "render-qa", "renderSha256": "0bba6104daef0a572feafc49c5321ea92854e3ded46b2068d4a9356fa021d781", "passed": true }
+        ],
+        "applicability": ["trusted word or phrase timestamps", "single-speaker talking head", "caption safe area validated"],
+        "prohibitions": ["advance highlight during audible pauses", "force word-level motion on low-confidence transcript", "cover speaker face"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "motion-distillation-v1", "memory": "schema-v1", "asset": "motion-sandbox-v1", "recipe": "pause-aware-follow-caption-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "caption",
+        "namespace": "caption.private",
+        "title": "停顿感知跟读字幕",
+        "problem": "字幕总时长正确，但停顿时高亮仍机械前进。",
+        "primitive": "pause-aware-follow-caption",
+        "parameters": { "holdDuringPause": true, "fallbackGranularity": ["phrase", "sentence"], "requiresRealTiming": true },
+        "tags": ["caption", "timing", "pause"]
+      }
+    },
+    {
+      "code": "M2",
+      "sourceDecision": {
+        "candidateId": "motion-technique.semantic-layout-router.v1",
+        "contentHash": "1e4f8e71a12ad32111c0f46f4a2e3468094c2097590f6d639dd64107bc1dd07c",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "motion-technique.semantic-layout-router.v1",
+        "candidateContentHash": "1e4f8e71a12ad32111c0f46f4a2e3468094c2097590f6d639dd64107bc1dd07c",
+        "technicalContentHash": "ef33d32c8b00c68ce189a56ef4b02a9f8e5ed8253fb92f13c8ade46cc95dafb5"
+      },
+      "record": {
+        "id": "motion-technique.semantic-layout-router.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-motion-caption-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7662823972718873919", "kind": "public-video-time-range", "start": 95, "end": 197, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7662823972718873919", "kind": "public-video-time-range", "start": 258, "end": 347, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "motion-sandbox-semantic-layout-router", "kind": "render-qa", "renderSha256": "8fcef2cb838e829a47d9ef137ca95da9dd0f822c3bbddea390939e27aa0d7c0a", "passed": true }
+        ],
+        "applicability": ["stable script", "semantic role available", "real evidence available when claimed"],
+        "prohibitions": ["choose template before semantic role", "reveal later information early", "generate fake evidence"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "motion-distillation-v1", "memory": "schema-v1", "asset": "motion-sandbox-v1", "recipe": "semantic-layout-router-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "motion",
+        "namespace": "motion.private",
+        "title": "语义版式路由",
+        "problem": "先套模板再塞内容，造成重复、拥挤、剧透或证据被遮盖。",
+        "primitive": "semantic-layout-router",
+        "parameters": { "roles": ["single-focus", "steps", "evidence"], "splitWhenDense": true, "evidenceMustRemainVisible": true },
+        "tags": ["motion", "layout", "semantic-role"]
+      }
+    },
+    {
+      "code": "M3",
+      "sourceDecision": {
+        "candidateId": "director-technique.plan-preview-promote-gates.v1",
+        "contentHash": "0e474ec4e86f18b12ee47f21c3d19b3e9c5507990d63cc6638f165c8422b4ce6",
+        "decision": "revise_then_review"
+      },
+      "trialCandidate": {
+        "candidateId": "director-technique.plan-preview-promote-gates.v2",
+        "candidateContentHash": "143259305332bc5e4cb7821c5cc5be4802f4be98d4e21f715b242423e99e92cd",
+        "technicalContentHash": "b282e9a0a4d0632d562ec66e400f70f07f9266054e09d1d3a9c503761f6e9c64"
+      },
+      "record": {
+        "id": "director-technique.plan-preview-promote-gates.v2",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "cross-source-distillation", "sourceId": "agent-training-batch-1-recommended-revisions-resolution", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7624469060838853914", "kind": "public-video-time-range", "start": 106, "end": 133, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7660857369508859170", "kind": "public-video-time-range", "start": 12, "end": 164, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "candidate-principle-scenarios", "kind": "scenario-suite", "scenarioCount": 3, "passed": true }
+        ],
+        "applicability": ["material plan or preview fork", "costly packaging", "engine choice requires evidence"],
+        "prohibitions": ["duplicate D1 or D3 rules", "collapse plan preview and experience promotion into one approval", "approve publish or promote memory"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "director-distillation-v2", "memory": "schema-v1", "asset": "scenario-sandbox-v1", "recipe": "director-flow-composition-v2", "evaluation": "human-trial-admission-v1" },
+        "domain": "director",
+        "namespace": "shared.recipes",
+        "title": "Director 流程门组合",
+        "problem": "方案、样片和经验晋升被合并，同时重复维护 D1 与 D3 的判断。",
+        "primitive": "plan-preview-promote-gates",
+        "parameters": { "structureGateRef": "director-principle.freeze-structure-before-packaging.v1", "freezeGateRef": "director-principle.offer-choices-then-freeze-after-evidence.v1", "separateEvidence": ["plan", "preview", "experience-promotion"], "independentRule": false },
+        "tags": ["director", "workflow-gate", "review-lineage"]
+      }
+    },
+    {
+      "code": "S1",
+      "sourceDecision": {
+        "candidateId": "sound-technique.mix-gain-guardrail.v1",
+        "contentHash": "e96b89b5bd626a5894c8df7ca785f03fd305315b6f086b24aa803f1655c0c451",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "sound-technique.mix-gain-guardrail.v1",
+        "candidateContentHash": "e96b89b5bd626a5894c8df7ca785f03fd305315b6f086b24aa803f1655c0c451",
+        "technicalContentHash": "1a223305226f13ea4aa3ba55dbe0889e789c14794b30dca27fda20f799f98fde"
+      },
+      "record": {
+        "id": "sound-technique.mix-gain-guardrail.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-sound-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7535052887664987427", "kind": "public-video-time-range", "start": 14, "end": 40.56, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "sound-sandbox-batch-1", "kind": "mix-qa", "integratedLufs": -16.19, "truePeakDbtp": -2.5, "passed": true }
+        ],
+        "applicability": ["talking-head mix", "separate voice music and effects stems", "final program measurement"],
+        "prohibitions": ["use fixed slider percentages as loudness", "ignore true peak", "replace listening review with meters"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "sound-distillation-v1", "memory": "schema-v1", "asset": "sound-sandbox-v1", "recipe": "mix-gain-guardrail-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "sound",
+        "namespace": "sound.private",
+        "title": "响度与真峰值底线",
+        "problem": "固定滑块比例和短促音效会让总线响度或真峰值失控。",
+        "primitive": "mix-gain-guardrail",
+        "parameters": { "targetIntegratedLufs": -16, "toleranceLu": 1, "maxTruePeakDbtp": -1.5, "measureWholeProgram": true, "voiceIsAnchor": true },
+        "tags": ["sound", "loudness", "true-peak"]
+      }
+    },
+    {
+      "code": "S2",
+      "sourceDecision": {
+        "candidateId": "sound-technique.speech-aware-ducking.v1",
+        "contentHash": "6584b3b614250341ef999386c7fc85924d3543f1080fc07f47c8aeb7ad3729dc",
+        "decision": "revise_then_review"
+      },
+      "trialCandidate": {
+        "candidateId": "sound-technique.speech-aware-ducking.v2",
+        "candidateContentHash": "6a71ed5d73c28da241d25e6d3383efb36f297fd407d2f5cc46b1a1d5d00919a5",
+        "technicalContentHash": "613a1f11f0283a5f7bb0385ea2ba59a7dc8b92fc12444364796ef16e8883bf59"
+      },
+      "record": {
+        "id": "sound-technique.speech-aware-ducking.v2",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-sound-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7488902005809876261", "kind": "public-video-time-range", "start": 9.14, "end": 39.7, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "sound-sandbox-batch-1", "kind": "same-stem-ab-qa", "variants": ["A", "B", "C"], "loudnessMatched": true, "passed": true }
+        ],
+        "applicability": ["voice and music stems available", "same-stem comparison possible", "speech intelligibility conflict"],
+        "prohibitions": ["enable spectral slot from a tutorial frequency", "treat lower volume as proof of clarity", "skip S1 loudness and peak gate"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "sound-distillation-v2", "memory": "schema-v1", "asset": "sound-sandbox-v1", "recipe": "speech-aware-ducking-v2", "evaluation": "human-trial-admission-v1" },
+        "domain": "sound",
+        "namespace": "sound.private",
+        "title": "人声触发音乐避让",
+        "problem": "音乐在人声期间抢占可懂度，而固定频谱处理可能误伤配乐。",
+        "primitive": "speech-aware-ducking",
+        "parameters": { "baseMode": "sidechain-fullband", "spectralSlotRequiresMeasurement": true, "sameStemAB": true, "loudnessMatched": true, "checkPumpingOnRealVoice": true, "guardrailRef": "sound-technique.mix-gain-guardrail.v1" },
+        "tags": ["sound", "ducking", "speech-intelligibility"]
+      }
+    },
+    {
+      "code": "S3",
+      "sourceDecision": {
+        "candidateId": "sound-technique.semantic-sfx-cue.v1",
+        "contentHash": "b3abaf8937d279213408998e8df28e618e693988bc2ba87864914c57142bcf42",
+        "decision": "revise_then_review"
+      },
+      "trialCandidate": {
+        "candidateId": "sound-technique.semantic-sfx-cue.v2",
+        "candidateContentHash": "cf452c364d8fd2cd9df44bc9e927f36025af1eecfa3eb4b0dc10a6c8c824b986",
+        "technicalContentHash": "80731c79e0952af7548399e50ebd02955c5b622c4f95a19d24efcc2bd51d32d6"
+      },
+      "record": {
+        "id": "sound-technique.semantic-sfx-cue.v2",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-sound-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7564715772593845056", "kind": "public-video-time-range", "start": 23.19, "end": 91.92, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "sound-sandbox-batch-1", "kind": "semantic-cue-qa", "cueCount": 3, "integratedLufs": -16.22, "truePeakDbtp": -2.5, "passed": true }
+        ],
+        "applicability": ["clear visual semantic or physical beat", "licensed local cue", "voice masking check available"],
+        "prohibitions": ["map a fixed word to a fixed sound", "use unlicensed clips", "add cues by fixed interval", "cover voice or evidence"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "sound-distillation-v2", "memory": "schema-v1", "asset": "sound-sandbox-v1", "recipe": "semantic-sfx-cue-v2", "evaluation": "human-trial-admission-v1" },
+        "domain": "sound",
+        "namespace": "sound.private",
+        "title": "语义音效锚点",
+        "problem": "音效按模板、固定间隔或固定词典堆叠，而没有增加意义。",
+        "primitive": "semantic-sfx-cue",
+        "parameters": { "allowedAnchors": ["visual-impact", "transition-cut", "spoken-emotion", "semantic-turn", "physical-gesture"], "fixedWordDictionary": false, "licenseRequired": true, "maxConcurrentCues": 1, "guardrailRef": "sound-technique.mix-gain-guardrail.v1" },
+        "tags": ["sound", "sfx", "semantic-anchor", "license"]
+      }
+    },
+    {
+      "code": "D1",
+      "sourceDecision": {
+        "candidateId": "director-principle.freeze-structure-before-packaging.v1",
+        "contentHash": "fddc8e950e7accd93ff8895e36574a6b383e4c3f887aec8c595c57be8e7d716d",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "director-principle.freeze-structure-before-packaging.v1",
+        "candidateContentHash": "fddc8e950e7accd93ff8895e36574a6b383e4c3f887aec8c595c57be8e7d716d",
+        "technicalContentHash": "b0d9b547ed9932ed288a5ae572a5564f7698720e3a93fab06ec1c33e8a1488c1"
+      },
+      "record": {
+        "id": "director-principle.freeze-structure-before-packaging.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-director-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7662969489130065152", "kind": "public-video-time-range", "start": 60, "end": 88, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7662969489130065152", "kind": "public-video-time-range", "start": 241, "end": 399, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "candidate-principle-scenarios", "kind": "scenario-suite", "scenarioCount": 3, "passed": true }
+        ],
+        "applicability": ["direction confirmed", "rough cut available", "semantic timeline can be frozen"],
+        "prohibitions": ["use packaging to hide source defects", "begin costly full packaging before structure stability", "approve or publish"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "director-distillation-v1", "memory": "schema-v1", "asset": "scenario-sandbox-v1", "recipe": "freeze-structure-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "director",
+        "namespace": "shared.recipes",
+        "title": "先冻结结构再包装",
+        "problem": "内容或素材仍不稳定时提前投入字幕、动效和声音包装。",
+        "primitive": "freeze-structure-before-packaging",
+        "parameters": { "requiresDirectionConfirmation": true, "requiresRoughCutConfirmation": true, "requiresSemanticTimeline": true, "technicalFixException": true },
+        "tags": ["director", "structure", "packaging-gate"]
+      }
+    },
+    {
+      "code": "D2",
+      "sourceDecision": {
+        "candidateId": "director-principle.semantic-role-before-effect.v1",
+        "contentHash": "de09efba9fa3df8bf347adae4ec92d4ddb62bd65dcb649efc24a15580d0f999a",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "director-principle.semantic-role-before-effect.v1",
+        "candidateContentHash": "de09efba9fa3df8bf347adae4ec92d4ddb62bd65dcb649efc24a15580d0f999a",
+        "technicalContentHash": "25d94ac432980b46371bee9e69a5297339c1a0a34dbe02a58c1a6d1f517f1e59"
+      },
+      "record": {
+        "id": "director-principle.semantic-role-before-effect.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-director-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7657583154651303183", "kind": "public-video-time-range", "start": 22, "end": 78, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7657583154651303183", "kind": "public-video-time-range", "start": 118, "end": 135, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7657583154651303183", "kind": "public-video-time-range", "start": 212, "end": 227, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "candidate-principle-scenarios", "kind": "scenario-suite", "scenarioCount": 3, "passed": true }
+        ],
+        "applicability": ["hook evidence turn step result or navigation role known", "effect can state a communication purpose"],
+        "prohibitions": ["choose template before purpose", "hide evidence", "invent narrative purpose for technical repair"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "director-distillation-v1", "memory": "schema-v1", "asset": "scenario-sandbox-v1", "recipe": "semantic-role-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "director",
+        "namespace": "shared.recipes",
+        "title": "先语义角色再选效果",
+        "problem": "剪辑由效果名或模板驱动，无法说明表达职责。",
+        "primitive": "semantic-role-before-effect",
+        "parameters": { "allowedRoles": ["hook", "evidence", "turn", "step", "result", "chapter-navigation"], "effectMustServeRole": true, "evidenceMustRemainVisible": true },
+        "tags": ["director", "semantic-role", "effect-selection"]
+      }
+    },
+    {
+      "code": "D3",
+      "sourceDecision": {
+        "candidateId": "director-principle.offer-choices-then-freeze-after-evidence.v1",
+        "contentHash": "e070692df0de70aa3d891c7ef99d42abae3d142637c0670c27846947bd64b4ed",
+        "decision": "retain_for_real_clip_trial"
+      },
+      "trialCandidate": {
+        "candidateId": "director-principle.offer-choices-then-freeze-after-evidence.v1",
+        "candidateContentHash": "e070692df0de70aa3d891c7ef99d42abae3d142637c0670c27846947bd64b4ed",
+        "technicalContentHash": "52a0e53ff3fd58fe294cf06c5d7bdd942d870dfe221553df5c78f5ffd7c3a9a3"
+      },
+      "record": {
+        "id": "director-principle.offer-choices-then-freeze-after-evidence.v1",
+        "schemaVersion": 1,
+        "createdAt": "2026-07-24T16:11:43.192Z",
+        "createdBy": { "type": "human-trial-admission", "id": "koubo-owner" },
+        "status": "trial",
+        "source": { "type": "research-distillation", "sourceId": "2026-07-24-director-training-batch-1", "author": "koubo", "license": "project-internal" },
+        "evidence": [
+          { "sourceId": "douyin-7660857369508859170", "kind": "public-video-time-range", "start": 12, "end": 31, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "douyin-7660857369508859170", "kind": "public-video-time-range", "start": 75, "end": 164, "useBoundary": "research-only-no-redistribution" },
+          { "sourceId": "candidate-principle-scenarios", "kind": "scenario-suite", "scenarioCount": 3, "passed": true }
+        ],
+        "applicability": ["aesthetic fork exists", "two or three distinct candidates possible", "human can reject all"],
+        "prohibitions": ["force selection from a bad group", "freeze first preference immediately", "claim single-variable causality from multi-variable changes"],
+        "versions": { "code": "agent-training-trial-v1", "model": "none", "prompt": "director-distillation-v1", "memory": "schema-v1", "asset": "scenario-sandbox-v1", "recipe": "choices-after-evidence-v1", "evaluation": "human-trial-admission-v1" },
+        "domain": "director",
+        "namespace": "shared.recipes",
+        "title": "少量选择，证据后冻结",
+        "problem": "Agent 猜测审美并在首版固化，同时不允许整组拒绝。",
+        "primitive": "offer-choices-then-freeze-after-evidence",
+        "parameters": { "candidateCountMin": 2, "candidateCountMax": 3, "rejectAllAllowed": true, "minimumEvidenceRounds": 2, "explicitHumanChoiceRequired": true },
+        "tags": ["director", "choice-set", "evidence", "rollback"]
+      }
+    }
+  ]
+}

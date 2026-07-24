@@ -2,7 +2,7 @@
 
 ## 当前定位
 
-`controlled-multi-agent-v1` 创意提案管线是 Visual Director v4 旁边的可关闭影子实验，不是新的默认生产管线。2026-07-24 增加的 Content Strategist 与 Ordinary Viewer Critic 使用独立的内容顾问开关，默认可用而无需打开 Caption/Motion/Sound 实验。两个角色已经完成本地合同、真实模型与工作台的有界运行验收，但这不授予生产批准或发布权限；16 条来源原则仍待用户逐项审核。
+`controlled-multi-agent-v1` 创意提案管线是 Visual Director v4 旁边的可关闭影子实验，不是新的默认生产管线。2026-07-24 增加的 Content Strategist 与 Ordinary Viewer Critic 使用独立的内容顾问开关，默认可用而无需打开 Caption/Motion/Sound 实验。两个角色已经完成本地合同、真实模型与工作台的有界运行验收，但这不授予生产批准或发布权限。来源原则和技术参数由 Codex 内部治理，不再要求用户逐项阅读；用户只审核真实口播片段和成片效果。
 
 - v4 继续拥有任务状态、阶段门、超时、重试、渲染、版本、最终批准和发布边界。
 - 内容方向默认由用户提供并锁定；只有用户明确允许 Agent 帮助找题时，才进入 Agent 选题路径。
@@ -220,6 +220,14 @@ inbox → extracted → recreated → trial → approved → promoted
 - 每次写入必须提交当前 `contentHash` 作为 `expectedHash`。
 - 失败记录保留为负面记忆，不做静默删除。
 
+首批训练从 2026-07-25 起补充以下试用规则：
+
+- `trial` 是内部技术试用准入，不再要求用户阅读规则页。历史批次可以保留已发生的人审 lineage；新批次允许 controller 依据用户授权的 `technical-trial-admission` 推进，但必须绑定候选、技术内容哈希、来源、许可、沙盒 QA 和回滚能力，不能空证据推进。
+- `approved` 只接受用户对真实口播片段的 `real-clip-outcome-review`，并绑定 candidate、输出版本、媒体 SHA-256 和转录 SHA-256；技术页、参数页或 Agent 自评不能代替。
+- 可版本化的试用定义放在 `config/multi-agent/trials/`，不会被生产流程自动加载。
+- 真实试用运行库放在独立的 `data/multi-agent/training-batches/<batch>/`。默认检索仍只返回 `approved/promoted`；候选试验必须使用专门的隔离实验入口，显式绑定 batch/catalog，不能仅靠切换数据目录把 `trial` 泄漏进生产提案。
+- 用户不再审核技术规则文本。Codex 负责来源、参数、版权、测试和回滚，用户只审核真实片段中可感知的内容、字幕、动效和声音效果。
+
 本地 API 示例：
 
 ```text
@@ -235,7 +243,7 @@ POST /api/multi-agent/memory/:kind/:id/disable
 POST /api/multi-agent/memory/:kind/:id/rollback
 ```
 
-所有 POST 都要求 `Idempotency-Key`。人工批准/晋级还要求 `actor.type=human` 和完整证据。
+所有 POST 都要求 `Idempotency-Key`。`trial` 可使用受绑定的内部技术准入；`approved/promoted` 仍要求 `actor.type=human` 和完整的真实片段结果证据。
 
 ## 提案、组合和评审
 
@@ -371,12 +379,12 @@ node scripts/serve_multi_agent_subjective_review.mjs `
 - 主观拒绝已作为本地 `production-event` 写入领域库，不触发生产批准、发布、记忆晋升或品牌骨架修改。
 - 遵守两轮迭代上限，不再进行第三轮风格粉饰；`controlled-multi-agent-v1` 创意渲染不批准扩大，v4 继续作为默认和回退。已验证的摄取、记忆、提案、Critic、评测和工作台影子基础设施保留。
 - Content Strategist、Ordinary Viewer Critic、16 条候选内容原则、方向确认 artifact 和两阶段评审合同已加入当前本地实现；它们扩大了内容决策前后的审计能力，但没有改变 v4 的批准、发布或回退权限。
-- 16 条原则仍待用户逐项审核；当前 4/6/6 的来源分布、三个原始 URL、访问时间、媒体冻结时间和完整转录 SHA-256 均已记录。
+- 16 条内容原则保留为内部候选，由 Codex 负责来源、边界和测试；不再把逐项规则阅读交给用户。当前 4/6/6 的来源分布、三个原始 URL、访问时间、媒体冻结时间和完整转录 SHA-256 均已记录。
 - 角色级开源复用审计已完成：继续直接复用固定版本 OpenAI Agents SDK，以窄 Python JSON bridge 适配，与 Node 总控组合；只最小自建 Koubo 特有的方向、证据和点评权限合同。
 - 真实工作台已经完成一次方向分析：结果为 `needs_evidence`、3 个追问、6 个证据缺口，确认与写稿按钮保持关闭，证明 Agent 没有为了跑通流程而放宽证据门。
 - 真实 Day 2 稿件点评返回“证据不足”和 2 个阻断点；真实 v5 成片在 `transcript_and_metadata_only` 模式返回“证据不足”和 3 个时间码阻断点。两次点评前后 content/job 的审核状态、批准、发布和输出版本均未变化。
 - 成片点评 artifact 绑定 `output.version=5`、媒体 SHA-256 `1b3f12ec...f7d39` 和转录 SHA-256 `e5d76033...ce9b`；返修后旧点评不会被视为当前版本点评。
-- 尚未完成的主观门只有：用户逐项审核 16 条候选原则，以及在未来真实方向证据补齐后亲自确认进入写稿。没有审核帧或审核音频时，Ordinary Viewer 仍不能评价完整画面或声音。
+- 尚未完成的用户门是：未来真实方向证据补齐后确认内容方向，以及观看真实动态片段/成片后判断可感知效果。没有审核帧或审核音频时，Ordinary Viewer 仍不能评价完整画面或声音。
 
 技术第二周期报告：`docs/acceptance/multi-agent-v2-blind-review.md`。
 
@@ -386,4 +394,4 @@ node scripts/serve_multi_agent_subjective_review.mjs `
 `docs/acceptance/multi-agent-completion-audit.md`。本轮以负向生产决策收口，不声称多 Agent 成片质量获得提升。
 
 内容顾问层的独立完成审计：
-`docs/acceptance/multi-agent-content-advisory-completion-audit.md`。该审计将“有界顾问运行已验收”与“用户候选原则审核、最终生产批准仍未发生”分开记录。
+`docs/acceptance/multi-agent-content-advisory-completion-audit.md`。该审计将“有界顾问运行已验收”与“内部候选治理、真实片段用户批准和最终生产批准仍未发生”分开记录。

@@ -1,5 +1,7 @@
 # 内容策略训练首批完整研究：C1 / C2 / C3
 
+> 历史状态说明：文中“等待用户第二级审核”已于 2026-07-25 被新流程取代。未来技术 `trial` 由 Codex 内部治理，用户只审核真实视频效果。
+
 日期：2026-07-24
 状态：`research_and_scenario_sandbox_complete / candidate_only / awaiting_real_clip_trial_admission_review`
 知识线：Content Strategist、Ordinary Viewer Critic

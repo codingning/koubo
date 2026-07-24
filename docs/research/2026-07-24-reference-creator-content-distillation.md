@@ -1,6 +1,6 @@
 # 参考博主三条视频观点蒸馏（受限顾问知识包）
 
-状态：`approved_for_bounded_advisory_use`；16 条原则仍保持 `candidate_awaiting_user_review`，不自动成为品牌或生产硬规则
+状态：`approved_for_bounded_advisory_use`；16 条原则转为 `candidate_under_internal_technical_governance`，不自动成为品牌或生产硬规则；下一次用户审核对象是实际口播内容或成片
 
 日期：2026-07-24
 

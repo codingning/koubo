@@ -1,5 +1,7 @@
 # Sound Agent 首批隔离复刻报告
 
+> 历史状态说明：文中“等待用户第二级审核”已于 2026-07-25 被新流程取代。未来技术 `trial` 由 Codex 内部治理，用户只审核真实视频效果。
+
 日期：2026-07-24
 状态：`sandbox_recreation_complete / candidate_only / awaiting_real_clip_trial_admission_review`
 知识边界：`candidate-recreation-only / no-formal-knowledge-promotion`

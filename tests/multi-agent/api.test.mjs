@@ -724,6 +724,61 @@ test("memory promotion rejects non-human approval before calling memory", async 
   assert.equal(transitions.length, 0);
 });
 
+test("memory trial admission rejects non-human actors without delegated evidence before calling memory", async t => {
+  const { request, transitions } = await apiFixture(t);
+
+  const response = await request(
+    "POST",
+    "/api/multi-agent/memory/technique-card/caption.pop.v1/trial",
+    {
+      actor: { type: "controller", id: "memory-governor" },
+      expectedHash: "a".repeat(64),
+      evidence: [],
+    }
+  );
+
+  assert.equal(response.status, 409);
+  assert.match(response.data.error, /human actor/);
+  assert.equal(transitions.length, 0);
+});
+
+test("memory trial admission allows a controller only with delegated technical evidence", async t => {
+  const { request, transitions } = await apiFixture(t);
+  const response = await request(
+    "POST",
+    "/api/multi-agent/memory/technique-card/caption.pop.v1/trial",
+    {
+      actor: { type: "controller", id: "codex-technical-governor" },
+      expectedHash: "a".repeat(64),
+      evidence: [{
+        type: "technical-trial-admission",
+        decision: "approved_for_trial",
+      }],
+    }
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(transitions.length, 1);
+  assert.equal(transitions[0].actor.type, "controller");
+});
+
+test("memory trial admission rejects malformed delegated evidence without throwing", async t => {
+  const { request, transitions } = await apiFixture(t);
+  const response = await request(
+    "POST",
+    "/api/multi-agent/memory/technique-card/caption.pop.v1/trial",
+    {
+      actor: { type: "controller", id: "codex-technical-governor" },
+      expectedHash: "a".repeat(64),
+      evidence: { type: "technical-trial-admission" },
+    }
+  );
+
+  assert.equal(response.status, 409);
+  assert.match(response.data.error, /delegated technical admission/);
+  assert.equal(transitions.length, 0);
+});
+
 test("idempotency key replays a mutation without executing it twice", async t => {
   const { request, transitions } = await apiFixture(t);
   const body = {

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "reviewId": "koubo-agent-training-batch-1-second-level-candidate-review-v2",
+  "candidateStatus": "candidate",
+  "reviewStage": "second_level_candidate_review",
+  "admissionTarget": "real_clip_trial",
+  "notKnowledgePromotion": true,
+  "evidenceSetHash": "06a6c7844bc5befca665a972b4dee4264c8724c22f6ef03e42b4a027860adbe5",
+  "classification": "item_level_review",
+  "wholeSetRejected": false,
+  "completion": { "decided": 12, "total": 12, "complete": true },
+  "updatedAt": "2026-07-24T16:11:43.192Z",
+  "items": [
+    { "code": "C1", "candidateId": "content-principle.one-primary-audience-payoff.v1", "contentHash": "b30bc2b9dcafc663c116fcaa042978bce53b10ee7022f167023d4136e5baf015", "decision": "retain_for_real_clip_trial", "note": "" },
+    { "code": "C2", "candidateId": "content-principle.opening-creates-audience-contract.v1", "contentHash": "eebac515f23b42f7478a629f5542478d656798fac0a58dbac87b858ff69cb3bf", "decision": "retain_for_real_clip_trial", "note": "" },
+    { "code": "C3", "candidateId": "content-principle.voice-source-before-verbatim-draft.v1", "contentHash": "3d7fc71d9d573bdb9527c86a97c1f90c5424b897f80b99994201fb3df3baa003", "decision": "retain_for_real_clip_trial", "note": "" },
+    { "code": "M1", "candidateId": "caption-technique.pause-aware-follow-caption.v1", "contentHash": "ed96ac4905231091e9d58b883bb47db982b7edbf3c10550d27265ef7c9c830b9", "decision": "retain_for_real_clip_trial", "note": "" },
+    { "code": "M2", "candidateId": "motion-technique.semantic-layout-router.v1", "contentHash": "1e4f8e71a12ad32111c0f46f4a2e3468094c2097590f6d639dd64107bc1dd07c", "decision": "retain_for_real_clip_trial", "note": "" },
+    { "code": "M3", "candidateId": "director-technique.plan-preview-promote-gates.v1", "contentHash": "0e474ec4e86f18b12ee47f21c3d19b3e9c5507990d63cc6638f165c8422b4ce6", "decision": "revise_then_review", "note": "" },
+    { "code": "S1", "candidateId": "sound-technique.mix-gain-guardrail.v1", "contentHash": "e96b89b5bd626a5894c8df7ca785f03fd305315b6f086b24aa803f1655c0c451", "decision": "retain_for_real_clip_trial", "note": "" },
+    { "code": "S2", "candidateId": "sound-technique.speech-aware-ducking.v1", "contentHash": "6584b3b614250341ef999386c7fc85924d3543f1080fc07f47c8aeb7ad3729dc", "decision": "revise_then_review", "note": "" },
+    { "code": "S3", "candidateId": "sound-technique.semantic-sfx-cue.v1", "contentHash": "b3abaf8937d279213408998e8df28e618e693988bc2ba87864914c57142bcf42", "decision": "revise_then_review", "note": "" },
+    { "code": "D1", "candidateId": "director-principle.freeze-structure-before-packaging.v1", "contentHash": "fddc8e950e7accd93ff8895e36574a6b383e4c3f887aec8c595c57be8e7d716d", "decision": "retain_for_real_clip_trial", "note": "" },
+    { "code": "D2", "candidateId": "director-principle.semantic-role-before-effect.v1", "contentHash": "de09efba9fa3df8bf347adae4ec92d4ddb62bd65dcb649efc24a15580d0f999a", "decision": "retain_for_real_clip_trial", "note": "" },
+    { "code": "D3", "candidateId": "director-principle.offer-choices-then-freeze-after-evidence.v1", "contentHash": "e070692df0de70aa3d891c7ef99d42abae3d142637c0670c27846947bd64b4ed", "decision": "retain_for_real_clip_trial", "note": "" }
+  ]
+}

@@ -548,8 +548,15 @@ export function createMultiAgentApi({
       requireEnabled();
       const [, kind, id, action] = memoryMatch;
       return idempotentMutation(req, pathname, async body => {
+        const delegatedTrial = action === "trial"
+          && body.actor?.type === "controller"
+          && Array.isArray(body.evidence)
+          && body.evidence.some(item => item?.type === "technical-trial-admission");
         if (["approve", "promote"].includes(action) && body.actor?.type !== "human") {
           throw httpError(409, `${action} requires a human actor`);
+        }
+        if (action === "trial" && body.actor?.type !== "human" && !delegatedTrial) {
+          throw httpError(409, "trial requires a human actor or delegated technical admission");
         }
         let result;
         if (action === "rollback") {

@@ -16,7 +16,7 @@
       "enum": ["inbox", "extracted", "recreated", "trial", "approved", "promoted", "rejected", "expired", "disabled"]
     },
     "evidence": { "type": "array", "minItems": 1, "items": { "type": "object" } },
-    "domain": { "type": "string", "enum": ["caption", "motion", "sound", "voice", "visual"] },
+    "domain": { "type": "string", "enum": ["caption", "content", "director", "motion", "sound", "voice", "visual"] },
     "namespace": { "type": "string" },
     "title": { "type": "string" },
     "problem": { "type": "string" },

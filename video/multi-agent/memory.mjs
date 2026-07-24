@@ -188,16 +188,88 @@ export function createMemoryService(store, profiles, {
     }
   }
 
-  function assertGates(to, actor, evidence) {
+  function assertGates(to, actor, evidence, record) {
+    if (to === "trial") {
+      const binding = record.reviewBinding;
+      const trialAuthority = record.trialAuthority;
+      const matchesCandidateLineage = item => {
+        if (!binding) return true;
+        return item.candidateId === binding.trialCandidateId
+          && item.evidenceSetHash === binding.sourceEvidenceSetHash
+          && item.technicalCatalogHash === binding.technicalCatalogHash
+          && item.sourceCandidateContentHash === binding.sourceCandidateContentHash
+          && item.trialCandidateContentHash === binding.trialCandidateContentHash
+          && item.trialTechnicalContentHash === binding.trialTechnicalContentHash;
+      };
+      const humanTrialAdmission = evidence.some(item => {
+        const shaped = item?.type === "human-review"
+          && item.decision === "approved_for_trial"
+          && String(item.reviewId || "").trim()
+          && item.reviewerId === actor.id
+          && String(item.projectId || "").trim()
+          && item.candidateId === record.id
+          && /^[a-f0-9]{64}$/.test(String(item.evidenceSetHash || ""))
+          && /^[a-f0-9]{64}$/.test(String(item.technicalCatalogHash || ""))
+          && /^[a-f0-9]{64}$/.test(String(item.sourceCandidateContentHash || ""))
+          && /^[a-f0-9]{64}$/.test(String(item.trialCandidateContentHash || ""))
+          && /^[a-f0-9]{64}$/.test(String(item.trialTechnicalContentHash || ""))
+          && (
+            /^[a-f0-9]{64}$/.test(String(item.decisionHash || ""))
+            || /^[a-f0-9]{64}$/.test(String(item.resolutionHash || ""))
+          );
+        if (!shaped || !matchesCandidateLineage(item)) return false;
+        if (!binding) return true;
+        if (binding.resolutionId) {
+          return item.reviewId === binding.resolutionId
+            && item.resolutionHash === binding.resolutionDecisionHash;
+        }
+        return item.reviewId === binding.sourceReviewId
+          && item.decisionHash === binding.sourceDecisionHash;
+      });
+      const technicalTrialAdmission = evidence.some(item => {
+        const checks = item?.checks || {};
+        const shaped = item?.type === "technical-trial-admission"
+          && item.decision === "approved_for_trial"
+          && item.admitterId === actor.id
+          && item.candidateId === record.id
+          && /^[a-f0-9]{64}$/.test(String(item.evidenceSetHash || ""))
+          && /^[a-f0-9]{64}$/.test(String(item.technicalCatalogHash || ""))
+          && /^[a-f0-9]{64}$/.test(String(item.sourceCandidateContentHash || ""))
+          && /^[a-f0-9]{64}$/.test(String(item.trialCandidateContentHash || ""))
+          && /^[a-f0-9]{64}$/.test(String(item.trialTechnicalContentHash || ""))
+          && checks.sourceTraceable === true
+          && checks.licenseReviewed === true
+          && checks.sandboxPassed === true
+          && checks.rollbackReady === true;
+        if (!shaped || actor.type !== "controller" || !trialAuthority) return false;
+        return trialAuthority.mode === "delegated_technical_governance"
+          && item.delegationId === trialAuthority.delegationId
+          && item.delegatedBy === trialAuthority.delegatedBy
+          && item.technicalCatalogHash === trialAuthority.technicalCatalogHash
+          && item.sourceCandidateContentHash === trialAuthority.sourceCandidateContentHash
+          && item.trialCandidateContentHash === trialAuthority.trialCandidateContentHash
+          && item.trialTechnicalContentHash === trialAuthority.trialTechnicalContentHash
+          && matchesCandidateLineage(item);
+      });
+      if (!((actor.type === "human" && humanTrialAdmission) || technicalTrialAdmission)) {
+        throw new Error("trial requires bound human review or delegated technical-admission evidence");
+      }
+    }
     if (to === "approved") {
       const humanApproval = evidence.some(item =>
-        item?.type === "human-review"
+        item?.type === "real-clip-outcome-review"
         && item.decision === "approved"
-        && String(item.reviewerId || "").trim()
+        && item.perceptualDecision === "accept"
+        && item.reviewerId === actor.id
         && String(item.projectId || "").trim()
+        && String(item.reviewId || "").trim()
+        && item.candidateId === record.id
+        && String(item.outputVersion || "").trim()
+        && /^[a-f0-9]{64}$/.test(String(item.mediaSha256 || ""))
+        && /^[a-f0-9]{64}$/.test(String(item.transcriptSha256 || ""))
       );
       if (actor.type !== "human" || !humanApproval) {
-        throw new Error("approval requires human approval evidence");
+        throw new Error("approval requires a human real-clip outcome review bound to media and transcript hashes");
       }
     }
     if (to === "promoted") {
@@ -222,7 +294,7 @@ export function createMemoryService(store, profiles, {
     if (!expectedHash) throw new Error("expected hash is required for governed transitions");
     if (prior.contentHash !== expectedHash) throw new Error("expected hash does not match stored record");
     assertTransitionAllowed(prior.status, to);
-    assertGates(to, actor, evidence);
+    assertGates(to, actor, evidence, prior);
     if (TERMINAL_STATUSES.has(to) && evidence.length === 0) {
       throw new Error(`${to} transition requires evidence`);
     }

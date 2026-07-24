@@ -1,5 +1,7 @@
 # Candidate Principle 场景沙盒首批验证
 
+> 历史状态说明：文中“等待用户第二级审核”已于 2026-07-25 被新流程取代。未来技术 `trial` 由 Codex 内部治理，用户只审核真实视频效果。
+
 日期：2026-07-24
 状态：`sandbox_scenario_validation_passed / candidate_only / no_runtime_integration / awaiting_real_clip_trial_admission_review`
 范围：Content 三条原则、Director 三条原则，以及 Motion 报告提供的 Director 跨组支持原则。

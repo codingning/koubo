@@ -108,11 +108,260 @@ function advanceToTrial(memory, record = technique()) {
   step(memory, record.id, "recreated", [
     { type: "render-qa", renderId: "sandbox.caption.pop.v1", passed: true },
   ]);
-  step(memory, record.id, "trial", [
-    { type: "project-trial", projectId: "job.alpha", outcome: "eligible" },
-  ]);
+  memory.transition({
+    kind: "technique-card",
+    id: record.id,
+    to: "trial",
+    actor: { type: "human", id: "owner" },
+    evidence: [{
+      type: "human-review",
+      reviewId: "review.trial.alpha",
+      reviewerId: "owner",
+      projectId: "job.alpha",
+      decision: "approved_for_trial",
+      candidateId: record.id,
+      evidenceSetHash: "e".repeat(64),
+      technicalCatalogHash: "a".repeat(64),
+      sourceCandidateContentHash: "c".repeat(64),
+      trialCandidateContentHash: "c".repeat(64),
+      trialTechnicalContentHash: "b".repeat(64),
+      decisionHash: "d".repeat(64),
+    }],
+    expectedHash: memory.get("technique-card", record.id).contentHash,
+  });
   return record.id;
 }
+
+test("trial rejects admission evidence that is neither bound human review nor delegated technical governance", t => {
+  const { memory } = fixtureMemory(t);
+  const record = technique();
+  memory.ingest(record);
+  step(memory, record.id, "extracted");
+  step(memory, record.id, "recreated", [
+    { type: "render-qa", renderId: "sandbox.caption.pop.v1", passed: true },
+  ]);
+
+  assert.throws(
+    () => step(memory, record.id, "trial", []),
+    /bound human review or delegated technical-admission evidence/
+  );
+  assert.throws(
+    () => memory.transition({
+      kind: "technique-card",
+      id: record.id,
+      to: "trial",
+      actor: { type: "human", id: "owner" },
+      evidence: [{
+        type: "human-review",
+        reviewId: "review.trial.alpha",
+        reviewerId: "owner",
+        projectId: "job.alpha",
+        decision: "approved_for_trial",
+        candidateId: "another-candidate",
+        evidenceSetHash: "e".repeat(64),
+        technicalCatalogHash: "a".repeat(64),
+        sourceCandidateContentHash: "c".repeat(64),
+        trialCandidateContentHash: "c".repeat(64),
+        trialTechnicalContentHash: "b".repeat(64),
+        decisionHash: "d".repeat(64),
+      }],
+      expectedHash: memory.get("technique-card", record.id).contentHash,
+    }),
+    /bound human review or delegated technical-admission evidence/
+  );
+});
+
+test("delegated technical governance can admit trial without a technical-rule user review", t => {
+  const { memory } = fixtureMemory(t);
+  const record = technique({
+    trialAuthority: {
+      mode: "delegated_technical_governance",
+      delegationId: "D-KOUBO-AGENT-003",
+      delegatedBy: "koubo-owner",
+      technicalCatalogHash: "a".repeat(64),
+      sourceCandidateContentHash: "c".repeat(64),
+      trialCandidateContentHash: "c".repeat(64),
+      trialTechnicalContentHash: "b".repeat(64),
+    },
+  });
+  memory.ingest(record);
+  step(memory, record.id, "extracted");
+  step(memory, record.id, "recreated", [
+    { type: "render-qa", renderId: "sandbox.caption.pop.v1", passed: true },
+  ]);
+  const evidence = {
+    type: "technical-trial-admission",
+    decision: "approved_for_trial",
+    admitterId: "codex-technical-governor",
+    candidateId: record.id,
+    delegationId: "D-KOUBO-AGENT-003",
+    delegatedBy: "koubo-owner",
+    evidenceSetHash: "e".repeat(64),
+    technicalCatalogHash: "a".repeat(64),
+    sourceCandidateContentHash: "c".repeat(64),
+    trialCandidateContentHash: "c".repeat(64),
+    trialTechnicalContentHash: "b".repeat(64),
+    checks: {
+      sourceTraceable: true,
+      licenseReviewed: true,
+      sandboxPassed: true,
+      rollbackReady: true,
+    },
+  };
+
+  const tampered = structuredClone(evidence);
+  tampered.technicalCatalogHash = "0".repeat(64);
+  assert.throws(
+    () => memory.transition({
+      kind: "technique-card",
+      id: record.id,
+      to: "trial",
+      actor: { type: "controller", id: "codex-technical-governor" },
+      evidence: [tampered],
+      expectedHash: memory.get("technique-card", record.id).contentHash,
+    }),
+    /delegated technical-admission evidence/
+  );
+
+  const result = memory.transition({
+    kind: "technique-card",
+    id: record.id,
+    to: "trial",
+    actor: { type: "controller", id: "codex-technical-governor" },
+    evidence: [evidence],
+    expectedHash: memory.get("technique-card", record.id).contentHash,
+  });
+  assert.equal(result.record.status, "trial");
+});
+
+test("trial evidence must match an embedded review lineage when present", t => {
+  const { memory } = fixtureMemory(t);
+  const record = technique({
+    reviewBinding: {
+      trialCandidateId: "caption.pop.v1",
+      trialCandidateContentHash: "c".repeat(64),
+      sourceReviewId: "review.trial.alpha",
+      sourceEvidenceSetHash: "e".repeat(64),
+      sourceDecisionHash: "d".repeat(64),
+      technicalCatalogHash: "a".repeat(64),
+      sourceCandidateContentHash: "c".repeat(64),
+      trialTechnicalContentHash: "b".repeat(64),
+      resolutionId: null,
+    },
+  });
+  memory.ingest(record);
+  step(memory, record.id, "extracted");
+  step(memory, record.id, "recreated", [
+    { type: "render-qa", renderId: "sandbox.caption.pop.v1", passed: true },
+  ]);
+  const evidence = {
+    type: "human-review",
+    reviewId: "review.trial.alpha",
+    reviewerId: "owner",
+    projectId: "job.alpha",
+    decision: "approved_for_trial",
+    candidateId: record.id,
+    evidenceSetHash: "0".repeat(64),
+    technicalCatalogHash: "0".repeat(64),
+    sourceCandidateContentHash: "c".repeat(64),
+    trialCandidateContentHash: "c".repeat(64),
+    trialTechnicalContentHash: "b".repeat(64),
+    decisionHash: "d".repeat(64),
+  };
+
+  assert.throws(
+    () => memory.transition({
+      kind: "technique-card",
+      id: record.id,
+      to: "trial",
+      actor: { type: "human", id: "owner" },
+      evidence: [evidence],
+      expectedHash: memory.get("technique-card", record.id).contentHash,
+    }),
+    /bound human review or delegated technical-admission evidence/
+  );
+  evidence.evidenceSetHash = "e".repeat(64);
+  assert.throws(
+    () => memory.transition({
+      kind: "technique-card",
+      id: record.id,
+      to: "trial",
+      actor: { type: "human", id: "owner" },
+      evidence: [evidence],
+      expectedHash: memory.get("technique-card", record.id).contentHash,
+    }),
+    /bound human review or delegated technical-admission evidence/
+  );
+  evidence.technicalCatalogHash = "a".repeat(64);
+  const result = memory.transition({
+    kind: "technique-card",
+    id: record.id,
+    to: "trial",
+    actor: { type: "human", id: "owner" },
+    evidence: [evidence],
+    expectedHash: memory.get("technique-card", record.id).contentHash,
+  });
+  assert.equal(result.record.status, "trial");
+});
+
+test("revised trial evidence must match the pinned resolution decision hash", t => {
+  const { memory } = fixtureMemory(t);
+  const record = technique({
+    reviewBinding: {
+      trialCandidateId: "caption.pop.v1",
+      trialCandidateContentHash: "c".repeat(64),
+      sourceReviewId: "review.parent",
+      sourceEvidenceSetHash: "e".repeat(64),
+      sourceDecisionHash: "d".repeat(64),
+      technicalCatalogHash: "a".repeat(64),
+      sourceCandidateContentHash: "c".repeat(64),
+      trialTechnicalContentHash: "b".repeat(64),
+      resolutionId: "resolution.revision.v1",
+      resolutionDecisionHash: "a".repeat(64),
+    },
+  });
+  memory.ingest(record);
+  step(memory, record.id, "extracted");
+  step(memory, record.id, "recreated", [
+    { type: "render-qa", renderId: "sandbox.caption.pop.v1", passed: true },
+  ]);
+  const evidence = {
+    type: "human-review",
+    reviewId: "resolution.revision.v1",
+    reviewerId: "owner",
+    projectId: "job.alpha",
+    decision: "approved_for_trial",
+    candidateId: record.id,
+    evidenceSetHash: "e".repeat(64),
+    technicalCatalogHash: "a".repeat(64),
+    sourceCandidateContentHash: "c".repeat(64),
+    trialCandidateContentHash: "c".repeat(64),
+    trialTechnicalContentHash: "b".repeat(64),
+    resolutionHash: "b".repeat(64),
+  };
+
+  assert.throws(
+    () => memory.transition({
+      kind: "technique-card",
+      id: record.id,
+      to: "trial",
+      actor: { type: "human", id: "owner" },
+      evidence: [evidence],
+      expectedHash: memory.get("technique-card", record.id).contentHash,
+    }),
+    /bound human review or delegated technical-admission evidence/
+  );
+  evidence.resolutionHash = "a".repeat(64);
+  const result = memory.transition({
+    kind: "technique-card",
+    id: record.id,
+    to: "trial",
+    actor: { type: "human", id: "owner" },
+    evidence: [evidence],
+    expectedHash: memory.get("technique-card", record.id).contentHash,
+  });
+  assert.equal(result.record.status, "trial");
+});
 
 function approve(memory, id, projectId = "job.alpha") {
   return memory.transition({
@@ -122,11 +371,16 @@ function approve(memory, id, projectId = "job.alpha") {
     actor: { type: "human", id: "owner" },
     evidence: [
       {
-        type: "human-review",
+        type: "real-clip-outcome-review",
         reviewId: `review.${projectId}`,
         reviewerId: "owner",
         projectId,
         decision: "approved",
+        perceptualDecision: "accept",
+        candidateId: id,
+        outputVersion: "v1",
+        mediaSha256: "a".repeat(64),
+        transcriptSha256: "b".repeat(64),
       },
     ],
     expectedHash: memory.get("technique-card", id).contentHash,
@@ -150,15 +404,15 @@ test("automatic extraction cannot skip lifecycle stages", t => {
   );
 });
 
-test("approval requires an explicit human approval record", t => {
+test("approval requires an explicit human real-clip outcome record", t => {
   const { memory } = fixtureMemory(t);
   const id = advanceToTrial(memory);
 
   assert.throws(
     () => step(memory, id, "approved", [
-      { type: "agent-review", reviewerId: "blind-critic", decision: "approved" },
+      { type: "human-review", reviewerId: "owner", projectId: "job.alpha", decision: "approved" },
     ]),
-    /human approval evidence/
+    /real-clip outcome review/
   );
 });
 
