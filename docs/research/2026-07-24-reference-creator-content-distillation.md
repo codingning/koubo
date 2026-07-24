@@ -1,12 +1,12 @@
-# 参考博主三条视频观点蒸馏（候选知识包）
+# 参考博主三条视频观点蒸馏（受限顾问知识包）
 
-状态：`candidate_awaiting_user_review`
+状态：`approved_for_bounded_advisory_use`；16 条原则仍保持 `candidate_awaiting_user_review`，不自动成为品牌或生产硬规则
 
 日期：2026-07-24
 
-用途：为后续 Content Strategist 与 Ordinary Viewer Critic 提供候选观点、访谈问题和评审规则。
+用途：为 Content Strategist 与 Ordinary Viewer Critic 提供可追溯的观点、访谈问题和评审规则。
 
-边界：只吸收内容观点，不学习视频形式、镜头、字幕样式、原句、案例包装或人设。本文不是对博主观点的事实背书，也不会在用户确认前晋升为长期生产规则。
+边界：只吸收内容观点，不学习视频形式、镜头、字幕样式、原句、案例包装或人设。本文不是对博主观点的事实背书；用户已要求把这些观点用于受限顾问 Agent，但未逐条把 16 条原则晋升为长期品牌规则。
 
 ## 1. 研究方法与来源
 
@@ -18,11 +18,13 @@
 - 原视频和原始转录仅作为本次临时研究证据；长期保留的是观点摘要、时间码、适用条件与反例。
 - 公开账号 `sec_uid`：`MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc`；三个作品 ID 均已从该账号的公开作品列表复核。
 
-| 作品 ID | 标题 | 时长 | 完整转录 |
-| --- | --- | ---: | --- |
-| `7665740666193874227` | 在场即信任：AI时代普通人的资产 | 10:41 | 243 段，覆盖全片 |
-| `7665371144572177700` | 一条视频顶一百条的拍法 | 8:59 | 206 段，覆盖全片 |
-| `7665003502212582683` | 做一件事就把它做成资产 | 6:06 | 152 段，覆盖全片 |
+实际访问记录：2026-07-24 14:32:26（Asia/Shanghai）读取该账号公开作品列表；14:32:59 开始并行冻结三个完整播放源。第二个用户原始 URL 的 `vid` 参数仍指向第一条，但 `modal_id=7665371144572177700`；研究时以账号公开作品列表中的作品 ID 和实际播放源为准，同时原样保留下方用户 URL 供审计。
+
+| 作品 ID | 标题 | 用户原始 URL | 时长与完整转录 | transcript.json SHA-256 |
+| --- | --- | --- | --- | --- |
+| `7665740666193874227` | 在场即信任：AI时代普通人的资产 | [原始链接](https://www.douyin.com/user/MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc?from_tab_name=main&vid=7665740666193874227) | 10:41；243 段，覆盖全片 | `8be3b68cd678ccc5a554b81972f945243b1667ff42a4b5dfbc49f4a2bd6a07b1` |
+| `7665371144572177700` | 一条视频顶一百条的拍法 | [原始链接](https://www.douyin.com/user/MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc?from_tab_name=main&modal_id=7665371144572177700&vid=7665740666193874227) | 8:59；206 段，覆盖全片 | `de120b3e8e02995192cfe25c232a3e8d5f8b6ebf932961eb731592823f9e570e` |
+| `7665003502212582683` | 做一件事就把它做成资产 | [原始链接](https://www.douyin.com/user/MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc?from_tab_name=main&modal_id=7665371144572177700&vid=7665003502212582683) | 6:06；152 段，覆盖全片 | `1aca1b0fbd2e1a14aac37499533b2acd077af7952995ab9cf33e77f9ad423b47` |
 
 ## 2. 视频一：《在场即信任》
 
@@ -320,7 +322,7 @@ Critic 可以尖锐，但不能侮辱创作者，也不能用情绪代替理由�
 - 不使用未核验的收入、版本数、问题库规模和成功率。
 - 不因博主说法有启发性，就删除其适用条件、反例和伦理边界。
 
-## 9. 当前结论与下一步门禁
+## 9. 当前结论与运行门禁
 
 三条视频最值得吸收的不是某个固定脚本公式，而是三种判断方式：
 
@@ -328,12 +330,25 @@ Critic 可以尖锐，但不能侮辱创作者，也不能用情绪代替理由�
 2. **学习判断**：它有没有记录一个问题、假设、修改和结果？
 3. **资产判断**：下一次能不能从已有版本继续，而不是重新从零开始？
 
-在用户审核本文前：
+用户于 2026-07-24 明确要求 Content Strategist 参考这些观点分析其每次提出的方向，并要求 Ordinary Viewer Critic 在稿件和成片后给出尖锐点评。因此本知识包可以进入受限顾问层，但仍须满足：
 
-- 不将这些观点写入生产 Agent 的 active profile；
 - 不修改现有品牌骨架；
-- 不创建完整稿件；
+- Content Strategist 在用户确认前不创建完整稿件；
 - 不把博主自述当成已验证事实；
 - 不自动晋升长期记忆。
 
-用户确认后，再把获批条目转成版本化的 Content Strategist 提示词、Ordinary Viewer Critic 评审表和回归测试集。
+当前实现把它们作为可替换的 advisory knowledge 使用；任何单条原则仍可由用户拒绝、修改或废弃，不影响用户拥有选题、成稿确认、生产批准和发布权。
+
+## 10. 角色级开源复用评估
+
+2026-07-24 使用 Agent Reach / Exa 和 GitHub 公开 API 对“内容策略 Agent”和“普通观众 Critic”做了专项复用检索。结论是继续复用现有 OpenAI Agents SDK、结构化 artifact、Promptfoo 与本地状态机，只最小自建 Koubo 特有的方向权、证据门和点评权限合同。
+
+| 候选 | 许可与维护快照 | 可借鉴点 | 不直接采用的原因 |
+| --- | --- | --- | --- |
+| `matiascodela/open-agentic-cmo` | MIT；2026-04 创建；4 Star；最近推送 2026-05-13 | 结构化策略 artifact、验证门和失败恢复 | 依赖 Paperclip，面向自治营销交付；不提供用户方向锁、逐证据确认或只读尖锐点评边界 |
+| `o-glethorpe/digital-marketing-pro` | MIT；2026-07 创建；0 Star | 品牌访谈、内容检查和可读 Skill 包装 | 过新且范围远大于本任务；默认营销策略/生成能力会扩大 Koubo 的方向与发布权限 |
+| `SimonTheSalesBooster/sevencritics` | GitHub API 未识别许可证；2026-03 创建；2 Star | 敌对读者视角、信任与行动检查 | 默认输出完整重写，且无可安全复用的明确许可证；与“不可换题、不可整篇重写”冲突 |
+| `ChurzeXo/kevlar-4u` | AGPL-3.0；2026-06 创建；0 Star | 本地 persona 和多层预审思路 | 包含留存/病毒概率等模拟预测，部分 Pro 策略不公开；许可证和职责边界均不适合作为当前内核 |
+| `itspikabubu/redpen` | GitHub API 未识别许可证；2026-03 创建；0 Star | 多 persona 评估、保留/回退循环 | 以自动改写和分数收敛为目标，会让 Critic 越过只读建议边界 |
+
+选择：`直接复用现有底层 → 适配结构化合同 → 最小自建两个角色`。没有新增第三方运行时，也没有复制候选仓库的提示词、代码或资产。
