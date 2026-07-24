@@ -118,7 +118,7 @@ Ordinary Viewer Critic 有两个评审阶段，均使用权威服务端内容和
 | --- | ---: | --- | --- | --- |
 | OpenAI Agents SDK | 0.18.3 | Python Agent 运行边界 | MIT | 回退现有 v4 / 直接调用兼容模型 |
 | PySceneDetect | 0.7.1 | 本地镜头检测 | BSD-3-Clause | FFmpeg scene filter |
-| HyperFrames | 0.7.68 | 技法隔离复刻与短样片 | Apache-2.0 | FFmpeg/ASS 与现有 v4 |
+| HyperFrames | 0.7.70 | 技法隔离复刻与短样片 | Apache-2.0 | FFmpeg/ASS、Remotion 与现有 v4；具体镜头由 Director 按证据选择 |
 | Promptfoo | 0.120.0 | 离线提示词/结构回归 | MIT | Node 测试与固定夹具 |
 | SQLite | Node 22 内置 | 权威本地状态和事件 | Public Domain | JSON 导出后迁移 |
 
@@ -193,12 +193,12 @@ node scripts/recreate_tutorial_techniques.mjs `
 → 带时间码的技巧候选
 → inbox
 → 抽象复刻（不执行教程代码）
-→ HyperFrames lint / validate / strict inspect / render
+→ HyperFrames strict check / render
 → FFmpeg 技术 QA
 → recreated
 ```
 
-允许的复刻 primitive 只有经过审计的六种；教程工程文件、字体、音效和代码不会被直接复制。
+允许的复刻 primitive 只有经过审计的八种：`caption-pop`、`keyword-emphasis`、`pause-aware-follow-caption`、`element-slide`、`element-bounce`、`semantic-layout-router`、`sfx-cue`、`voice-pause`。其中两个专项 Motion primitive 必须使用各自的 proof verifier，通用复刻入口不会为它们写入 `recreated` transition；教程工程文件、字体、音效和代码不会被直接复制。
 
 ## 记忆治理
 

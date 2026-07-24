@@ -16,12 +16,18 @@ external framework as the product architecture:
 | [OpenAI Agents SDK for Python](https://github.com/openai/openai-agents-python) | 0.18.3 | MIT | Bounded specialist calls, tracing-compatible orchestration | Only behind `video/multi_agent_bridge.py`; local SQLite memory remains authoritative |
 | [PySceneDetect](https://github.com/Breakthrough/PySceneDetect) | 0.7.1 | BSD-3-Clause | Local tutorial and output scene boundaries | Reads local media; produces time ranges only |
 | [Promptfoo](https://github.com/promptfoo/promptfoo) | 0.120.0 | MIT | Prompt/contract regression checks | Development-only; pinned below latest because Node 22.20.0 does not satisfy the latest package engine floor |
-| [HyperFrames](https://github.com/openai/hyperframes) | 0.7.68 | Apache-2.0 | Sandboxed reconstruction and deterministic rendering | No-network generated project; imported tutorial code is forbidden |
+| [HyperFrames](https://github.com/openai/hyperframes) | 0.7.70 | Apache-2.0 | Sandboxed reconstruction and deterministic rendering | No-network generated project; imported tutorial code is forbidden |
 
 The OpenAI Agents SDK and PySceneDetect top-level pins live in
 `requirements-multi-agent.lock.txt`. After installation, the exact resolved
 environment is captured in `requirements-multi-agent.resolved.txt`. The runtime is
 isolated in `.runtime-multi-agent/` and is never committed.
+
+HyperFrames was upgraded from `0.7.68` to `0.7.70` on 2026-07-24 after the
+read-only upgrade probe, strict `check`, high-quality render, full decode, motion
+sidecar, layout and contrast verification all passed for the two new training
+sandboxes. This changes only the tutorial reconstruction pin; it does not choose
+HyperFrames over Remotion for production shots.
 
 ## GitHub-first review
 

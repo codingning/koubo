@@ -1,0 +1,470 @@
+{
+  "schemaVersion": 1,
+  "batchId": "candidate-principle-sandbox-batch-1",
+  "candidateStatus": "candidate",
+  "scenarios": [
+    {
+      "id": "audience-payoff.applicable.project-share",
+      "principleId": "content-principle.one-primary-audience-payoff.v1",
+      "title": "项目分享明确一类观众和一个可复述收益",
+      "category": "applicable",
+      "facts": {
+        "audience": { "primaryDefined": true },
+        "payoff": {
+          "source": "viewer_change",
+          "primaryDefined": true,
+          "viewerGainDefined": true,
+          "viewerCanRestate": true,
+          "kind": "understanding",
+          "observablePracticalActionRequired": true
+        }
+      },
+      "expected": {
+        "classification": "applicable",
+        "selectedRuleId": "payoff.one-primary-gain-is-clear"
+      }
+    },
+    {
+      "id": "audience-payoff.blocked.creator-log-only",
+      "principleId": "content-principle.one-primary-audience-payoff.v1",
+      "title": "只有创作者做了什么，没有观众获得什么",
+      "category": "blocked",
+      "facts": {
+        "audience": { "primaryDefined": false },
+        "payoff": {
+          "source": "creator_activity_only",
+          "primaryDefined": false,
+          "viewerGainDefined": false,
+          "viewerCanRestate": false,
+          "kind": "unspecified",
+          "observablePracticalActionRequired": false
+        }
+      },
+      "expected": {
+        "classification": "blocked",
+        "selectedRuleId": "payoff.creator-log-without-viewer-gain"
+      }
+    },
+    {
+      "id": "audience-payoff.degraded.companionship",
+      "principleId": "content-principle.one-primary-audience-payoff.v1",
+      "title": "陪伴型内容不强迫转成工具收益",
+      "category": "degraded",
+      "facts": {
+        "audience": { "primaryDefined": true },
+        "payoff": {
+          "source": "viewer_change",
+          "primaryDefined": true,
+          "viewerGainDefined": true,
+          "viewerCanRestate": true,
+          "kind": "companionship",
+          "observablePracticalActionRequired": false
+        }
+      },
+      "expected": {
+        "classification": "degraded",
+        "selectedRuleId": "payoff.non-tool-boundary"
+      }
+    },
+    {
+      "id": "audience-contract.applicable.promise-paid",
+      "principleId": "content-principle.opening-creates-audience-contract.v1",
+      "title": "开头承诺由主要段落推进并在结尾证明",
+      "category": "applicable",
+      "facts": {
+        "contract": {
+          "openingDefined": true,
+          "majorSectionsAdvance": true,
+          "endingEvidencePresent": true,
+          "unrelatedSegmentPresent": false,
+          "causalBridgePresent": true,
+          "necessaryStoryOrPause": false,
+          "stillAdvancesPromise": true
+        }
+      },
+      "expected": {
+        "classification": "applicable",
+        "selectedRuleId": "contract.opening-and-payoff-align"
+      }
+    },
+    {
+      "id": "audience-contract.blocked.good-but-unrelated",
+      "principleId": "content-principle.opening-creates-audience-contract.v1",
+      "title": "中途加入有价值但与开头无关的信息",
+      "category": "blocked",
+      "facts": {
+        "contract": {
+          "openingDefined": true,
+          "majorSectionsAdvance": false,
+          "endingEvidencePresent": true,
+          "unrelatedSegmentPresent": true,
+          "causalBridgePresent": false,
+          "necessaryStoryOrPause": false,
+          "stillAdvancesPromise": false
+        }
+      },
+      "expected": {
+        "classification": "blocked",
+        "selectedRuleId": "contract.unrelated-value-without-bridge"
+      }
+    },
+    {
+      "id": "audience-contract.degraded.story-bridge",
+      "principleId": "content-principle.opening-creates-audience-contract.v1",
+      "title": "故事和停顿通过因果桥继续服务同一承诺",
+      "category": "degraded",
+      "facts": {
+        "contract": {
+          "openingDefined": true,
+          "majorSectionsAdvance": true,
+          "endingEvidencePresent": true,
+          "unrelatedSegmentPresent": false,
+          "causalBridgePresent": true,
+          "necessaryStoryOrPause": true,
+          "stillAdvancesPromise": true
+        }
+      },
+      "expected": {
+        "classification": "degraded",
+        "selectedRuleId": "contract.story-or-pause-still-serves-promise"
+      }
+    },
+    {
+      "id": "voice-source.applicable.interview-first",
+      "principleId": "content-principle.voice-source-before-verbatim-draft.v1",
+      "title": "先访谈取得本人语言，再按熟练度选择大纲复述",
+      "category": "applicable",
+      "facts": {
+        "voice": {
+          "sourceConversationCaptured": true,
+          "readinessAssessed": true,
+          "draftOrigin": "creator_source",
+          "draftMode": "self_rephrase",
+          "creatorFamiliarWithDraft": true,
+          "aiConnectionTextMarked": true,
+          "exactWordingRequired": false,
+          "exactWordingReason": "none"
+        }
+      },
+      "expected": {
+        "classification": "applicable",
+        "selectedRuleId": "voice.source-and-readiness-drive-format"
+      }
+    },
+    {
+      "id": "voice-source.blocked.generic-script-first",
+      "principleId": "content-principle.voice-source-before-verbatim-draft.v1",
+      "title": "未访谈就生成创作者不熟悉的通用逐字稿",
+      "category": "blocked",
+      "facts": {
+        "voice": {
+          "sourceConversationCaptured": false,
+          "readinessAssessed": false,
+          "draftOrigin": "generic_ai_verbatim",
+          "draftMode": "verbatim_by_default",
+          "creatorFamiliarWithDraft": false,
+          "aiConnectionTextMarked": false,
+          "exactWordingRequired": false,
+          "exactWordingReason": "none"
+        }
+      },
+      "expected": {
+        "classification": "blocked",
+        "selectedRuleId": "voice.generic-verbatim-before-source"
+      }
+    },
+    {
+      "id": "voice-source.degraded.accessibility-verbatim",
+      "principleId": "content-principle.voice-source-before-verbatim-draft.v1",
+      "title": "无障碍需求要求更精确的逐字支持",
+      "category": "degraded",
+      "facts": {
+        "voice": {
+          "sourceConversationCaptured": true,
+          "readinessAssessed": true,
+          "draftOrigin": "creator_source",
+          "draftMode": "verbatim_by_choice",
+          "creatorFamiliarWithDraft": true,
+          "aiConnectionTextMarked": true,
+          "exactWordingRequired": true,
+          "exactWordingReason": "accessibility"
+        }
+      },
+      "expected": {
+        "classification": "degraded",
+        "selectedRuleId": "voice.exact-wording-exception"
+      }
+    },
+    {
+      "id": "plan-preview-gates.applicable.material-forks",
+      "principleId": "director-technique.plan-preview-promote-gates.v1",
+      "title": "实质分叉下方案、预览和经验规则三门分离",
+      "category": "applicable",
+      "facts": {
+        "gates": {
+          "directToFullBuild": false,
+          "materialForkPresent": true,
+          "planSeparate": true,
+          "previewSeparate": true,
+          "experienceRuleSeparate": true,
+          "engineReasonRecorded": true,
+          "deterministicConstraintOnly": false,
+          "technicalQaRequired": true
+        }
+      },
+      "expected": {
+        "classification": "applicable",
+        "selectedRuleId": "gates.material-fork-keeps-three-decisions-separate"
+      }
+    },
+    {
+      "id": "plan-preview-gates.blocked.one-click-full-build",
+      "principleId": "director-technique.plan-preview-promote-gates.v1",
+      "title": "一句模糊需求直接全片且一次确认覆盖所有门",
+      "category": "blocked",
+      "facts": {
+        "gates": {
+          "directToFullBuild": true,
+          "materialForkPresent": true,
+          "planSeparate": false,
+          "previewSeparate": false,
+          "experienceRuleSeparate": false,
+          "engineReasonRecorded": false,
+          "deterministicConstraintOnly": false,
+          "technicalQaRequired": true
+        }
+      },
+      "expected": {
+        "classification": "blocked",
+        "selectedRuleId": "gates.vague-request-collapses-independent-gates"
+      }
+    },
+    {
+      "id": "plan-preview-gates.degraded.safe-area",
+      "principleId": "director-technique.plan-preview-promote-gates.v1",
+      "title": "安全区是确定性约束，不额外制造审美选择",
+      "category": "degraded",
+      "facts": {
+        "gates": {
+          "directToFullBuild": false,
+          "materialForkPresent": false,
+          "planSeparate": false,
+          "previewSeparate": false,
+          "experienceRuleSeparate": false,
+          "engineReasonRecorded": true,
+          "deterministicConstraintOnly": true,
+          "technicalQaRequired": true
+        }
+      },
+      "expected": {
+        "classification": "degraded",
+        "selectedRuleId": "gates.deterministic-constraint-exception"
+      }
+    },
+    {
+      "id": "freeze-structure.applicable.timeline-confirmed",
+      "principleId": "director-principle.freeze-structure-before-packaging.v1",
+      "title": "方向、粗剪和语义时间线已确认",
+      "category": "applicable",
+      "facts": {
+        "freeze": {
+          "packagingRequested": true,
+          "directionConfirmed": true,
+          "roughCutConfirmed": true,
+          "timelineConfirmed": true,
+          "unresolvedDefect": false,
+          "technicalFixOnly": false,
+          "changesMeaning": true,
+          "changesTimeline": true
+        }
+      },
+      "expected": {
+        "classification": "applicable",
+        "selectedRuleId": "freeze.semantic-timeline-is-stable"
+      }
+    },
+    {
+      "id": "freeze-structure.blocked.unresolved-source-defect",
+      "principleId": "director-principle.freeze-structure-before-packaging.v1",
+      "title": "素材缺陷未解决就请求昂贵包装",
+      "category": "blocked",
+      "facts": {
+        "freeze": {
+          "packagingRequested": true,
+          "directionConfirmed": true,
+          "roughCutConfirmed": false,
+          "timelineConfirmed": false,
+          "unresolvedDefect": true,
+          "technicalFixOnly": false,
+          "changesMeaning": true,
+          "changesTimeline": true
+        }
+      },
+      "expected": {
+        "classification": "blocked",
+        "selectedRuleId": "freeze.unresolved-structure-or-source-defect"
+      }
+    },
+    {
+      "id": "freeze-structure.degraded.deterministic-repair",
+      "principleId": "director-principle.freeze-structure-before-packaging.v1",
+      "title": "只做不改变语义和时间线的确定性修复",
+      "category": "degraded",
+      "facts": {
+        "freeze": {
+          "packagingRequested": false,
+          "directionConfirmed": false,
+          "roughCutConfirmed": false,
+          "timelineConfirmed": false,
+          "unresolvedDefect": true,
+          "technicalFixOnly": true,
+          "changesMeaning": false,
+          "changesTimeline": false
+        }
+      },
+      "expected": {
+        "classification": "degraded",
+        "selectedRuleId": "freeze.deterministic-technical-fix"
+      }
+    },
+    {
+      "id": "semantic-role.applicable.evidence-card",
+      "principleId": "director-principle.semantic-role-before-effect.v1",
+      "title": "证据段先标记职责，再选择解释卡和箭头",
+      "category": "applicable",
+      "facts": {
+        "semantic": {
+          "role": "evidence",
+          "effectChosenFirst": false,
+          "purposeDefined": true,
+          "effectServesRole": true,
+          "evidenceNotObscured": true,
+          "technicalFixOnly": false,
+          "narrativeRoleRequired": true,
+          "technicalFixRecorded": false
+        }
+      },
+      "expected": {
+        "classification": "applicable",
+        "selectedRuleId": "semantic.role-drives-expression"
+      }
+    },
+    {
+      "id": "semantic-role.blocked.template-first",
+      "principleId": "director-principle.semantic-role-before-effect.v1",
+      "title": "先套模板且说不出这一效果的表达目的",
+      "category": "blocked",
+      "facts": {
+        "semantic": {
+          "role": "unknown",
+          "effectChosenFirst": true,
+          "purposeDefined": false,
+          "effectServesRole": false,
+          "evidenceNotObscured": false,
+          "technicalFixOnly": false,
+          "narrativeRoleRequired": true,
+          "technicalFixRecorded": false
+        }
+      },
+      "expected": {
+        "classification": "blocked",
+        "selectedRuleId": "semantic.effect-name-without-purpose"
+      }
+    },
+    {
+      "id": "semantic-role.degraded.noise-repair",
+      "principleId": "director-principle.semantic-role-before-effect.v1",
+      "title": "降噪等纯技术修复不虚构叙事职责",
+      "category": "degraded",
+      "facts": {
+        "semantic": {
+          "role": "technical_repair",
+          "effectChosenFirst": false,
+          "purposeDefined": true,
+          "effectServesRole": false,
+          "evidenceNotObscured": true,
+          "technicalFixOnly": true,
+          "narrativeRoleRequired": false,
+          "technicalFixRecorded": true
+        }
+      },
+      "expected": {
+        "classification": "degraded",
+        "selectedRuleId": "semantic.technical-repair-exception"
+      }
+    },
+    {
+      "id": "offer-choices.applicable.small-distinct-set",
+      "principleId": "director-principle.offer-choices-then-freeze-after-evidence.v1",
+      "title": "少量差异候选允许全拒并等待多轮证据",
+      "category": "applicable",
+      "facts": {
+        "choices": {
+          "firstPreferenceFrozenImmediately": false,
+          "rejectAllAllowed": true,
+          "deterministicConstraintOnly": false,
+          "aestheticForkPresent": true,
+          "technicalQaRequired": true,
+          "candidateCount": 3,
+          "candidatesClearlyDifferent": true,
+          "evidenceRounds": 2,
+          "explicitHumanChoiceRequired": true
+        }
+      },
+      "expected": {
+        "classification": "applicable",
+        "selectedRuleId": "choices.small-distinct-set-with-evidence"
+      }
+    },
+    {
+      "id": "offer-choices.blocked.freeze-first-preference",
+      "principleId": "director-principle.offer-choices-then-freeze-after-evidence.v1",
+      "title": "首选后立即固化并且不允许整组拒绝",
+      "category": "blocked",
+      "facts": {
+        "choices": {
+          "firstPreferenceFrozenImmediately": true,
+          "rejectAllAllowed": false,
+          "deterministicConstraintOnly": false,
+          "aestheticForkPresent": true,
+          "technicalQaRequired": true,
+          "candidateCount": 1,
+          "candidatesClearlyDifferent": false,
+          "evidenceRounds": 0,
+          "explicitHumanChoiceRequired": false
+        }
+      },
+      "expected": {
+        "classification": "blocked",
+        "selectedRuleId": "choices.first-preference-is-frozen-or-rejection-is-missing"
+      }
+    },
+    {
+      "id": "offer-choices.degraded.encoding-constraint",
+      "principleId": "director-principle.offer-choices-then-freeze-after-evidence.v1",
+      "title": "编码规格无需制造审美候选但仍需技术检查",
+      "category": "degraded",
+      "facts": {
+        "choices": {
+          "firstPreferenceFrozenImmediately": false,
+          "rejectAllAllowed": true,
+          "deterministicConstraintOnly": true,
+          "aestheticForkPresent": false,
+          "technicalQaRequired": true,
+          "candidateCount": 1,
+          "candidatesClearlyDifferent": false,
+          "evidenceRounds": 0,
+          "explicitHumanChoiceRequired": false
+        }
+      },
+      "expected": {
+        "classification": "degraded",
+        "selectedRuleId": "choices.deterministic-constraint-exception"
+      }
+    }
+  ],
+  "wholeSetReview": {
+    "reviewId": "candidate-principle-batch-1-whole-set-review",
+    "reason": "The reviewer may reject every candidate principle without selecting a relative winner."
+  }
+}

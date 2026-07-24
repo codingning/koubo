@@ -13,6 +13,7 @@ import {
 } from "../video/multi-agent/tutorial-sandbox.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const HYPERFRAMES_VERSION = "0.7.70";
 
 function parseArguments(argv) {
   const values = {};
@@ -65,7 +66,7 @@ async function hyperframes(command, projectDir, extra = []) {
   return run(process.execPath, [
     npxCli,
     "-y",
-    "hyperframes@0.7.68",
+    `hyperframes@${HYPERFRAMES_VERSION}`,
     command,
     projectDir,
     ...extra,
@@ -101,35 +102,41 @@ async function reconstruct({ technique, outputRoot, memory }) {
   const projectDir = path.join(outputRoot, current.primitive, current.id);
   await buildTechniqueSandbox({ technique: current, outputDir: projectDir });
 
-  const lint = await hyperframes("lint", projectDir);
-  requireSuccess(lint, `lint ${current.id}`);
-  const validate = await hyperframes("validate", projectDir, ["--json"]);
-  requireSuccess(validate, `validate ${current.id}`);
-  const validation = parseJsonOutput(validate.stdout, "hyperframes validate");
-  if (!validation.ok || validation.contrastFailures !== 0 || validation.warnings?.length) {
-    throw new Error(`validation failed for ${current.id}`);
+  if (["pause-aware-follow-caption", "semantic-layout-router"].includes(current.primitive)) {
+    throw new Error(
+      `${current.primitive} requires its specialized proof verifier before a governed recreated transition`
+    );
   }
-  const inspect = await hyperframes("inspect", projectDir, ["--strict", "--json"]);
-  requireSuccess(inspect, `inspect ${current.id}`);
-  const inspection = parseJsonOutput(inspect.stdout, "hyperframes inspect");
-  if (!inspection.ok || inspection.errorCount !== 0 || inspection.warningCount !== 0) {
-    throw new Error(`layout inspection failed for ${current.id}`);
+
+  const checked = await hyperframes("check", projectDir, ["--strict", "--json"]);
+  requireSuccess(checked, `check ${current.id}`);
+  const check = parseJsonOutput(checked.stdout, "hyperframes check");
+  if (!check.ok
+    || !check.lint?.ok
+    || !check.runtime?.ok
+    || !check.layout?.ok
+    || !check.motion?.ok
+    || !check.contrast?.ok
+    || Number(check.lint?.errorCount || 0) !== 0
+    || Number(check.lint?.warningCount || 0) !== 0) {
+    throw new Error(`HyperFrames check failed for ${current.id}`);
   }
 
   const renderFile = path.join(projectDir, "render.mp4");
   const render = await hyperframes("render", projectDir, [
     "--output", renderFile,
+    "--quality", "high",
     "--workers", "1",
-    "--quiet",
     "--sdr",
+    "--strict-all",
   ]);
   requireSuccess(render, `render ${current.id}`);
   const qa = await qaTechniqueSandbox({
     projectDir,
     renderFile,
-    readable: inspection.ok,
-    safeArea: inspection.ok,
-    contrast: validation.contrastFailures === 0,
+    readable: check.layout.ok,
+    safeArea: check.layout.ok,
+    contrast: check.contrast.ok,
     syncErrorMs: 0,
     networkAccess: false,
   });
@@ -137,7 +144,13 @@ async function reconstruct({ technique, outputRoot, memory }) {
   if (qa.eligibleTransition !== "recreated") {
     throw new Error(`render QA failed for ${current.id}: ${qa.failures.join(", ")}`);
   }
-  const transition = applyRecreationQa({ memory, technique: current, qa });
+  const transition = await applyRecreationQa({
+    memory,
+    technique: current,
+    qa,
+    projectDir,
+    renderFile,
+  });
   return {
     techniqueId: current.id,
     primitive: current.primitive,
