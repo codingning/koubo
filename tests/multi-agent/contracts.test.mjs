@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import path from "node:path";
 import {
   validateRecord,
+  validateLibrary,
   canonicalJson,
   contentHash,
   loadAgentProfiles,
@@ -75,14 +77,49 @@ test("canonical hashes ignore object key order but not content", () => {
   assert.notEqual(contentHash({ a: 1 }), contentHash({ a: 2 }));
 });
 
-test("loads six bounded production profiles with isolated memory namespaces", async () => {
+test("validates the traced content-principle library and rejects invalid time ranges", () => {
+  const library = JSON.parse(fs.readFileSync(
+    path.join(root, "config", "multi-agent", "content-principles.json"),
+    "utf8"
+  ));
+  assert.equal(validateLibrary("content-principle", library), library);
+  assert.equal(library.sources.length, 3);
+  assert.deepEqual(
+    library.sources.map(item => item.videoId).sort(),
+    ["7665003502212582683", "7665371144572177700", "7665740666193874227"],
+  );
+  assert.ok(library.sources.every(item => /^https:\/\/www\.douyin\.com\//u.test(item.originalUserUrl)));
+  assert.ok(library.sources.every(item => /^[a-f0-9]{64}$/u.test(item.transcriptSha256)));
+  const invalid = structuredClone(library);
+  invalid.principles[0].timecodes[0].endSeconds = invalid.principles[0].timecodes[0].startSeconds;
+  assert.throws(() => validateLibrary("content-principle", invalid), /endSeconds > startSeconds/);
+  const missingSource = structuredClone(library);
+  missingSource.principles[0].sourceVideoId = "7000000000000000000";
+  assert.throws(() => validateLibrary("content-principle", missingSource), /declared source/);
+});
+
+test("loads bounded production profiles with isolated memory namespaces", async () => {
   const profiles = await loadAgentProfiles(root);
   assert.deepEqual(
     profiles.map(item => item.agentId).sort(),
-    ["blind-critic", "caption-agent", "director-agent", "motion-agent", "retention-critic", "sound-agent"]
+    [
+      "blind-critic",
+      "caption-agent",
+      "content-strategist",
+      "director-agent",
+      "motion-agent",
+      "ordinary-viewer-critic",
+      "retention-critic",
+      "sound-agent",
+    ]
   );
   const motion = profiles.find(item => item.agentId === "motion-agent");
   assert.deepEqual(motion.memoryNamespaces, ["shared.evidence", "motion.private", "shared.recipes"]);
+  const strategist = profiles.find(item => item.agentId === "content-strategist");
+  assert.equal(strategist.maxProposals, 1);
+  assert.equal(strategist.prohibitions.includes("replace user direction"), true);
+  const ordinary = profiles.find(item => item.agentId === "ordinary-viewer-critic");
+  assert.equal(ordinary.prohibitions.includes("perform technical QA or retention prediction"), true);
   assert.equal(profiles.some(item => item.responsibilities.includes("publish")), false);
   assert.equal(profiles.some(item => item.responsibilities.includes("promote-memory")), false);
 });
@@ -100,8 +137,12 @@ test("validates every repository schema, profile, and evaluation rubric", async 
   const report = await validateRepositoryContracts(root);
   assert.deepEqual(report, {
     schemaVersion: 1,
-    schemas: 8,
-    profiles: 6,
+    schemas: 9,
+    profiles: 8,
     rubric: "koubo-multi-agent-rubric-v1",
+    libraries: {
+      contentPrinciples: 16,
+      status: "candidate_awaiting_user_review",
+    },
   });
 });

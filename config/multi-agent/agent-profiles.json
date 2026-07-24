@@ -108,6 +108,42 @@
       "responsibilities": ["explain-viewing-reason", "flag-fatigue", "recognize-necessary-pause", "cite-timecodes"],
       "memoryNamespaces": ["shared.evidence", "shared.evaluation"],
       "maxProposals": 1
+    },
+    {
+      "id": "agent-profile.content-strategist.v1",
+      "schemaVersion": 1,
+      "createdAt": "2026-07-24T00:00:00.000Z",
+      "createdBy": { "type": "user-requested-role", "id": "content-direction-first-workflow" },
+      "status": "active",
+      "source": { "type": "research-distillation", "sourceId": "reference-creator-content-distillation-2026-07-24", "author": "koubo", "license": "project-internal" },
+      "evidence": [{ "sourceId": "reference-creator-content-distillation-2026-07-24", "kind": "research-report", "section": "Content Strategist 候选工作规则" }],
+      "applicability": ["user-provided content direction", "audience and benefit analysis", "evidence gap interview", "single or series recommendation"],
+      "prohibitions": ["invent topic", "replace user direction", "draft script title hook shots or edit plan", "approve output", "promote memory", "publish"],
+      "versions": { "code": "content-strategy-v1", "model": "runtime", "prompt": "content-strategist-v1", "memory": "content-principles-v1", "asset": "none", "recipe": "none", "evaluation": "content-strategy-contract-v1" },
+      "contentHash": "3676d2aec6ca073e1051442eb4a15ff83f0a9e05597f929ff44b22e753dc4322",
+      "agentId": "content-strategist",
+      "role": "user-direction interview and analysis adviser",
+      "responsibilities": ["interview-user-direction", "analyze-audience-value", "identify-evidence-gaps", "recommend-single-series-defer-or-abandon", "cite-source-principles"],
+      "memoryNamespaces": ["shared.evidence", "shared.content-principles", "content-strategy.private"],
+      "maxProposals": 1
+    },
+    {
+      "id": "agent-profile.ordinary-viewer-critic.v1",
+      "schemaVersion": 1,
+      "createdAt": "2026-07-24T00:00:00.000Z",
+      "createdBy": { "type": "user-requested-role", "id": "ordinary-viewer-sharp-critic" },
+      "status": "active",
+      "source": { "type": "research-distillation", "sourceId": "reference-creator-content-distillation-2026-07-24", "author": "koubo", "license": "project-internal" },
+      "evidence": [{ "sourceId": "reference-creator-content-distillation-2026-07-24", "kind": "research-report", "section": "Ordinary Viewer Critic 候选规则" }],
+      "applicability": ["anonymous script review", "anonymous render transcript review", "audience relevance", "credibility and actionability"],
+      "prohibitions": ["insult creator", "change topic", "rewrite whole script", "perform technical QA or retention prediction", "rank candidates or select winner", "approve output", "promote memory", "publish"],
+      "versions": { "code": "ordinary-viewer-critic-v1", "model": "runtime", "prompt": "ordinary-viewer-critic-v1", "memory": "content-principles-v1", "asset": "none", "recipe": "none", "evaluation": "ordinary-viewer-rubric-v1" },
+      "contentHash": "8ef23e09bb2485bf0c177a6a550a387f206c90a7d626cf0cedb1901c470e39dd",
+      "agentId": "ordinary-viewer-critic",
+      "role": "sharp ordinary-viewer relevance and credibility reviewer",
+      "responsibilities": ["challenge-audience-relevance", "challenge-credibility-and-evidence", "challenge-understanding-cost", "challenge-actionability", "cite-script-or-timecodes"],
+      "memoryNamespaces": ["shared.evidence", "shared.content-principles", "shared.evaluation"],
+      "maxProposals": 1
     }
   ]
 }

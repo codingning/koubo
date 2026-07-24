@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import Any
+from typing import Any, Literal
 
 
 OPERATIONS = (
@@ -39,6 +39,28 @@ AGENT_INSTRUCTIONS = {
         "timecodes, applicability, prohibitions, and parameters. Keep status inbox."
     ),
 }
+ROLE_INSTRUCTIONS = {
+    "content-strategist": (
+        "Analyze only the explicit user-locked content direction. Interview for audience, "
+        "viewer benefit, evidence, risks, and single-versus-series potential. Treat cited "
+        "creator principles as advisory candidates with source timecodes, not facts. Never "
+        "invent or replace the topic; never draft scripts, titles, hooks, shot lists, or edit "
+        "plans; never approve, publish, or promote memory. Return only the supplied structured "
+        "analysis contract."
+    ),
+    "ordinary-viewer-critic": (
+        "Act as a sharp but non-insulting ordinary viewer. Review only relevance, clarity, "
+        "credibility, evidence, and actionability. Cite exact script text or supplied timecoded "
+        "evidence. Do not change the topic, rewrite the whole script, perform technical QA, "
+        "predict retention or drop-off, rank candidates, choose a winner, approve, publish, or "
+        "promote memory. Never claim visual or audio observations beyond the declared inspection "
+        "mode and supplied frame evidence."
+    ),
+}
+ROLE_OPERATIONS = {
+    "content-strategist": "agent_proposals",
+    "ordinary-viewer-critic": "agent_critique",
+}
 SENSITIVE_KEYS = {
     "apikey",
     "accesstoken",
@@ -53,6 +75,22 @@ SENSITIVE_KEYS = {
 
 class RequestError(ValueError):
     """A safe validation error suitable for returning to the local caller."""
+
+
+def instructions_for_agent(operation: str, agent_id: str) -> str:
+    role = ROLE_INSTRUCTIONS.get(agent_id)
+    if role:
+        return f"{AGENT_INSTRUCTIONS[operation]}\n\nRole-specific boundary:\n{role}"
+    return AGENT_INSTRUCTIONS[operation]
+
+
+def validate_agent_operation(operation: str, agent_id: str) -> None:
+    required_operation = ROLE_OPERATIONS.get(agent_id)
+    if required_operation is not None and operation != required_operation:
+        raise RequestError(
+            f"agent {agent_id} only supports operation {required_operation}; "
+            f"received {operation}"
+        )
 
 
 def normalized_key(value: str) -> str:
@@ -185,7 +223,120 @@ def parse_agent_output(value: Any) -> Any:
     return {"text": value}
 
 
+def advisory_output_type(agent_id: str) -> type[Any] | None:
+    """Return strict structured-output contracts for the two advisory roles.
+
+    The generic creative agents intentionally keep their historical free-form JSON
+    behavior.  These two roles sit on authority boundaries, so a merely suggestive
+    prompt is not sufficient: the Agents SDK must ask the model for the exact shape
+    that the deterministic JavaScript validators consume.
+    """
+    if agent_id not in ROLE_OPERATIONS:
+        return None
+
+    from pydantic import BaseModel, ConfigDict, Field
+
+    class StrictOutput(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+
+    if agent_id == "content-strategist":
+        class EvidenceReference(StrictOutput):
+            id: str = Field(description="Exact id from minimalInput.evidence")
+            relevance: str = Field(description="What this evidence supports")
+
+        class EvidenceAssessment(StrictOutput):
+            available: list[EvidenceReference]
+            missing: list[str]
+
+        class PrincipleCitation(StrictOutput):
+            principleId: str = Field(description="Exact id from candidatePrinciples")
+            contentHash: str = Field(description="Exact contentHash from that candidate principle")
+            relevance: str = Field(description="Why this advisory candidate is relevant")
+
+        class ContentStrategistOutput(StrictOutput):
+            lockedDirection: str
+            directionRestatement: str
+            audience: str = Field(description="One concise audience description, not an object")
+            viewerBenefit: str = Field(description="One concise viewer benefit, not an object")
+            strengths: list[str]
+            weaknesses: list[str]
+            evidence: EvidenceAssessment
+            testableQuestion: str
+            principleCitations: list[PrincipleCitation]
+            recommendation: Literal["single_piece", "series", "defer"]
+            nextQuestions: list[str] = Field(max_length=3)
+            status: Literal[
+                "ready_for_script",
+                "needs_evidence",
+                "needs_restructure",
+                "recommend_abandon",
+            ]
+            uncertainties: list[str]
+
+        EvidenceAssessment.model_rebuild(
+            _types_namespace={"EvidenceReference": EvidenceReference}
+        )
+        ContentStrategistOutput.model_rebuild(
+            _types_namespace={
+                "EvidenceAssessment": EvidenceAssessment,
+                "PrincipleCitation": PrincipleCitation,
+                "Literal": Literal,
+            }
+        )
+        return ContentStrategistOutput
+
+    class OrdinaryViewerBlocker(StrictOutput):
+        issue: str
+        classification: Literal["fact", "subjective", "uncertain"]
+        quote: str | None = Field(
+            description="Exact script quote for script review; null for render review when not needed"
+        )
+        start: float | None = Field(
+            description="Render timestamp start in seconds; null for script review"
+        )
+        end: float | None = Field(
+            description="Render timestamp end in seconds; null for script review"
+        )
+
+    class OrdinaryViewerClassifications(StrictOutput):
+        fact: list[str]
+        subjective: list[str]
+        uncertain: list[str]
+
+    class OrdinaryViewerOutput(StrictOutput):
+        sharpConclusion: str
+        blockers: list[OrdinaryViewerBlocker] = Field(max_length=3)
+        viewerValueGap: str
+        evidenceGap: str
+        minimalFix: str
+        viewerDecision: Literal[
+            "清楚且有用",
+            "听懂但无用",
+            "证据不足",
+            "无法理解",
+            "整体不接受",
+        ]
+        classifications: OrdinaryViewerClassifications
+
+    OrdinaryViewerOutput.model_rebuild(
+        _types_namespace={
+            "OrdinaryViewerBlocker": OrdinaryViewerBlocker,
+            "OrdinaryViewerClassifications": OrdinaryViewerClassifications,
+            "Literal": Literal,
+        }
+    )
+    return OrdinaryViewerOutput
+
+
+def agent_tracing_enabled() -> bool:
+    """Tracing is opt-in because advisory prompts contain user evidence."""
+    return str(os.environ.get("KOUBO_AGENT_TRACING_ENABLED") or "").strip() == "1"
+
+
 def run_agent_operation(operation: str, request: dict[str, Any]) -> dict[str, Any]:
+    agent_id = str(request.get("agent_id") or operation).strip()
+    validate_agent_operation(operation, agent_id)
+
     if "fixture_response" in request:
         return {
             "success": True,
@@ -199,16 +350,20 @@ def run_agent_operation(operation: str, request: dict[str, Any]) -> dict[str, An
     if not prompt:
         raise RequestError("prompt is required")
 
-    from agents import Agent, Runner
+    from agents import Agent, Runner, set_tracing_disabled
 
-    agent_id = str(request.get("agent_id") or operation)
+    set_tracing_disabled(not agent_tracing_enabled())
+
     kwargs: dict[str, Any] = {
         "name": agent_id,
-        "instructions": AGENT_INSTRUCTIONS[operation],
+        "instructions": instructions_for_agent(operation, agent_id),
     }
     model = str(os.environ.get("OPENAI_MODEL") or "").strip()
     if model:
         kwargs["model"] = model
+    output_type = advisory_output_type(agent_id)
+    if output_type is not None:
+        kwargs["output_type"] = output_type
     agent = Agent(**kwargs)
     result = Runner.run_sync(agent, prompt)
     return {

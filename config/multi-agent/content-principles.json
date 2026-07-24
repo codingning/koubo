@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "id": "koubo-content-principles-v1",
+  "status": "candidate_awaiting_user_review",
+  "sourceDocument": "docs/research/2026-07-24-reference-creator-content-distillation.md",
+  "sources": [
+    {
+      "videoId": "7665740666193874227",
+      "title": "在场即信任：AI时代普通人的资产",
+      "originalUserUrl": "https://www.douyin.com/user/MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc?from_tab_name=main&vid=7665740666193874227",
+      "accountSecUid": "MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc",
+      "accessedAt": "2026-07-24T14:32:26+08:00",
+      "mediaRetrievalStartedAt": "2026-07-24T14:32:59+08:00",
+      "transcriptModel": "faster-whisper/small",
+      "transcriptSegments": 243,
+      "transcriptSha256": "8be3b68cd678ccc5a554b81972f945243b1667ff42a4b5dfbc49f4a2bd6a07b1"
+    },
+    {
+      "videoId": "7665371144572177700",
+      "title": "一条视频顶一百条的拍法",
+      "originalUserUrl": "https://www.douyin.com/user/MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc?from_tab_name=main&modal_id=7665371144572177700&vid=7665740666193874227",
+      "accountSecUid": "MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc",
+      "accessedAt": "2026-07-24T14:32:26+08:00",
+      "mediaRetrievalStartedAt": "2026-07-24T14:32:59+08:00",
+      "transcriptModel": "faster-whisper/small",
+      "transcriptSegments": 206,
+      "transcriptSha256": "de120b3e8e02995192cfe25c232a3e8d5f8b6ebf932961eb731592823f9e570e"
+    },
+    {
+      "videoId": "7665003502212582683",
+      "title": "做一件事就把它做成资产",
+      "originalUserUrl": "https://www.douyin.com/user/MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc?from_tab_name=main&modal_id=7665371144572177700&vid=7665003502212582683",
+      "accountSecUid": "MS4wLjABAAAAxaSHyjKQyfWHKjIS1mYbpxxEQZpT8ogl_eyks2M_Twc",
+      "accessedAt": "2026-07-24T14:32:26+08:00",
+      "mediaRetrievalStartedAt": "2026-07-24T14:32:59+08:00",
+      "transcriptModel": "faster-whisper/small",
+      "transcriptSegments": 152,
+      "transcriptSha256": "1aca1b0fbd2e1a14aac37499533b2acd077af7952995ab9cf33e77f9ad423b47"
+    }
+  ],
+  "usageBoundary": {
+    "contentOnly": true,
+    "forbidOriginalWording": true,
+    "forbidVideoFormImitation": true,
+    "candidateIsNotProductionPolicy": true
+  },
+  "principles": [
+    {
+      "id": "content-principle.production-is-not-distribution.v1",
+      "sourceVideoId": "7665740666193874227",
+      "sourceTitle": "在场即信任：AI时代普通人的资产",
+      "timecodes": [
+        { "startSeconds": 106, "endSeconds": 139, "startLabel": "01:46", "endLabel": "02:19" }
+      ],
+      "claim": "完成内容或产品，并不自动带来观看、使用或真实需求。",
+      "abstraction": "方向分析必须分别检查用户做出了什么、目标受众为何在意，以及成果如何被真实发现。",
+      "applicability": ["个人项目分享", "AI工具实测", "开源方案介绍"],
+      "counterexamples": ["已有明确受众和稳定触达渠道的内容，分发未必是当前首要问题。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.generic-copy-is-fragile.v1",
+      "sourceVideoId": "7665740666193874227",
+      "sourceTitle": "在场即信任：AI时代普通人的资产",
+      "timecodes": [
+        { "startSeconds": 140, "endSeconds": 205, "startLabel": "02:20", "endLabel": "03:25" },
+        { "startSeconds": 317, "endSeconds": 355, "startLabel": "05:17", "endLabel": "05:55" }
+      ],
+      "claim": "当工具让复制变得普遍时，只有通用信息和复述的内容很难形成长期差异。",
+      "abstraction": "若删除创作者姓名、项目名和证据后任何账号都能原样发布，应要求补充真实行动、取舍、失败或版本变化。",
+      "applicability": ["AI知识口播", "热点解读", "通用教程"],
+      "counterexamples": ["标准化服务仍可能凭稳定性、成本、速度或合规能力创造价值。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.information-gap-expires.v1",
+      "sourceVideoId": "7665740666193874227",
+      "sourceTitle": "在场即信任：AI时代普通人的资产",
+      "timecodes": [
+        { "startSeconds": 241, "endSeconds": 289, "startLabel": "04:01", "endLabel": "04:49" }
+      ],
+      "claim": "新技术带来的先发信息优势通常会随普及而快速衰减。",
+      "abstraction": "热点选题需要说明适用期限，并留下热点结束后仍可复用的方法、记录或成果，不能只放大焦虑。",
+      "applicability": ["新模型发布", "新功能体验", "平台热点"],
+      "counterexamples": ["专有数据、长期客户关系或高迁移成本可能把短期优势转成更稳定的壁垒。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.verifiable-history-builds-trust.v1",
+      "sourceVideoId": "7665740666193874227",
+      "sourceTitle": "在场即信任：AI时代普通人的资产",
+      "timecodes": [
+        { "startSeconds": 498, "endSeconds": 544, "startLabel": "08:18", "endLabel": "09:04" }
+      ],
+      "claim": "长期、真实且可回看的行动历史，比单条观点更难被简单复制。",
+      "abstraction": "Content Strategist应寻找第一版、失败、返修、结果和边界，让AI放大真实行动而不是制造身份。",
+      "applicability": ["个人成长账号", "项目进度", "连续实验"],
+      "counterexamples": ["持续出现但缺少价值、诚实或兑现，只会增加熟悉感，不会自动形成信任。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.learning-corrects-errors.v1",
+      "sourceVideoId": "7665371144572177700",
+      "sourceTitle": "一条视频顶一百条的拍法",
+      "timecodes": [
+        { "startSeconds": 33, "endSeconds": 72, "startLabel": "00:33", "endLabel": "01:12" },
+        { "startSeconds": 522, "endSeconds": 539, "startLabel": "08:42", "endLabel": "08:59" }
+      ],
+      "claim": "重复发布的数量不等于学习，学习需要识别并修正具体错误。",
+      "abstraction": "每个方向应有一个清楚的学习问题，不能把又做了一次当成进步证明。",
+      "applicability": ["短视频实验", "技能训练", "Agent迭代"],
+      "counterexamples": ["在动作尚未形成基本熟练度时，适量重复本身也可能有训练价值。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.start-with-low-variable-baseline.v1",
+      "sourceVideoId": "7665371144572177700",
+      "sourceTitle": "一条视频顶一百条的拍法",
+      "timecodes": [
+        { "startSeconds": 100, "endSeconds": 135, "startLabel": "01:40", "endLabel": "02:15" }
+      ],
+      "claim": "先建立变量较少的基线，后续才更容易判断问题来自哪里。",
+      "abstraction": "首次验证应减少非必要变化，先确认内容、证据和表达是否成立。",
+      "applicability": ["内容首测", "工作流试运行", "Agent基准评测"],
+      "counterexamples": ["探索阶段可以并行发散，但不能把多变量结果解释成单一因果。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.preregister-expectations.v1",
+      "sourceVideoId": "7665371144572177700",
+      "sourceTitle": "一条视频顶一百条的拍法",
+      "timecodes": [
+        { "startSeconds": 135, "endSeconds": 170, "startLabel": "02:15", "endLabel": "02:50" }
+      ],
+      "claim": "在看到结果前记录预期，有助于避免事后为数据编造解释。",
+      "abstraction": "实验型选题应保存发布前判断、理由和预期，再与真实结果对照。",
+      "applicability": ["发布复盘", "A/B实验", "模型评测"],
+      "counterexamples": ["低样本或平台波动较大时，预期与结果的差异仍不能单独证明因果。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.ai-generates-hypotheses-not-verdicts.v1",
+      "sourceVideoId": "7665371144572177700",
+      "sourceTitle": "一条视频顶一百条的拍法",
+      "timecodes": [
+        { "startSeconds": 210, "endSeconds": 314, "startLabel": "03:30", "endLabel": "05:14" }
+      ],
+      "claim": "AI可以提出原因和改进假设，但其判断不能直接充当事实或裁决。",
+      "abstraction": "Strategist应要求AI标注不确定性、证据和验证办法，不得把模型推测写成平台规律。",
+      "applicability": ["数据复盘", "内容诊断", "Agent训练"],
+      "counterexamples": ["有充分、可复现数据支持的自动检查，可以作为技术门禁，但仍不替代主观判断。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.change-one-main-variable.v1",
+      "sourceVideoId": "7665371144572177700",
+      "sourceTitle": "一条视频顶一百条的拍法",
+      "timecodes": [
+        { "startSeconds": 314, "endSeconds": 364, "startLabel": "05:14", "endLabel": "06:04" }
+      ],
+      "claim": "一次实验只改变一个主要变量，更容易形成可解释的比较。",
+      "abstraction": "若标题、内容、剪辑和发布时间同时变化，分析必须拒绝把结果归因于其中单项。",
+      "applicability": ["短视频迭代", "提示词试验", "Agent候选比较"],
+      "counterexamples": ["紧急修复可以同时处理多个确定性缺陷，但不得声称获得了单变量因果结论。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.version-failures-and-results.v1",
+      "sourceVideoId": "7665371144572177700",
+      "sourceTitle": "一条视频顶一百条的拍法",
+      "timecodes": [
+        { "startSeconds": 364, "endSeconds": 428, "startLabel": "06:04", "endLabel": "07:08" },
+        { "startSeconds": 470, "endSeconds": 520, "startLabel": "07:50", "endLabel": "08:40" }
+      ],
+      "claim": "失败的版本、问题、假设、修改和结果都应保留，避免重复试错。",
+      "abstraction": "实验过程可以成为内容，但必须展示原判断、具体修改、结果和淘汰理由，而不是只讲成功。",
+      "applicability": ["版本复盘", "公开实验", "Agent评测记录"],
+      "counterexamples": ["没有真实样本和结果的假想复盘不能被包装成已经验证的方法。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.asset-survives-tomorrow.v1",
+      "sourceVideoId": "7665003502212582683",
+      "sourceTitle": "做一件事就把它做成资产",
+      "timecodes": [
+        { "startSeconds": 0, "endSeconds": 23, "startLabel": "00:00", "endLabel": "00:23" },
+        { "startSeconds": 293, "endSeconds": 366, "startLabel": "04:53", "endLabel": "06:06" }
+      ],
+      "claim": "一项成果是否成为资产，可以看下一次能否从已有版本继续，而非重新从零开始。",
+      "abstraction": "项目选题应指出留下了什么可复用成果，以及下一次如何使用它。",
+      "applicability": ["个人项目", "开源Skill", "自动化流程"],
+      "counterexamples": ["低频、一次性或维护成本高于复用收益的任务不一定值得资产化。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.rough-v1-solves-recurring-problem.v1",
+      "sourceVideoId": "7665003502212582683",
+      "sourceTitle": "做一件事就把它做成资产",
+      "timecodes": [
+        { "startSeconds": 49, "endSeconds": 102, "startLabel": "00:49", "endLabel": "01:42" }
+      ],
+      "claim": "第一版可以简单，但应解决一个真实且会重复出现的小问题。",
+      "abstraction": "资产不必一开始就是完整产品，可以是清单、模板、案例库、Skill或最小自动化。",
+      "applicability": ["MVP", "个人效率工具", "内容工作流"],
+      "counterexamples": ["高风险、不可撤回或缺少人工兜底的场景不适合粗糙上线。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.real-use-directs-next-version.v1",
+      "sourceVideoId": "7665003502212582683",
+      "sourceTitle": "做一件事就把它做成资产",
+      "timecodes": [
+        { "startSeconds": 102, "endSeconds": 119, "startLabel": "01:42", "endLabel": "01:59" }
+      ],
+      "claim": "真实使用暴露的问题，比脱离使用场景的功能想象更能决定下一版。",
+      "abstraction": "分析方向时先寻找一次实际使用、一次失败和一个具体缺口，再讨论扩展。",
+      "applicability": ["项目迭代", "Agent训练", "工具测评"],
+      "counterexamples": ["安全、隐私和合规要求仍需在真实失败发生前进行预防性设计。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.manual-fallback-teaches-automation.v1",
+      "sourceVideoId": "7665003502212582683",
+      "sourceTitle": "做一件事就把它做成资产",
+      "timecodes": [
+        { "startSeconds": 119, "endSeconds": 167, "startLabel": "01:59", "endLabel": "02:47" },
+        { "startSeconds": 168, "endSeconds": 202, "startLabel": "02:48", "endLabel": "03:22" }
+      ],
+      "claim": "自动化遇到新问题时，应暂停并由人工走通正确过程，再把验证后的处理方式写回系统。",
+      "abstraction": "训练Agent的内容必须展示失败、澄清、人工兜底和重新编码，不能把自信输出当成完成。",
+      "applicability": ["Agent训练", "自动化异常", "工作流治理"],
+      "counterexamples": ["医疗、法律、财务等高风险判断不能仅凭一次人工处理就自动晋升为可复用规则。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.versions-compound-with-maintenance.v1",
+      "sourceVideoId": "7665003502212582683",
+      "sourceTitle": "做一件事就把它做成资产",
+      "timecodes": [
+        { "startSeconds": 205, "endSeconds": 264, "startLabel": "03:25", "endLabel": "04:24" },
+        { "startSeconds": 344, "endSeconds": 366, "startLabel": "05:44", "endLabel": "06:06" }
+      ],
+      "claim": "复利来自小版本持续叠加，但成熟系统仍需要监控、维护和例外处理。",
+      "abstraction": "不得把自动化写成完全无人值守；应说明版本变化、人工边界和回滚责任。",
+      "applicability": ["长期项目", "Agent系统", "自动剪辑流程"],
+      "counterexamples": ["没有真实复用和维护记录的版本数量，只是库存而不是资产。"],
+      "status": "candidate_awaiting_user_review"
+    },
+    {
+      "id": "content-principle.knowledge-assets-need-real-reuse.v1",
+      "sourceVideoId": "7665003502212582683",
+      "sourceTitle": "做一件事就把它做成资产",
+      "timecodes": [
+        { "startSeconds": 268, "endSeconds": 292, "startLabel": "04:28", "endLabel": "04:52" }
+      ],
+      "claim": "问题记录和知识库只有在真实交付、复用或后续判断中产生作用时才形成资产。",
+      "abstraction": "真实问题可以同时服务交付、选题和研究，但必须验证代表性、时效性并保护隐私。",
+      "applicability": ["FAQ", "案例库", "内容选题库"],
+      "counterexamples": ["过时、缺少上下文或包含敏感信息的问题记录可能增加风险而非价值。"],
+      "status": "candidate_awaiting_user_review"
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "koubo://schemas/content-principle/v1",
+  "title": "Koubo Content Principle Library v1",
+  "type": "object",
+  "x-koubo-common-record": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "status",
+    "sourceDocument",
+    "sources",
+    "usageBoundary",
+    "principles"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "enum": [1]
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "candidate_awaiting_user_review",
+        "accepted",
+        "rejected",
+        "superseded"
+      ]
+    },
+    "sourceDocument": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "videoId",
+          "title",
+          "originalUserUrl",
+          "accountSecUid",
+          "accessedAt",
+          "mediaRetrievalStartedAt",
+          "transcriptModel",
+          "transcriptSegments",
+          "transcriptSha256"
+        ],
+        "properties": {
+          "videoId": { "type": "string", "pattern": "^[0-9]{19}$" },
+          "title": { "type": "string", "minLength": 1 },
+          "originalUserUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://www\\.douyin\\.com/"
+          },
+          "accountSecUid": { "type": "string", "minLength": 1 },
+          "accessedAt": { "type": "string", "format": "date-time" },
+          "mediaRetrievalStartedAt": { "type": "string", "format": "date-time" },
+          "transcriptModel": { "type": "string", "minLength": 1 },
+          "transcriptSegments": { "type": "integer", "minimum": 1 },
+          "transcriptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "usageBoundary": {
+      "type": "object",
+      "required": [
+        "contentOnly",
+        "forbidOriginalWording",
+        "forbidVideoFormImitation",
+        "candidateIsNotProductionPolicy"
+      ],
+      "properties": {
+        "contentOnly": { "type": "boolean", "enum": [true] },
+        "forbidOriginalWording": { "type": "boolean", "enum": [true] },
+        "forbidVideoFormImitation": { "type": "boolean", "enum": [true] },
+        "candidateIsNotProductionPolicy": { "type": "boolean", "enum": [true] }
+      },
+      "additionalProperties": false
+    },
+    "principles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourceVideoId",
+          "sourceTitle",
+          "timecodes",
+          "claim",
+          "abstraction",
+          "applicability",
+          "counterexamples",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^content-principle\\.[a-z0-9-]+\\.v1$"
+          },
+          "sourceVideoId": {
+            "type": "string",
+            "pattern": "^[0-9]{19}$"
+          },
+          "sourceTitle": {
+            "type": "string",
+            "minLength": 1
+          },
+          "timecodes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["startSeconds", "endSeconds", "startLabel", "endLabel"],
+              "properties": {
+                "startSeconds": { "type": "number", "minimum": 0 },
+                "endSeconds": { "type": "number", "exclusiveMinimum": 0 },
+                "startLabel": {
+                  "type": "string",
+                  "pattern": "^[0-9]{2}:[0-9]{2}$"
+                },
+                "endLabel": {
+                  "type": "string",
+                  "pattern": "^[0-9]{2}:[0-9]{2}$"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "claim": {
+            "type": "string",
+            "minLength": 8
+          },
+          "abstraction": {
+            "type": "string",
+            "minLength": 8
+          },
+          "applicability": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "counterexamples": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "candidate_awaiting_user_review",
+              "accepted",
+              "rejected",
+              "superseded"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

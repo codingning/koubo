@@ -23,7 +23,10 @@ import {
 } from "./visual_director.mjs";
 import { createMultiAgentApi } from "./multi-agent/api.mjs";
 import { buildBlindReviewBundle } from "./multi-agent/evaluation.mjs";
-import { canonicalJson, loadAgentProfiles } from "./multi-agent/contracts.mjs";
+import { canonicalJson, contentHash, loadAgentProfiles, validateLibrary } from "./multi-agent/contracts.mjs";
+import { canEnterScriptStage } from "./multi-agent/content-strategy.mjs";
+import { createOrdinaryViewerCritic } from "./multi-agent/ordinary-viewer-critic.mjs";
+import { auditRenderedJobOrdinaryViewer } from "./multi-agent/rendered-ordinary-viewer-audit.mjs";
 import { createMemoryService } from "./multi-agent/memory.mjs";
 import { createOrchestrator } from "./multi-agent/orchestrator.mjs";
 import { openDomainStore } from "./multi-agent/store.mjs";
@@ -81,6 +84,8 @@ function confined(base, target) {
 }
 function redact(text) {
   return String(text || "")
+    .replace(/(?:file:\/{2,3})?[A-Za-z]:[\\/][^\r\n"'<>,;)\]]+/gi, "<local-path>")
+    .replace(/\\\\[^\\/\s]+[\\/][^\r\n"'<>,;)\]]+/g, "<local-path>")
     .replace(/(api[_-]?key|token|password|authorization)\s*[:=]\s*[^\s,;]+/gi, "$1=<redacted>")
     .replace(/(?:sk|gsk|ghp|github_pat)_[A-Za-z0-9_-]{12,}/g, "<redacted>")
     .slice(0, 40000);
@@ -92,6 +97,15 @@ async function writeJson(file, data) {
 }
 async function readJsonFile(file) { return JSON.parse((await fsp.readFile(file, "utf8")).replace(/^\uFEFF/, "")); }
 async function readJob(id) { return readJsonFile(path.join(confined(jobsRoot, id), "job.json")); }
+async function readContent(id) {
+  const safeId = safeName(id);
+  try {
+    return await readJsonFile(path.join(confined(contentRoot, safeId), "content.json"));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
 async function saveJob(job) { job.updatedAt = new Date().toISOString(); await writeJson(path.join(confined(jobsRoot, job.id), "job.json"), job); }
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -165,6 +179,15 @@ async function contentDirectionFor(contentId) {
     const content = await readJsonFile(path.join(confined(contentRoot, id), "content.json"));
     return {
       id,
+      lockedDirection: String(content.lockedDirection || ""),
+      lockedDirectionHash: String(content.lockedDirectionHash || content.generation?.lockedDirectionHash || ""),
+      directionSource: String(content.directionSource || ""),
+      strategyConfirmationArtifactId: String(content.generation?.strategyConfirmationArtifactId || ""),
+      strategyAnalysisArtifactId: String(content.generation?.strategyAnalysisArtifactId || ""),
+      approvedDirection: content.approvedDirection || null,
+      audience: String(content.audience || ""),
+      viewerBenefit: String(content.viewerBenefit || content.audienceBenefit || ""),
+      coreQuestion: String(content.coreQuestion || content.structureDesign?.coreQuestion || ""),
       mainTopic: String(content.mainTopic || ""),
       hook: String(content.hook || ""),
       audienceBenefit: String(content.audienceBenefit || ""),
@@ -295,7 +318,480 @@ function normalizeContent(raw, dayNumber, id, meta) {
     generation: { model: meta.model, usage: meta.usage || {}, mode: "openai-compatible", automatic: true, qualityRevision: meta.quality_revision || { repaired: false, initial_issues: [] } }
   };
 }
-async function generateContent(options = {}) {
+
+function contentStrategyError(code, message, statusCode = 422) {
+  const error = new Error(`${code}: ${message}`);
+  error.code = code;
+  error.statusCode = statusCode;
+  return error;
+}
+
+function requiredLockedDirection(value, label = "lockedDirection") {
+  const direction = String(value ?? "").trim();
+  if (!direction) throw contentStrategyError(
+    "CONTENT_DIRECTION_REQUIRED",
+    `${label} is required. 默认生成不再自动选题；请先提交用户锁定方向和服务端 strategyConfirmationArtifactId，或显式设置 allowAgentTopicSearch=true。`
+  );
+  return direction;
+}
+
+export function hashLockedDirection(direction) {
+  return contentHash({ lockedDirection: requiredLockedDirection(direction) });
+}
+
+function serverArtifactContentHash(artifact) {
+  const core = structuredClone(artifact);
+  delete core.contentHash;
+  return contentHash(core);
+}
+
+function assertServerArtifactContentHash(artifact, label) {
+  const declared = String(artifact?.contentHash || "").trim();
+  if (!/^[a-f0-9]{64}$/u.test(declared) || declared !== serverArtifactContentHash(artifact)) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_ARTIFACT_HASH_INVALID",
+      `${label} content hash is missing or invalid`,
+      409
+    );
+  }
+  return declared;
+}
+
+function strategyNotReadyMessage(input, analysis) {
+  if (input.userConfirmation?.analysisApproved !== true
+    || input.userConfirmation?.confirmedDirection !== input.lockedDirection) {
+    return "strategy artifact must be user-confirmed and ready for script（策略分析尚未由用户确认进入写稿）";
+  }
+  if (!Array.isArray(input.evidence) || input.evidence.length === 0
+    || !Array.isArray(analysis.evidence?.available) || analysis.evidence.available.length === 0
+    || !Array.isArray(analysis.evidence?.missing) || analysis.evidence.missing.length > 0) {
+    return "strategy artifact evidence is incomplete（真实证据缺失或仍有未解决证据项）";
+  }
+  return "strategy artifact is not confirmed and ready for script（状态、方向或证据未通过写稿门禁）";
+}
+
+function expectedApprovedDirection(input, analysis) {
+  return {
+    audience: analysis.audience,
+    viewerBenefit: analysis.viewerBenefit,
+    coreQuestion: analysis.testableQuestion,
+    constraints: input.constraints || [],
+  };
+}
+
+async function requiredStrategyArtifact(readArtifactFn, kind, id, label) {
+  const artifact = await readArtifactFn(kind, id);
+  if (!artifact) throw contentStrategyError("CONTENT_STRATEGY_ARTIFACT_NOT_FOUND", `${label} artifact not found`, 404);
+  if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
+    throw contentStrategyError("CONTENT_STRATEGY_ARTIFACT_INVALID", `${label} artifact is invalid`, 409);
+  }
+  return artifact;
+}
+
+export async function validateContentGenerationStrategy(options = {}, dependencies = {}) {
+  if (options.allowAgentTopicSearch === true) {
+    if (String(options.lockedDirection || "").trim()
+      || options.strategyArtifact
+      || String(options.strategyConfirmationArtifactId || "").trim()) {
+      throw contentStrategyError(
+        "CONTENT_TOPIC_AUTHORITY_CONFLICT",
+        "allowAgentTopicSearch=true cannot be combined with a user-locked direction or strategy confirmation; choose one authority path."
+      );
+    }
+    return {
+      mode: "agent_topic_search_explicit",
+      directionSource: "agent_topic_search_explicitly_allowed",
+      lockedDirection: null,
+      lockedDirectionHash: null,
+      strategyArtifact: null,
+      strategyArtifactHash: null,
+    };
+  }
+
+  if (options.strategyArtifact !== undefined) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_INLINE_FORBIDDEN",
+      "client-provided strategyArtifact is not authoritative; submit strategyConfirmationArtifactId from the server confirmation route"
+    );
+  }
+
+  const lockedDirection = requiredLockedDirection(options.lockedDirection);
+  const expectedDirectionHash = hashLockedDirection(lockedDirection);
+  const declaredDirectionHash = String(options.lockedDirectionHash || "").trim();
+  if (declaredDirectionHash !== expectedDirectionHash) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_HASH_MISMATCH",
+      "locked direction hash does not match lockedDirection"
+    );
+  }
+
+  const confirmationArtifactId = String(options.strategyConfirmationArtifactId || "").trim();
+  if (!confirmationArtifactId) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_CONFIRMATION_REQUIRED",
+      "strategyConfirmationArtifactId is required. Use the server-side human confirmation artifact; embedded strategy objects are rejected."
+    );
+  }
+  const readArtifactFn = dependencies.readArtifactFn || readMultiAgentArtifact;
+  if (typeof readArtifactFn !== "function") {
+    throw contentStrategyError("CONTENT_STRATEGY_READER_UNAVAILABLE", "server strategy artifact reader is unavailable", 503);
+  }
+  const confirmation = await requiredStrategyArtifact(
+    readArtifactFn,
+    "content-strategy-confirmations",
+    confirmationArtifactId,
+    "content strategy confirmation"
+  );
+  if (confirmation.schemaVersion !== 1 || confirmation.kind !== "content_strategy_human_confirmation") {
+    throw contentStrategyError("CONTENT_STRATEGY_CONFIRMATION_INVALID", "confirmation artifact has an invalid contract", 409);
+  }
+  assertServerArtifactContentHash(confirmation, "content strategy confirmation");
+  if (confirmation.decision !== "approved" || confirmation.scriptHandoffAllowed !== true) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_NOT_APPROVED",
+      "confirmation artifact is not approved for Script Agent handoff",
+      409
+    );
+  }
+  if (confirmation.actor?.type !== "human" || !String(confirmation.actor?.id || "").trim()) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_CONFIRMATION_ACTOR_INVALID",
+      "confirmation artifact requires a human actor",
+      409
+    );
+  }
+  if (String(confirmation.lockedDirection || "").trim() !== lockedDirection) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_DIRECTION_MISMATCH",
+      "confirmation artifact direction does not match the request lockedDirection",
+      409
+    );
+  }
+  const analysisArtifactId = String(confirmation.analysisArtifactId || "").trim();
+  if (!analysisArtifactId) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_ANALYSIS_BINDING_MISSING",
+      "confirmation artifact does not identify its analysis artifact",
+      409
+    );
+  }
+  const analysisArtifact = await requiredStrategyArtifact(
+    readArtifactFn,
+    "content-strategy-analyses",
+    analysisArtifactId,
+    "content strategy analysis"
+  );
+  if (analysisArtifact.schemaVersion !== 1 || analysisArtifact.kind !== "content_strategy_analysis") {
+    throw contentStrategyError("CONTENT_STRATEGY_ANALYSIS_INVALID", "analysis artifact has an invalid contract", 409);
+  }
+  const analysisContentHash = assertServerArtifactContentHash(
+    analysisArtifact,
+    "content strategy analysis"
+  );
+  if (String(confirmation.analysisContentHash || "").trim() !== analysisContentHash) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_ANALYSIS_HASH_MISMATCH",
+      "confirmation artifact is bound to a different analysis content hash",
+      409
+    );
+  }
+  if (!analysisArtifact.input || !analysisArtifact.analysis) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_ANALYSIS_INCOMPLETE",
+      "analysis artifact is missing its original input or analysis",
+      409
+    );
+  }
+  if (analysisArtifact.input.lockedDirection !== lockedDirection
+    || analysisArtifact.analysis.lockedDirection !== lockedDirection) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_DIRECTION_MISMATCH",
+      "confirmation is bound to an analysis with a different locked direction",
+      409
+    );
+  }
+  const approvedDirection = expectedApprovedDirection(analysisArtifact.input, analysisArtifact.analysis);
+  if (canonicalJson(confirmation.approvedDirection) !== canonicalJson(approvedDirection)) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_APPROVED_DIRECTION_MISMATCH",
+      "confirmation approvedDirection does not match the bound analysis",
+      409
+    );
+  }
+  const confirmedInput = structuredClone(analysisArtifact.input);
+  confirmedInput.userConfirmation = {
+    analysisApproved: true,
+    confirmedDirection: lockedDirection,
+  };
+  if (!canEnterScriptStage(confirmedInput, analysisArtifact.analysis)) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_NOT_READY",
+      strategyNotReadyMessage(confirmedInput, analysisArtifact.analysis),
+      409
+    );
+  }
+
+  const authoritativeStrategy = {
+    confirmationArtifactId,
+    analysisArtifactId,
+    confirmation: structuredClone(confirmation),
+    input: confirmedInput,
+    analysis: structuredClone(analysisArtifact.analysis),
+  };
+  const authoritativeStrategyHash = contentHash(authoritativeStrategy);
+
+  return {
+    mode: "user_locked_strategy",
+    directionSource: "explicit_user_direction",
+    lockedDirection,
+    lockedDirectionHash: expectedDirectionHash,
+    strategyConfirmationArtifactId: confirmationArtifactId,
+    strategyAnalysisArtifactId: analysisArtifactId,
+    strategyArtifact: authoritativeStrategy,
+    strategyArtifactHash: authoritativeStrategyHash,
+  };
+}
+
+function returnedDirection(value) {
+  for (const candidate of [
+    value?.lockedDirection,
+    value?.topic,
+    value?.mainTopic,
+    value?.selectedTopic,
+    value?.direction,
+  ]) {
+    const direction = String(candidate ?? "").trim();
+    if (direction) return direction;
+  }
+  return "";
+}
+
+function returnedTopicField(value, stage) {
+  const candidates = stage === "plan_topic"
+    ? [value?.topic, value?.mainTopic, value?.selectedTopic, value?.direction]
+    : [value?.mainTopic, value?.topic, value?.selectedTopic, value?.direction];
+  for (const candidate of candidates) {
+    const direction = String(candidate ?? "").trim();
+    if (direction) return direction;
+  }
+  return "";
+}
+
+export function preserveLockedDirection(value, generationContext, stage = "content") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw contentStrategyError("CONTENT_DIRECTION_OUTPUT_INVALID", `${stage} must return an object`, 502);
+  }
+  const output = structuredClone(value);
+  let lockedDirection = generationContext?.lockedDirection;
+  let lockedDirectionHash = generationContext?.lockedDirectionHash;
+  let directionSource = generationContext?.directionSource;
+
+  if (!lockedDirection) {
+    lockedDirection = requiredLockedDirection(returnedDirection(output), `${stage}.lockedDirection`);
+    lockedDirectionHash = hashLockedDirection(lockedDirection);
+    directionSource = "agent_topic_search_explicitly_allowed";
+  }
+
+  if (String(output.lockedDirection || "").trim()
+    && String(output.lockedDirection).trim() !== lockedDirection) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_CHANGED",
+      `${stage} changed the locked direction`,
+      409
+    );
+  }
+  if (String(output.lockedDirectionHash || "").trim()
+    && String(output.lockedDirectionHash).trim() !== lockedDirectionHash) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_HASH_CHANGED",
+      `${stage} changed the locked direction hash`,
+      409
+    );
+  }
+  if (String(output.directionSource || "").trim()
+    && String(output.directionSource).trim() !== directionSource) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_SOURCE_CHANGED",
+      `${stage} changed the direction authority`,
+      409
+    );
+  }
+
+  const returnedTopic = returnedTopicField(output, stage);
+  if (generationContext?.lockedDirection && returnedTopic !== lockedDirection) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_CHANGED",
+      `${stage} changed the user-locked topic field`,
+      409
+    );
+  }
+
+  output.lockedDirection = lockedDirection;
+  output.lockedDirectionHash = lockedDirectionHash;
+  output.directionSource = directionSource;
+  return output;
+}
+
+function generationLockPayload(generationContext) {
+  const payload = {
+    direction_source: generationContext.directionSource,
+    allow_agent_topic_search: generationContext.mode === "agent_topic_search_explicit",
+  };
+  if (generationContext.lockedDirection) {
+    payload.locked_direction = generationContext.lockedDirection;
+    payload.locked_direction_hash = generationContext.lockedDirectionHash;
+  }
+  if (generationContext.strategyArtifact) {
+    payload.strategy_artifact = generationContext.strategyArtifact;
+    payload.strategy_artifact_hash = generationContext.strategyArtifactHash;
+  }
+  return payload;
+}
+
+function generationContextFromPlan(generationContext, topicPlan) {
+  if (generationContext.lockedDirection) return generationContext;
+  return {
+    ...generationContext,
+    lockedDirection: topicPlan.lockedDirection,
+    lockedDirectionHash: topicPlan.lockedDirectionHash,
+    directionSource: topicPlan.directionSource,
+  };
+}
+
+function generatedScriptText(content) {
+  const segments = Array.isArray(content?.fullSegments)
+    ? content.fullSegments.map(item => String(item?.text || "").trim()).filter(Boolean)
+    : [];
+  return segments.join("\n") || String(content?.shortScript || content?.hook || content?.mainTopic || "").trim();
+}
+
+function redactAuditLocalPaths(value) {
+  let text = String(value ?? "");
+  text = text.replace(/file:\/\/\/?[^\s"'<>]+/giu, "<local-path>");
+  text = text.replace(/(?:\\\\\?\\)?[A-Za-z]:[\\/][^\s"'<>|]*/gu, "<local-path>");
+  text = text.replace(/\\\\[^\\/\s]+[\\/][^\s"'<>|]*/gu, "<local-path>");
+  text = text.replace(
+    /(^|[\s"'([{=])\/(?:Users|home|tmp|var|etc|mnt|opt|srv|Volumes|private|root)(?:\/[^\s"'<>]*)?/giu,
+    (_, prefix) => `${prefix}<local-path>`
+  );
+  return text.trim();
+}
+
+function opaqueAuditSourceId(value, fallback) {
+  const text = String(value ?? "").trim();
+  if (/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(text)) return text;
+  const digest = crypto.createHash("sha256").update(text || fallback).digest("hex").slice(0, 16);
+  return `${fallback}-${digest}`;
+}
+
+function generatedAuditFacts(content, generationContext) {
+  const strategyEvidence = generationContext.strategyArtifact?.input?.evidence;
+  if (Array.isArray(strategyEvidence) && strategyEvidence.length) {
+    return strategyEvidence.map((item, index) => ({
+      sourceId: opaqueAuditSourceId(item.sourceId || item.id, `strategy-evidence-${index + 1}`),
+      provenance: opaqueAuditSourceId(item.provenance || "user_provided", "provenance"),
+      claim: redactAuditLocalPaths(item.summary || item.kind || item.id || "真实证据"),
+      kind: opaqueAuditSourceId(item.kind || "evidence", "evidence-kind"),
+      status: opaqueAuditSourceId(item.provenance || "user_provided", "evidence-status"),
+      ...(Number.isFinite(item.start) && Number.isFinite(item.end) ? { start: item.start, end: item.end } : {}),
+    }));
+  }
+  return (Array.isArray(content?.evidence) ? content.evidence : []).slice(0, 12).map((item, index) => {
+    if (typeof item === "string") return {
+      sourceId: `generated-content-evidence-${index + 1}`,
+      provenance: "generated_content_claim",
+      claim: redactAuditLocalPaths(item),
+    };
+    return {
+      sourceId: opaqueAuditSourceId(item?.sourceId || item?.id, `generated-content-evidence-${index + 1}`),
+      provenance: opaqueAuditSourceId(item?.provenance || "generated_content_claim", "provenance"),
+      claim: redactAuditLocalPaths(item?.summary || item?.claim || item?.text || item?.kind || "生成内容证据"),
+      kind: opaqueAuditSourceId(item?.kind || "evidence", "evidence-kind"),
+      status: opaqueAuditSourceId(item?.status || "generated_content_claim", "evidence-status"),
+    };
+  });
+}
+
+export function buildGeneratedContentScriptAuditInput(content, generationContext, topicPlan = {}) {
+  const analysis = generationContext.strategyArtifact?.analysis || {};
+  const audience = String(analysis.audience || topicPlan.viewerUseCase || content.audienceBenefit || "时间有限、需要具体AI行动的普通观众").trim();
+  const viewerBenefit = String(analysis.viewerBenefit || topicPlan.methodPromise || content.audienceBenefit || "看完能完成一个可验证的AI动作").trim();
+  const coreQuestion = String(analysis.testableQuestion || topicPlan.coreQuestion || content.structureDesign?.coreQuestion || "这条内容是否给出真实、可复用的观众价值").trim();
+  return {
+    stage: "script",
+    approvedDirection: {
+      audience,
+      viewerBenefit,
+      coreQuestion,
+      constraints: [
+        `lockedDirection: ${generationContext.lockedDirection}`,
+        "不得换题、整篇重写或批准发布",
+      ],
+    },
+    script: generatedScriptText(content),
+    facts: generatedAuditFacts(content, generationContext),
+  };
+}
+
+export async function auditGeneratedContentScript({
+  content,
+  generationContext,
+  topicPlan,
+  outputDirectory,
+  critic,
+  writeJsonFn = writeJson,
+} = {}) {
+  if (!critic || typeof critic.review !== "function") throw new Error("ordinary viewer critic is required");
+  const originalStatus = content.status;
+  const reviewFile = path.join(outputDirectory, "ordinary-viewer-review.json");
+  const base = {
+    schemaVersion: 1,
+    stage: "script",
+    lockedDirection: generationContext.lockedDirection,
+    lockedDirectionHash: generationContext.lockedDirectionHash,
+    strategyArtifactHash: generationContext.strategyArtifactHash || null,
+    generatedAt: new Date().toISOString(),
+    authority: {
+      mayApproveProduction: false,
+      mayApprovePublish: false,
+      mayChangeDirection: false,
+    },
+  };
+  let artifact;
+  try {
+    const review = await critic.review(buildGeneratedContentScriptAuditInput(content, generationContext, topicPlan));
+    artifact = { ...base, status: "complete", review };
+    content.ordinaryViewerAudit = {
+      status: "complete",
+      stage: "script",
+      artifactHref: `/content-items/${content.id}/ordinary-viewer-review.json`,
+      viewerDecision: review.viewerDecision,
+      sharpConclusion: review.sharpConclusion,
+      blockers: review.blockers.length,
+    };
+  } catch (error) {
+    artifact = { ...base, status: "failed", error: redact(error.message) };
+    content.ordinaryViewerAudit = {
+      status: "failed",
+      stage: "script",
+      artifactHref: `/content-items/${content.id}/ordinary-viewer-review.json`,
+      error: artifact.error,
+    };
+  }
+  content.status = originalStatus;
+  content.sourceFiles = [
+    ...(Array.isArray(content.sourceFiles) ? content.sourceFiles : []),
+    { label: "普通观众稿件审查", path: `/content-items/${content.id}/ordinary-viewer-review.json` },
+  ];
+  await writeJsonFn(reviewFile, artifact);
+  return artifact;
+}
+
+export async function generateContent(options = {}, dependencies = {}) {
+  let generationContext = await validateContentGenerationStrategy(options, {
+    readArtifactFn: dependencies.readArtifactFn,
+  });
+  const runAiFn = dependencies.runAiFn || runAi;
   const lockKey = "__content_generation__";
   if (running.has(lockKey)) { const error = new Error("已有口播正在生成，请稍候"); error.statusCode = 409; throw error; }
   running.set(lockKey, true);
@@ -319,8 +815,26 @@ async function generateContent(options = {}) {
     let contentStyle = {};
     try { contentStyle = await readJsonFile(path.join(root, "config", "content_style.json")); } catch {}
     const editorialBrief = options.editorialBrief && typeof options.editorialBrief === "object" ? options.editorialBrief : {};
-    const topicResult = await runAi({ operation: "plan_topic", date: shanghaiDate(), day_number: dayNumber, evidence, content_style: contentStyle, editorial_brief: editorialBrief, existing_topics: existingTopics }, dir, "topic-plan");
-    const topicPlan = topicResult.data;
+    const planLock = generationLockPayload(generationContext);
+    const topicResult = await runAiFn({
+      operation: "plan_topic",
+      date: shanghaiDate(),
+      day_number: dayNumber,
+      evidence,
+      content_style: contentStyle,
+      editorial_brief: {
+        ...editorialBrief,
+        ...(generationContext.lockedDirection ? {
+          topic: generationContext.lockedDirection,
+          lockedDirection: generationContext.lockedDirection,
+          lockedDirectionHash: generationContext.lockedDirectionHash,
+        } : {}),
+      },
+      existing_topics: existingTopics,
+      ...planLock,
+    }, dir, "topic-plan");
+    const topicPlan = preserveLockedDirection(topicResult.data, generationContext, "plan_topic");
+    generationContext = generationContextFromPlan(generationContext, topicPlan);
     await writeJson(path.join(dir, "topic-plan.json"), topicPlan);
     const referenceFile = path.join(dir, "reference-research.json");
     try {
@@ -332,9 +846,50 @@ async function generateContent(options = {}) {
     }
     const referenceResearch = await readJsonFile(referenceFile);
     if (!Array.isArray(referenceResearch.fullContentSources) || !referenceResearch.fullContentSources.length) throw new Error("同题视频研究没有完成至少一条全文核验来源");
-    const result = await runAi({ operation: "generate_content", date: shanghaiDate(), day_number: dayNumber, evidence, topic_plan: topicPlan, reference_research: referenceResearch, existing_topics: existingTopics }, dir, "generate-content");
-    const content = normalizeContent(result.data, dayNumber, id, result);
+    const result = await runAiFn({
+      operation: "generate_content",
+      date: shanghaiDate(),
+      day_number: dayNumber,
+      evidence,
+      topic_plan: topicPlan,
+      reference_research: referenceResearch,
+      existing_topics: existingTopics,
+      ...generationLockPayload(generationContext),
+    }, dir, "generate-content");
+    const lockedResult = preserveLockedDirection(result.data, generationContext, "generate_content");
+    const content = preserveLockedDirection(normalizeContent(lockedResult, dayNumber, id, result), generationContext, "content");
+    const strategyAnalysis = generationContext.strategyArtifact?.analysis || {};
+    content.audience = String(strategyAnalysis.audience || topicPlan.viewerUseCase || content.engagement?.audienceMirror || "").trim();
+    content.viewerBenefit = String(strategyAnalysis.viewerBenefit || topicPlan.methodPromise || content.audienceBenefit || "").trim();
+    content.coreQuestion = String(strategyAnalysis.testableQuestion || topicPlan.coreQuestion || content.structureDesign?.coreQuestion || "").trim();
+    if (generationContext.mode === "user_locked_strategy") {
+      content.approvedDirection = {
+        audience: content.audience,
+        viewerBenefit: content.viewerBenefit,
+        coreQuestion: content.coreQuestion,
+        constraints: Array.isArray(generationContext.strategyArtifact?.input?.constraints)
+          ? generationContext.strategyArtifact.input.constraints.map(String)
+          : [],
+      };
+    }
+    content.generation = {
+      ...content.generation,
+      topicMode: generationContext.mode,
+      allowAgentTopicSearch: generationContext.mode === "agent_topic_search_explicit",
+      strategyArtifactHash: generationContext.strategyArtifactHash || null,
+      strategyConfirmationArtifactId: generationContext.strategyConfirmationArtifactId || null,
+      strategyAnalysisArtifactId: generationContext.strategyAnalysisArtifactId || null,
+      lockedDirectionHash: generationContext.lockedDirectionHash,
+      ordinaryViewerAuditRequired: true,
+    };
     if (options.replacesContentId) content.replacesContentId = safeName(options.replacesContentId);
+    await auditGeneratedContentScript({
+      content,
+      generationContext,
+      topicPlan,
+      outputDirectory: dir,
+      critic: dependencies.ordinaryViewerCritic || multiAgentOrdinaryViewerCritic,
+    });
     await writeJson(path.join(dir, "content.json"), content);
     return content;
   } finally {
@@ -2316,6 +2871,87 @@ function visualJobStatus(stageId) {
   }[stageId] || "planning";
 }
 
+const RENDERED_AUDIT_PROTECTED_FIELDS = [
+  "approvedAt",
+  "autoPublish",
+  "finalReview",
+  "memoryPromotion",
+  "productionApproval",
+  "publish",
+  "publishedAt",
+  "publishStatus",
+];
+
+function renderedAuditProtectedState(job) {
+  return {
+    status: job.status,
+    fields: Object.fromEntries(RENDERED_AUDIT_PROTECTED_FIELDS.map(key => [key, {
+      present: Object.prototype.hasOwnProperty.call(job, key),
+      value: structuredClone(job[key]),
+    }])),
+  };
+}
+
+function restoreRenderedAuditProtectedState(job, snapshot) {
+  job.status = snapshot.status;
+  for (const [key, state] of Object.entries(snapshot.fields)) {
+    if (state.present) job[key] = state.value;
+    else delete job[key];
+  }
+}
+
+export async function auditRenderedJobAfterFinalRender(job, trigger, dependencies = {}) {
+  const protectedState = renderedAuditProtectedState(job);
+  try {
+    const keeps = Array.isArray(job.currentPlan?.keepSegments) ? job.currentPlan.keepSegments : [];
+    const mappedTranscript = keeps.length
+      ? transcriptCues(job.transcript, keeps, job.script)
+      : undefined;
+    const audit = await auditRenderedJobOrdinaryViewer({
+      job,
+      transcript: mappedTranscript,
+      critic: dependencies.critic || multiAgentOrdinaryViewerCritic,
+      writeArtifact: dependencies.writeArtifact || writeMultiAgentArtifact,
+      readArtifact: dependencies.readArtifact || readMultiAgentArtifact,
+      allowedRoots: dependencies.allowedRoots || [jobsRoot],
+      trigger,
+      attemptKey: dependencies.attemptKey || `automatic:${trigger}`,
+      clock: dependencies.clock || (() => new Date().toISOString()),
+    });
+    const artifact = audit.artifact;
+    const summary = {
+      status: artifact.status,
+      stage: "render",
+      trigger,
+      artifactId: audit.artifactId,
+      artifactHref: audit.artifactHref,
+      outputVersion: artifact.outputVersion,
+      mediaSha256: artifact.mediaSha256,
+      transcriptSha256: artifact.transcriptSha256,
+      inspectionMode: artifact.inspectionMode,
+      reviewedAt: artifact.reviewedAt,
+      ...(artifact.review ? {
+        viewerDecision: artifact.review.viewerDecision,
+        sharpConclusion: artifact.review.sharpConclusion,
+        blockers: Array.isArray(artifact.review.blockers) ? artifact.review.blockers.length : 0,
+      } : {}),
+      ...(artifact.error ? { error: artifact.error } : {}),
+    };
+    const outputVersion = Number(job.output?.version);
+    job.output = { ...job.output, ordinaryViewerAudit: summary };
+    job.versions = (job.versions || []).map(item => Number(item.version) === outputVersion
+      ? { ...item, ordinaryViewerAudit: summary }
+      : item);
+    restoreRenderedAuditProtectedState(job, protectedState);
+    await (dependencies.saveJobFn || saveJob)(job);
+    return audit;
+  } catch (error) {
+    restoreRenderedAuditProtectedState(job, protectedState);
+    console.warn(`Ordinary Viewer 成片审查未能落库：${redact(error?.message || error)}`);
+    return null;
+  }
+}
+
 async function executeVisualStage(job, stageId, feedback = "") {
   const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
   const stage = workflow.stages[stageId];
@@ -2369,6 +3005,9 @@ async function executeVisualStage(job, stageId, feedback = "") {
     job.progress = visualStageProgress(stageId, "complete");
     workflow.updatedAt = new Date().toISOString();
     await saveJob(job);
+    if (stageId === "full_render") {
+      await auditRenderedJobAfterFinalRender(job, "visual_director_v4_full_render");
+    }
     return artifacts;
   } catch (error) {
     stage.status = "error";
@@ -2618,7 +3257,12 @@ async function renderVersion(job, version) {
     model: job.planModel || null
   };
   job.versions = [...(job.versions || []).filter(x => x.version !== version), versionResult];
-  job.output = versionResult; job.jobDir = jobDir; job.status = "awaiting_review"; job.progress = 100; await saveJob(job);
+  job.output = versionResult;
+  job.jobDir = jobDir;
+  job.status = "awaiting_review";
+  job.progress = 100;
+  await saveJob(job);
+  await auditRenderedJobAfterFinalRender(job, "legacy_ffmpeg_render_version");
 }
 async function processJob(job) {
   if (running.has(job.id)) return; running.set(job.id, true);
@@ -2902,6 +3546,7 @@ async function serveFile(req, res, file) {
 }
 
 const multiAgentEnabled = process.env.KOUBO_MULTI_AGENT_ENABLED === "1";
+const contentAdvisoryEnabled = process.env.KOUBO_CONTENT_ADVISORY_ENABLED !== "0";
 const multiAgentDataRoot = path.resolve(
   root,
   process.env.KOUBO_MULTI_AGENT_DATA_ROOT || "data/multi-agent"
@@ -2916,6 +3561,10 @@ const multiAgentStore = openDomainStore({
   exportRoot: path.join(multiAgentDataRoot, "library"),
 });
 const multiAgentProfiles = await loadAgentProfiles(root);
+const multiAgentContentPrinciples = validateLibrary(
+  "content-principle",
+  await readJsonFile(path.join(root, "config", "multi-agent", "content-principles.json"))
+);
 const multiAgentMemory = createMemoryService(multiAgentStore, multiAgentProfiles);
 const multiAgentBridgeRoot = path.join(multiAgentDataRoot, "runtime", "bridge");
 const multiAgentArtifactRoot = path.join(multiAgentDataRoot, "runtime", "artifacts");
@@ -2983,9 +3632,17 @@ async function invokeMultiAgentBridge(request) {
   }
 }
 
+const multiAgentOrdinaryViewerCritic = createOrdinaryViewerCritic({
+  invokeAgent: request => invokeMultiAgentBridge({
+    ...request,
+    agentId: "ordinary-viewer-critic",
+  }),
+});
+
 const multiAgentOrchestrator = createOrchestrator({
   invokeAgent: invokeMultiAgentBridge,
   memory: multiAgentMemory,
+  contentPrinciples: multiAgentContentPrinciples,
 });
 
 async function writeMultiAgentArtifact(kind, id, value) {
@@ -2994,7 +3651,19 @@ async function writeMultiAgentArtifact(kind, id, value) {
   const directory = confined(multiAgentArtifactRoot, safeKind);
   await fsp.mkdir(directory, { recursive: true });
   const file = path.join(directory, `${safeId}.json`);
-  await writeJson(file, multiAgentSafeInput(value));
+  const safeValue = multiAgentSafeInput(value);
+  const serialized = JSON.stringify(safeValue, null, 2);
+  try {
+    await fsp.writeFile(file, serialized, { encoding: "utf8", flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    const existing = await readJsonFile(file);
+    if (canonicalJson(existing) !== canonicalJson(safeValue)) {
+      const conflict = new Error("multi-agent artifact id already exists with different immutable content");
+      conflict.statusCode = 409;
+      throw conflict;
+    }
+  }
   return `/api/multi-agent/artifacts/${encodeURIComponent(safeKind)}/${encodeURIComponent(safeId)}`;
 }
 
@@ -3086,15 +3755,32 @@ const multiAgentTutorials = {
 
 const multiAgentApi = createMultiAgentApi({
   enabled: multiAgentEnabled,
+  advisoryEnabled: contentAdvisoryEnabled,
   defaultPipeline: VISUAL_WORKFLOW_VERSION,
   allowedTutorialRoots,
-  readJob,
+  allowedRenderedRoots: [jobsRoot],
+  readJob: async id => {
+    const job = await readJob(id);
+    const keeps = Array.isArray(job.currentPlan?.keepSegments) ? job.currentPlan.keepSegments : [];
+    if (keeps.length) {
+      job.ordinaryViewerTranscript = transcriptCues(job.transcript, keeps, job.script)
+        .map(item => ({ start: Number(item.start), end: Number(item.end), text: String(item.text || "").trim() }))
+        .filter(item => item.text && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start);
+    }
+    return job;
+  },
+  readContent,
   writeArtifact: writeMultiAgentArtifact,
   readArtifact: readMultiAgentArtifact,
   listMemory: listMultiAgentMemory,
   memory: multiAgentMemory,
   tutorials: multiAgentTutorials,
   orchestrator: multiAgentOrchestrator,
+  contentStrategist: {
+    analyze: async input => (await multiAgentOrchestrator.analyzeContentDirection(input)).analysis,
+  },
+  contentPrinciples: multiAgentContentPrinciples,
+  ordinaryViewerCritic: multiAgentOrdinaryViewerCritic,
   buildBlindReviewBundle,
 });
 
@@ -3446,8 +4132,27 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) json(res, error.statusCode || (error.code === "ENOENT" ? 404 : 500), { error: error.message }); else res.destroy();
   }
 });
+let serverResourcesClosed = false;
+function closeMultiAgentStore() {
+  if (serverResourcesClosed) return;
+  serverResourcesClosed = true;
+  multiAgentStore.close();
+}
 server.on("error", error => { if (error.code === "EADDRINUSE") process.exit(0); console.error(error); process.exit(1); });
-server.on("close", () => multiAgentStore.close());
+server.on("close", closeMultiAgentStore);
 if (process.env.KOUBO_NO_LISTEN !== "1") server.listen(port, host, () => console.log(`AI口播工作台：http://${host}:${port}/`));
 
-export { normalizeAssetRecord, assetComplianceIssues, assetReviewSummary, candidatePlacement };
+export async function closeServerResourcesForTests() {
+  if (server.listening) {
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+  closeMultiAgentStore();
+}
+
+export {
+  normalizeAssetRecord,
+  assetComplianceIssues,
+  assetReviewSummary,
+  candidatePlacement,
+  writeMultiAgentArtifact,
+};

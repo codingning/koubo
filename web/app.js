@@ -65,6 +65,17 @@
   let tutorialCheckpoint = null;
   let memoryRecords = [];
   let multiAgentReviews = null;
+  let contentStrategyAnalyzing = false;
+  let contentStrategyDraft = {
+    direction: "",
+    evidenceSummary: "",
+    analysisArtifactId: "",
+    analysis: null,
+    confirmationArtifactId: "",
+    generatedContentId: "",
+  };
+  const ordinaryViewerReviewCache = new Map();
+  const ordinaryViewerReviewLoading = new Map();
 
   function itemState(item = currentItem) {
     if (!persisted.items[item.id]) {
@@ -387,6 +398,8 @@
 
   function renderAll() {
     renderPicker(); renderStatus(); renderToday(); renderScripts(); renderCreative(); renderShoot(); renderPublish(); renderEvidence(); renderRoadmap(); renderLibrary();
+    renderOrdinaryViewerResult();
+    void hydrateOrdinaryViewerReview(currentItem);
   }
 
   function setScriptMode(mode) {
@@ -479,6 +492,267 @@
     if (message) byId("edit-job-status").textContent = message;
   }
 
+  function contentStrategyInputs() {
+    return {
+      direction: byId("content-direction").value.trim(),
+      evidenceSummary: byId("content-evidence-summary").value.trim(),
+    };
+  }
+
+  function contentAdvisoryReady() {
+    return videoServiceOnline
+      && serviceHealth?.ai?.configured === true
+      && multiAgentStatus?.advisoryEnabled === true;
+  }
+
+  function contentStrategyReadyForConfirmation() {
+    const current = contentStrategyInputs();
+    const analysis = contentStrategyDraft.analysis;
+    return !!analysis
+      && !!contentStrategyDraft.analysisArtifactId
+      && current.direction === contentStrategyDraft.direction
+      && current.evidenceSummary === contentStrategyDraft.evidenceSummary
+      && analysis.lockedDirection === current.direction
+      && analysis.status === "ready_for_script"
+      && Array.isArray(analysis.evidence?.available)
+      && analysis.evidence.available.length > 0
+      && Array.isArray(analysis.evidence?.missing)
+      && analysis.evidence.missing.length === 0;
+  }
+
+  function updateContentStrategyControls() {
+    const { direction, evidenceSummary } = contentStrategyInputs();
+    const busy = contentStrategyAnalyzing || contentGenerating;
+    const ready = contentStrategyReadyForConfirmation();
+    const generated = !!contentStrategyDraft.generatedContentId;
+    const analyze = byId("analyze-content-direction");
+    const confirmation = byId("confirm-content-strategy");
+    const generate = byId("generate-content");
+    byId("content-direction").disabled = busy;
+    byId("content-evidence-summary").disabled = busy;
+    analyze.disabled = !(contentAdvisoryReady() && direction && evidenceSummary && !busy);
+    confirmation.disabled = !(contentAdvisoryReady() && ready && !busy && !generated);
+    if (confirmation.disabled && (!ready || generated)) confirmation.checked = false;
+    generate.disabled = !(contentAdvisoryReady() && ready && confirmation.checked && !busy && !generated);
+    if (!busy) generate.textContent = generated ? "本方向已生成" : "第 2 步：确认并生成口播";
+  }
+
+  function analysisList(items, emptyText) {
+    const values = Array.isArray(items) ? items.filter(Boolean) : [];
+    return values.length
+      ? `<ul>${values.map(item => `<li>${htmlEscape(item)}</li>`).join("")}</ul>`
+      : `<p class="strategy-empty-value">${htmlEscape(emptyText)}</p>`;
+  }
+
+  function renderContentStrategyAnalysis(message = "") {
+    const host = byId("content-strategy-analysis");
+    const analysis = contentStrategyDraft.analysis;
+    if (!analysis) {
+      host.className = "strategy-analysis is-empty";
+      host.innerHTML = htmlEscape(message || "填写左侧两项后点击“分析方向”，这里会展示观众收益、优缺点、证据缺口和最多三个追问。");
+      return;
+    }
+    const statusLabels = {
+      ready_for_script: "证据已就绪",
+      needs_evidence: "需要补充证据",
+      needs_restructure: "需要收窄或重构",
+      recommend_abandon: "建议暂缓或放弃",
+    };
+    const recommendationLabels = {
+      single_piece: "适合单篇",
+      series: "适合系列",
+      defer: "建议暂缓",
+    };
+    const ready = contentStrategyReadyForConfirmation();
+    const generated = !!contentStrategyDraft.generatedContentId;
+    const available = (analysis.evidence?.available || []).map(item => item.relevance || item.id);
+    const missing = analysis.evidence?.missing || [];
+    host.className = `strategy-analysis ${ready ? "is-ready" : "needs-input"}`;
+    host.innerHTML = `
+      <div class="strategy-analysis-heading">
+        <div><span>内容顾问结论</span><strong>${htmlEscape(statusLabels[analysis.status] || analysis.status)}</strong></div>
+        <span class="strategy-recommendation">${htmlEscape(recommendationLabels[analysis.recommendation] || analysis.recommendation)}</span>
+      </div>
+      <p class="strategy-restatement">${htmlEscape(analysis.directionRestatement)}</p>
+      <div class="strategy-analysis-grid">
+        <article><span>目标受众</span><p>${htmlEscape(analysis.audience)}</p></article>
+        <article><span>观众能获得什么</span><p>${htmlEscape(analysis.viewerBenefit)}</p></article>
+        <article><span>这条内容要回答</span><p>${htmlEscape(analysis.testableQuestion)}</p></article>
+        <article><span>已引用的真实证据</span>${analysisList(available, "没有可引用证据")}</article>
+        <article><span>这个方向的优点</span>${analysisList(analysis.strengths, "暂无")}</article>
+        <article><span>这个方向的缺点</span>${analysisList(analysis.weaknesses, "暂无")}</article>
+        <article class="strategy-gap-card"><span>证据缺口</span>${analysisList(missing, "当前没有未解决的证据缺口")}</article>
+        <article><span>下一轮最多三个问题</span>${analysisList(analysis.nextQuestions, "不需要继续追问")}</article>
+      </div>
+      ${(analysis.uncertainties || []).length ? `<div class="strategy-uncertainties"><b>仍不确定：</b>${htmlEscape(analysis.uncertainties.join("；"))}</div>` : ""}
+      <p class="strategy-gate-message">${generated
+        ? "这个锁定方向已经生成一份口播。请先阅读下方普通观众点评；如需新方向，修改左侧内容后重新分析。"
+        : ready
+          ? "分析和证据已满足写稿门槛。请先阅读，再由你勾选确认；内容顾问不会替你确认。"
+        : "当前还不能写稿。请根据证据缺口或追问补充左侧信息，然后重新分析。"}</p>`;
+  }
+
+  function resetContentStrategyAnalysis(message = "方向或证据已经改变，旧分析已失效；请重新分析。") {
+    if (contentStrategyAnalyzing || contentGenerating) return;
+    const hadAnalysis = !!contentStrategyDraft.analysisArtifactId || !!contentStrategyDraft.generatedContentId;
+    contentStrategyDraft = {
+      direction: "",
+      evidenceSummary: "",
+      analysisArtifactId: "",
+      analysis: null,
+      confirmationArtifactId: "",
+      generatedContentId: "",
+    };
+    byId("confirm-content-strategy").checked = false;
+    renderContentStrategyAnalysis(hadAnalysis ? message : "");
+    if (hadAnalysis) byId("generation-status").textContent = message;
+    updateContentStrategyControls();
+  }
+
+  async function analyzeContentDirection() {
+    const { direction, evidenceSummary } = contentStrategyInputs();
+    if (!contentAdvisoryReady() || !direction || !evidenceSummary || contentStrategyAnalyzing || contentGenerating) return;
+    contentStrategyAnalyzing = true;
+    contentStrategyDraft = {
+      direction,
+      evidenceSummary,
+      analysisArtifactId: "",
+      analysis: null,
+      confirmationArtifactId: "",
+      generatedContentId: "",
+    };
+    byId("confirm-content-strategy").checked = false;
+    byId("content-strategy-analysis").className = "strategy-analysis is-loading";
+    byId("content-strategy-analysis").textContent = "内容顾问正在分析受众、价值、优缺点和证据缺口；此时不会生成口播。";
+    byId("generation-status").textContent = "正在分析你锁定的方向，不会自动换题或写稿。";
+    updateContentStrategyControls();
+    try {
+      const payload = await multiAgentRequest("/api/multi-agent/content-strategy/analyze", {
+        method: "POST",
+        body: {
+          direction,
+          userFacts: [evidenceSummary],
+          evidence: [{
+            id: "evidence.user-summary",
+            kind: "creator-provided-summary",
+            summary: evidenceSummary,
+            sourceId: "user-provided-summary",
+            provenance: "user_provided",
+          }],
+          constraints: [
+            "只分析用户锁定的方向，不得换题或直接写稿",
+            "只使用真实经历和可追溯证据，不虚构结果",
+          ],
+        },
+        idempotencyPrefix: "content-strategy-analysis",
+      });
+      contentStrategyDraft.analysisArtifactId = payload.analysisArtifactId;
+      contentStrategyDraft.analysis = payload.analysis;
+      renderContentStrategyAnalysis();
+      byId("generation-status").textContent = contentStrategyReadyForConfirmation()
+        ? "方向分析完成。请阅读结果并明确勾选确认，之后才会生成口播。"
+        : "分析发现仍有缺口；请补充左侧证据或回答追问后重新分析。";
+      toast("方向分析已完成，尚未生成口播");
+    } catch (error) {
+      contentStrategyDraft.analysisArtifactId = "";
+      contentStrategyDraft.analysis = null;
+      renderContentStrategyAnalysis(`方向分析失败：${error.message}`);
+      byId("generation-status").textContent = `方向分析失败：${error.message}`;
+      toast("方向分析失败，请查看页面提示");
+    } finally {
+      contentStrategyAnalyzing = false;
+      updateContentStrategyControls();
+    }
+  }
+
+  async function lockedDirectionHash(direction) {
+    if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") {
+      throw new Error("当前浏览器不支持方向哈希，请通过本地工作台入口重新打开页面");
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify({ lockedDirection: direction }));
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  function renderOrdinaryViewerResult(item = currentItem) {
+    const host = byId("ordinary-viewer-result");
+    const audit = item?.ordinaryViewerAudit;
+    if (!audit) {
+      host.className = "ordinary-viewer-result is-empty";
+      host.innerHTML = "新口播生成后，普通观众 Agent 会在这里给出最尖锐的一句话、具体阻碍和最小修改。";
+      return;
+    }
+    const cached = ordinaryViewerReviewCache.get(item.id);
+    if (audit.status === "failed" || cached?.status === "failed") {
+      host.className = "ordinary-viewer-result is-failed";
+      host.innerHTML = `<div class="ordinary-viewer-heading"><span>普通观众点评未完成</span><strong>不能据此提示直接拍摄</strong></div><p>${htmlEscape(cached?.error || audit.error || "点评服务返回失败")}</p>`;
+      return;
+    }
+    const review = cached?.review;
+    if (!review) {
+      host.className = "ordinary-viewer-result is-loading";
+      host.innerHTML = `<div class="ordinary-viewer-heading"><span>普通观众的第一反应</span><strong>${htmlEscape(audit.viewerDecision || "正在读取")}</strong></div><blockquote>${htmlEscape(audit.sharpConclusion || "正在读取完整点评……")}</blockquote><p>正在读取“最小修改”和证据缺口，不会把生成完成直接等同于可以拍摄。</p>`;
+      return;
+    }
+    const classificationLabels = { fact: "事实问题", subjective: "主观感受", uncertain: "无法确认" };
+    const blockers = (review.blockers || []).map(item => {
+      const reference = item.quote
+        ? `原文：“${item.quote}”`
+        : (Number.isFinite(item.start) && Number.isFinite(item.end) ? `${item.start.toFixed(1)}–${item.end.toFixed(1)} 秒` : "未给出引用");
+      return `<li><b>${htmlEscape(item.issue)}</b><span>${htmlEscape(classificationLabels[item.classification] || item.classification || "观点")}</span><small>${htmlEscape(reference)}</small></li>`;
+    }).join("");
+    host.className = "ordinary-viewer-result is-complete";
+    host.innerHTML = `
+      <div class="ordinary-viewer-heading"><span>普通观众的第一反应</span><strong>${htmlEscape(review.viewerDecision)}</strong></div>
+      <blockquote>${htmlEscape(review.sharpConclusion)}</blockquote>
+      <div class="ordinary-viewer-fix"><span>最小修改</span><p>${htmlEscape(review.minimalFix)}</p></div>
+      <div class="ordinary-viewer-gaps">
+        <article><span>观众价值缺口</span><p>${htmlEscape(review.viewerValueGap)}</p></article>
+        <article><span>证据缺口</span><p>${htmlEscape(review.evidenceGap)}</p></article>
+      </div>
+      <div class="ordinary-viewer-blockers"><span>最关键的阻碍（最多三条）</span>${blockers ? `<ol>${blockers}</ol>` : "<p>没有返回阻碍，但仍需由你决定是否修改或拍摄。</p>"}</div>
+      <small class="ordinary-viewer-boundary">这是一份只读普通观众点评，不批准拍摄、发布或自动改稿。</small>`;
+  }
+
+  async function hydrateOrdinaryViewerReview(item = currentItem, { force = false } = {}) {
+    const audit = item?.ordinaryViewerAudit;
+    if (!item?.id || !audit) return null;
+    if (!videoServiceOnline) return null;
+    if (!force && ordinaryViewerReviewCache.has(item.id)) return ordinaryViewerReviewCache.get(item.id);
+    if (ordinaryViewerReviewLoading.has(item.id)) return ordinaryViewerReviewLoading.get(item.id);
+    if (audit.status === "failed") {
+      const entry = { status: "failed", error: audit.error || "普通观众点评失败" };
+      ordinaryViewerReviewCache.set(item.id, entry);
+      if (currentItem?.id === item.id) renderOrdinaryViewerResult(item);
+      return entry;
+    }
+    if (!audit.artifactHref) return null;
+    const task = (async () => {
+      try {
+        const href = String(audit.artifactHref);
+        const url = /^https?:\/\//i.test(href) ? href : `${videoApiBase}${href.startsWith("/") ? href : `/${href}`}`;
+        const response = await fetch(url, { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `点评读取失败（${response.status}）`);
+        const review = payload.review || payload.artifact?.review;
+        if (!review?.sharpConclusion || !review?.minimalFix) throw new Error("普通观众点评缺少尖锐结论或最小修改");
+        const entry = { status: "complete", review };
+        ordinaryViewerReviewCache.set(item.id, entry);
+        if (currentItem?.id === item.id) renderOrdinaryViewerResult(item);
+        return entry;
+      } catch (error) {
+        const entry = { status: "failed", error: error.message };
+        ordinaryViewerReviewCache.set(item.id, entry);
+        if (currentItem?.id === item.id) renderOrdinaryViewerResult(item);
+        return entry;
+      } finally {
+        ordinaryViewerReviewLoading.delete(item.id);
+      }
+    })();
+    ordinaryViewerReviewLoading.set(item.id, task);
+    return task;
+  }
+
   function mergeGeneratedContents(items, selectId = null) {
     const generated = Array.isArray(items) ? items.filter(item => item && item.id) : [];
     const generatedIds = new Set(generated.map(item => item.id));
@@ -503,27 +777,62 @@
   }
 
   async function generateNewContent() {
-    if (!videoServiceOnline || contentGenerating) return;
+    if (!contentAdvisoryReady() || !contentStrategyReadyForConfirmation() || !byId("confirm-content-strategy").checked || contentGenerating) return;
     contentGenerating = true;
     const button = byId("generate-content");
-    button.disabled = true;
-    button.textContent = "AI正在生成……";
-    byId("generation-status").textContent = "正在汇总最近真实进展、Git记录和公开边界，然后由文本模型生成可拍口播。通常需要1—3分钟。";
+    const direction = contentStrategyDraft.direction;
+    button.textContent = "正在确认并生成……";
+    byId("generation-status").textContent = "正在把你的明确确认写成独立凭证，然后按锁定方向生成；通常需要1—3分钟。";
+    updateContentStrategyControls();
     try {
-      const response = await fetch(`${videoApiBase}/api/contents/generate`, { method: "POST" });
-      const payload = await response.json();
+      if (!contentStrategyDraft.confirmationArtifactId) {
+        const confirmationPayload = await multiAgentRequest("/api/multi-agent/content-strategy/confirm", {
+          method: "POST",
+          body: {
+            analysisArtifactId: contentStrategyDraft.analysisArtifactId,
+            decision: "approved",
+            actor: { type: "human", id: "local-owner" },
+            note: "用户已在本地工作台阅读分析并明确勾选确认",
+          },
+          idempotencyPrefix: "content-strategy-confirmation",
+        });
+        if (confirmationPayload.confirmation?.scriptHandoffAllowed !== true) {
+          throw new Error("这份分析仍未满足写稿门槛，请补充证据后重新分析");
+        }
+        contentStrategyDraft.confirmationArtifactId = confirmationPayload.confirmationArtifactId;
+      }
+      const directionHash = await lockedDirectionHash(direction);
+      byId("generation-status").textContent = "确认凭证已建立，正在按原方向研究同题内容、生成口播并运行普通观众点评。";
+      const response = await fetch(`${videoApiBase}/api/contents/generate`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lockedDirection: direction,
+          lockedDirectionHash: directionHash,
+          strategyConfirmationArtifactId: contentStrategyDraft.confirmationArtifactId,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "口播生成失败");
+      if (!payload.item?.id) throw new Error("口播生成成功，但服务端没有返回内容 ID");
+      contentStrategyDraft.generatedContentId = payload.item.id;
+      ordinaryViewerReviewCache.delete(payload.item.id);
+      mergeGeneratedContents([payload.item], payload.item.id);
       await refreshGeneratedContents(payload.item.id);
       switchView("today");
-      byId("generation-status").textContent = `已生成 ${payload.item.day} · ${payload.item.mainTopic}`;
-      toast("新口播已生成，可以直接拍摄");
+      const reviewEntry = await hydrateOrdinaryViewerReview(currentItem, { force: true });
+      byId("generation-status").textContent = reviewEntry?.status === "complete"
+        ? `已生成 ${payload.item.day} · ${payload.item.mainTopic}；请先看下方普通观众点评，再决定修改或拍摄。`
+        : `已生成 ${payload.item.day} · ${payload.item.mainTopic}，但普通观众完整点评读取失败；不要直接进入拍摄。`;
+      toast("口播已生成；普通观众点评已展示，请先判断是否修改");
     } catch (error) {
       byId("generation-status").textContent = `生成失败：${error.message}`;
       toast("生成失败，请查看页面提示");
     } finally {
       contentGenerating = false;
-      button.textContent = "AI生成新口播";
-      button.disabled = !(videoServiceOnline && serviceHealth?.ai?.configured);
+      renderContentStrategyAnalysis();
+      updateContentStrategyControls();
     }
   }
 
@@ -762,6 +1071,7 @@
       && byId("tutorial-author").value.trim()
       && byId("tutorial-license").value.trim();
     byId("tutorial-ingest").disabled = !tutorialReady;
+    updateContentStrategyControls();
   }
 
   function renderMultiAgentProposals() {
@@ -896,6 +1206,7 @@
       byId("multi-agent-workspace").classList.add("is-hidden");
       byId("multi-agent-disabled-note").classList.remove("is-hidden");
       byId("memory-records").innerHTML = `<div class="empty-state">记忆服务读取失败：${htmlEscape(error.message)}</div>`;
+      updateContentStrategyControls();
     }
   }
 
@@ -1077,9 +1388,9 @@
         ? `HyperFrames默认 · 2K母版 · 两道审核门 · ${modelText} · 本地转录 ${serviceHealth.ai?.transcriptionModel || "faster-whisper/small"}`
         : "请确认 FFmpeg 已安装并重新打开工作台。";
       byId("generation-status").textContent = serviceHealth.ai?.configured
-        ? `已连接 ${serviceHealth.ai.model}；点击即可根据最近真实进展生成新口播。`
+        ? `已连接 ${serviceHealth.ai.model}；请先输入本次方向和真实证据，再让内容顾问分析。`
         : "视频仍可本地处理，但AI口播生成和语义剪辑需要文本模型配置。";
-      byId("generate-content").disabled = !(videoServiceOnline && serviceHealth.ai?.configured);
+      updateContentStrategyControls();
       try {
         const workflowResponse = await fetch(`${videoApiBase}/api/video-workflow/defaults`, { cache: "no-store" });
         const workflowPayload = await workflowResponse.json();
@@ -1101,9 +1412,9 @@
       status.className = "service-status is-offline";
       detail.textContent = "请双击项目根目录的“打开AI口播工作台.vbs”；它会静默启动服务并重新打开网页。";
       byId("generation-status").textContent = "请先通过“打开AI口播工作台.vbs”启动本地工作流。";
-      byId("generate-content").disabled = true;
       multiAgentStatus = null;
       renderMultiAgentStatus();
+      updateContentStrategyControls();
     }
     byId("analyze-video").disabled = !(videoServiceOnline && selectedVideoFile);
   }
@@ -1729,6 +2040,10 @@
   });
 
   // One-click content generation and automatic video workflow
+  byId("analyze-content-direction").addEventListener("click", analyzeContentDirection);
+  byId("content-direction").addEventListener("input", () => resetContentStrategyAnalysis());
+  byId("content-evidence-summary").addEventListener("input", () => resetContentStrategyAnalysis());
+  byId("confirm-content-strategy").addEventListener("change", updateContentStrategyControls);
   byId("generate-content").addEventListener("click", generateNewContent);
   byId("video-file").addEventListener("change", event => handleVideoSelection(event.target.files?.[0]));
   byId("analyze-video").addEventListener("click", analyzeSelectedVideo);

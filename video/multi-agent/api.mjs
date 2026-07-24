@@ -1,6 +1,13 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { canonicalJson } from "./contracts.mjs";
+import { canonicalJson, contentHash as hashContent } from "./contracts.mjs";
+import {
+  buildContentStrategistInput,
+  buildContentStrategistAnalysisRequest,
+  normalizeContentStrategistOutput,
+  canEnterScriptStage,
+} from "./content-strategy.mjs";
+import { auditRenderedJobOrdinaryViewer } from "./rendered-ordinary-viewer-audit.mjs";
 
 const SECRET_KEYS = new Set([
   "accesstoken",
@@ -128,6 +135,150 @@ function jobProposalInput(job) {
   };
 }
 
+function isMultiAgentPath(pathname) {
+  return pathname.startsWith("/api/multi-agent/")
+    || /^\/api\/(?:jobs|contents)\/[^/]+\/multi-agent\//.test(pathname);
+}
+
+function requireDependency(value, label) {
+  if (typeof value !== "function") throw httpError(503, `${label} is not configured`);
+  return value;
+}
+
+function validationError(error) {
+  if (error?.statusCode) return error;
+  return httpError(400, String(error?.message || error || "invalid request"));
+}
+
+function normalizedAgentResult(response, label) {
+  if (response?.success === false) throw new Error(response.error || `${label} failed`);
+  return response?.result ?? response;
+}
+
+function artifactId(subjectId, key) {
+  const suffix = crypto.createHash("sha256").update(key).digest("hex").slice(0, 12);
+  return `${subjectId}.${suffix}`;
+}
+
+function recordContentHash(record) {
+  const core = structuredClone(record);
+  delete core.contentHash;
+  return hashContent(core);
+}
+
+function withRecordContentHash(record) {
+  return { ...record, contentHash: recordContentHash(record) };
+}
+
+function assertRecordContentHash(record, label) {
+  const declared = String(record?.contentHash || "").trim();
+  if (!/^[a-f0-9]{64}$/u.test(declared) || declared !== recordContentHash(record)) {
+    throw httpError(409, `${label} content hash is missing or invalid`);
+  }
+  return declared;
+}
+
+function assertNoClientAuthorityFields(body, keys, label) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, `${label} body must be an object`);
+  }
+  const normalized = new Set(keys.map(key => key.replace(/[^a-z0-9]/gi, "").toLowerCase()));
+  for (const key of Object.keys(body)) {
+    const token = key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+    if (normalized.has(token)) {
+      throw httpError(400, `${label} must use authoritative server data; client field ${key} is forbidden`);
+    }
+  }
+}
+
+function contentScript(content, variant = "full") {
+  if (variant !== "full" && variant !== "short") throw httpError(400, "variant must be full or short");
+  if (variant === "short") {
+    const short = String(content.shortScript || "").trim();
+    if (short) return short;
+  }
+  const segments = Array.isArray(content.fullSegments)
+    ? content.fullSegments.map(item => String(item?.text || item || "").trim()).filter(Boolean)
+    : [];
+  if (segments.length) return segments.join("\n");
+  for (const value of [content.script, content.fullScript, content.shortScript]) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  throw httpError(409, "content has no authoritative script candidate");
+}
+
+function directionFromRecord(record = {}) {
+  const audience = String(
+    record.approvedDirection?.audience
+      || record.audience
+      || record.targetAudience
+      || record.engagement?.audienceMirror
+      || ""
+  ).trim();
+  const viewerBenefit = String(
+    record.approvedDirection?.viewerBenefit
+      || record.viewerBenefit
+      || record.audienceBenefit
+      || ""
+  ).trim();
+  const coreQuestion = String(
+    record.approvedDirection?.coreQuestion
+      || record.coreQuestion
+      || record.structureDesign?.coreQuestion
+      || record.contentDirection?.structureDesign?.coreQuestion
+      || record.mainTopic
+      || record.contentDirection?.mainTopic
+      || ""
+  ).trim();
+  if (!audience || !viewerBenefit || !coreQuestion) {
+    throw httpError(409, "authoritative record is missing audience, viewer benefit, or core question");
+  }
+  const constraints = Array.isArray(record.approvedDirection?.constraints)
+    ? record.approvedDirection.constraints.map(String).map(item => item.trim()).filter(Boolean)
+    : Array.isArray(record.risks)
+      ? record.risks.map(item => String(item?.text || item || "").trim()).filter(Boolean)
+      : [];
+  return { audience, viewerBenefit, coreQuestion, constraints };
+}
+
+function lockedDirectionFromRecord(record = {}) {
+  return String(
+    record.lockedDirection
+      || record.generation?.lockedDirection
+      || record.contentDirection?.lockedDirection
+      || record.contentDirection?.generation?.lockedDirection
+      || ""
+  ).trim();
+}
+
+function traceableFacts(items, prefix) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item, index) => {
+    const value = item && typeof item === "object" && !Array.isArray(item) ? item : { claim: item };
+    const sourceId = String(value.sourceId || value.id || `${prefix}.${index + 1}`).trim();
+    const fact = {
+      sourceId,
+      provenance: String(value.provenance || "authoritative_server_record").trim(),
+    };
+    const claim = String(value.claim || value.summary || value.text || value.evidence || "").trim();
+    if (claim) fact.claim = claim;
+    for (const key of ["kind", "status", "uncertainty"]) {
+      const text = String(value[key] || "").trim();
+      if (text) fact[key] = text;
+    }
+    if (Number.isFinite(value.start) && Number.isFinite(value.end) && value.start >= 0 && value.end > value.start) {
+      fact.start = Number(value.start);
+      fact.end = Number(value.end);
+    }
+    return fact;
+  });
+}
+
+function contentFacts(content, contentId) {
+  return traceableFacts(content.evidence || [], `content.${contentId}.evidence`);
+}
+
 function errorMessage(error) {
   return String(error?.message || error || "request failed")
     .replace(/[A-Za-z]:\\[^\s"']+/g, "<local-path>")
@@ -137,15 +288,21 @@ function errorMessage(error) {
 
 export function createMultiAgentApi({
   enabled = false,
+  advisoryEnabled = enabled,
   defaultPipeline = "visual-director-v4",
   allowedTutorialRoots = [],
+  allowedRenderedRoots = [],
   readJob,
+  readContent,
   writeArtifact,
   readArtifact,
   listMemory,
   memory,
   tutorials,
   orchestrator,
+  contentStrategist,
+  contentPrinciples = [],
+  ordinaryViewerCritic,
   buildBlindReviewBundle,
   clock = () => new Date().toISOString(),
 } = {}) {
@@ -153,6 +310,10 @@ export function createMultiAgentApi({
 
   function requireEnabled() {
     if (!enabled) throw httpError(409, "controlled multi-agent workflow is disabled");
+  }
+
+  function requireAdvisoryEnabled() {
+    if (!advisoryEnabled) throw httpError(409, "content advisory workflow is disabled");
   }
 
   async function idempotentMutation(req, pathname, action) {
@@ -175,12 +336,51 @@ export function createMultiAgentApi({
     return stored;
   }
 
+  async function runContentStrategist(input, request) {
+    if (typeof contentStrategist === "function") {
+      return normalizedAgentResult(await contentStrategist(input, { request }), "content strategist");
+    }
+    if (typeof contentStrategist?.analyze === "function") {
+      return normalizedAgentResult(await contentStrategist.analyze(input, { request }), "content strategist");
+    }
+    throw httpError(503, "content strategist is not configured");
+  }
+
+  async function runOrdinaryReview(input, options) {
+    if (typeof ordinaryViewerCritic?.review !== "function") {
+      throw httpError(503, "ordinary viewer critic is not configured");
+    }
+    return ordinaryViewerCritic.review(input, options);
+  }
+
+  async function writeIndependentArtifact(kind, id, value) {
+    const writer = requireDependency(writeArtifact, "writeArtifact");
+    return writer(kind, id, sanitize(value));
+  }
+
+  async function confirmedDirection(artifactId, fallbackRecord, { expectedLockedDirection = "" } = {}) {
+    const id = String(artifactId || "").trim();
+    if (!id) return directionFromRecord(fallbackRecord);
+    const artifactReader = requireDependency(readArtifact, "readArtifact");
+    const confirmation = await artifactReader("content-strategy-confirmations", id);
+    if (!confirmation) throw httpError(404, "content strategy confirmation artifact not found");
+    assertRecordContentHash(confirmation, "content strategy confirmation");
+    if (confirmation.decision !== "approved" || confirmation.scriptHandoffAllowed !== true) {
+      throw httpError(409, "content strategy confirmation is not approved");
+    }
+    if (confirmation.actor?.type !== "human" || !String(confirmation.actor?.id || "").trim()) {
+      throw httpError(409, "content strategy confirmation requires a human actor");
+    }
+    const expected = String(expectedLockedDirection || "").trim();
+    if (expected && String(confirmation.lockedDirection || "").trim() !== expected) {
+      throw httpError(409, "content strategy confirmation is bound to a different locked direction");
+    }
+    return directionFromRecord({ approvedDirection: confirmation.approvedDirection });
+  }
+
   async function handleRoute(req, url) {
     const pathname = decodeURIComponent(url.pathname);
-    if (!pathname.startsWith("/api/multi-agent/")
-      && !/^\/api\/jobs\/[^/]+\/multi-agent\//.test(pathname)) {
-      return null;
-    }
+    if (!isMultiAgentPath(pathname)) return null;
     if (!isLoopback(req.socket?.remoteAddress)) throw httpError(403, "multi-agent API is local-only");
 
     if (req.method === "GET" && pathname === "/api/multi-agent/status") {
@@ -188,6 +388,7 @@ export function createMultiAgentApi({
         status: 200,
         body: {
           enabled,
+          advisoryEnabled,
           localOnly: true,
           defaultPipeline,
           multiAgentPipeline: "controlled-multi-agent-v1",
@@ -218,6 +419,126 @@ export function createMultiAgentApi({
         : null;
       if (!artifact) throw httpError(404, "multi-agent artifact not found");
       return { status: 200, body: { artifact: sanitize(artifact) } };
+    }
+
+    if (req.method === "POST" && pathname === "/api/multi-agent/content-strategy/analyze") {
+      requireAdvisoryEnabled();
+      return idempotentMutation(req, pathname, async (body, key) => {
+        assertNoClientAuthorityFields(body, [
+          "script", "fullScript", "draft", "titles", "hooks", "shotList", "editPlan",
+          "userConfirmation", "approved", "publish", "memoryPromotion", "replacementDirection",
+        ], "content strategy analysis");
+        let input;
+        let request;
+        try {
+          input = buildContentStrategistInput({
+            direction: body.direction,
+            directionSource: "user",
+            audienceContext: body.audienceContext,
+            userFacts: body.userFacts,
+            evidence: body.evidence,
+            constraints: body.constraints,
+            interviewAnswers: body.interviewAnswers,
+          });
+          request = buildContentStrategistAnalysisRequest(input, { principles: contentPrinciples });
+        } catch (error) {
+          throw validationError(error);
+        }
+        const rawAnalysis = await runContentStrategist(input, request);
+        let analysis;
+        try {
+          analysis = normalizeContentStrategistOutput(
+            rawAnalysis,
+            input,
+            { principles: contentPrinciples }
+          );
+        } catch (error) {
+          throw httpError(502, `content strategist returned invalid output: ${error.message}`);
+        }
+        const id = artifactId("content-strategy", key);
+        const record = withRecordContentHash({
+          schemaVersion: 1,
+          kind: "content_strategy_analysis",
+          input,
+          analysis,
+          principleIds: request.candidatePrinciples.map(item => item.id),
+          analyzedAt: clock(),
+          authority: {
+            directionOwner: "user",
+            strategistMayDraft: false,
+            mutatesContent: false,
+            mutatesJob: false,
+            grantsApproval: false,
+            publishes: false,
+            promotesMemory: false,
+          },
+        });
+        const artifact = await writeIndependentArtifact("content-strategy-analyses", id, record);
+        return { status: 201, body: { analysisArtifactId: id, analysis, artifact } };
+      });
+    }
+
+    if (req.method === "POST" && pathname === "/api/multi-agent/content-strategy/confirm") {
+      requireAdvisoryEnabled();
+      return idempotentMutation(req, pathname, async (body, key) => {
+        assertNoClientAuthorityFields(body, [
+          "lockedDirection", "approvedDirection", "scriptHandoffAllowed", "script", "publish",
+          "productionApproval", "memoryPromotion",
+        ], "content strategy confirmation");
+        const actor = body.actor;
+        if (!actor || actor.type !== "human" || !String(actor.id || "").trim()) {
+          throw httpError(409, "content strategy confirmation requires a human actor");
+        }
+        const decision = String(body.decision || "").trim();
+        if (!new Set(["approved", "rejected"]).has(decision)) {
+          throw httpError(400, "decision must be approved or rejected");
+        }
+        const analysisArtifactId = String(body.analysisArtifactId || "").trim();
+        if (!analysisArtifactId) throw httpError(400, "analysisArtifactId is required");
+        const artifactReader = requireDependency(readArtifact, "readArtifact");
+        const source = await artifactReader("content-strategy-analyses", analysisArtifactId);
+        if (!source) throw httpError(404, "content strategy analysis artifact not found");
+        if (!source.input || !source.analysis) throw httpError(409, "content strategy analysis artifact is incomplete");
+        const analysisContentHash = assertRecordContentHash(source, "content strategy analysis");
+
+        const confirmedInput = structuredClone(source.input);
+        confirmedInput.userConfirmation = {
+          analysisApproved: decision === "approved",
+          confirmedDirection: decision === "approved" ? source.input.lockedDirection : null,
+        };
+        const scriptHandoffAllowed = decision === "approved"
+          && canEnterScriptStage(confirmedInput, source.analysis);
+        const approvedDirection = {
+          audience: source.analysis.audience,
+          viewerBenefit: source.analysis.viewerBenefit,
+          coreQuestion: source.analysis.testableQuestion,
+          constraints: source.input.constraints || [],
+        };
+        const id = artifactId("content-strategy-confirmation", key);
+        const record = withRecordContentHash({
+          schemaVersion: 1,
+          kind: "content_strategy_human_confirmation",
+          analysisArtifactId,
+          analysisContentHash,
+          lockedDirection: source.input.lockedDirection,
+          approvedDirection,
+          decision,
+          actor: { type: "human", id: String(actor.id).trim() },
+          note: String(body.note || "").trim(),
+          confirmedAt: clock(),
+          scriptHandoffAllowed,
+          authority: {
+            confirmsAnalysisOnly: true,
+            strategistMayDraft: false,
+            mutatesContent: false,
+            mutatesJob: false,
+            grantsPublishApproval: false,
+            promotesMemory: false,
+          },
+        });
+        const artifact = await writeIndependentArtifact("content-strategy-confirmations", id, record);
+        return { status: 201, body: { confirmationArtifactId: id, confirmation: record, artifact } };
+      });
     }
 
     const memoryMatch = pathname.match(
@@ -298,6 +619,120 @@ export function createMultiAgentApi({
       return { status: 200, body: { tutorial } };
     }
 
+    const contentOrdinaryReviewMatch = pathname.match(
+      /^\/api\/contents\/([A-Za-z0-9._-]+)\/multi-agent\/ordinary-review$/
+    );
+    if (req.method === "POST" && contentOrdinaryReviewMatch) {
+      requireAdvisoryEnabled();
+      return idempotentMutation(req, pathname, async (body, key) => {
+        assertNoClientAuthorityFields(body, [
+          "script", "fullScript", "shortScript", "fullSegments", "candidate", "content",
+          "facts", "factSheet", "evidence", "approvedDirection", "review", "publish",
+          "productionApproval", "memoryPromotion",
+        ], "content ordinary review");
+        const contentId = contentOrdinaryReviewMatch[1];
+        const reader = requireDependency(readContent, "readContent");
+        const loaded = await reader(contentId);
+        if (!loaded) throw httpError(404, "content not found");
+        const content = structuredClone(loaded);
+        const approvedDirection = await confirmedDirection(
+          body.directionConfirmationArtifactId,
+          content,
+          { expectedLockedDirection: lockedDirectionFromRecord(content) }
+        );
+        const input = {
+          approvedDirection,
+          facts: contentFacts(content, contentId),
+          script: contentScript(content, String(body.variant || "full")),
+        };
+        const review = await runOrdinaryReview(input, { stage: "script" });
+        const id = artifactId(`content-${contentId}-ordinary-review`, key);
+        const record = {
+          schemaVersion: 1,
+          kind: "ordinary_viewer_review",
+          stage: "script",
+          inspectionMode: "script_text",
+          subject: { type: "content", id: contentId, source: "authoritative_readContent" },
+          approvedDirection,
+          evidenceSourceIds: input.facts.map(item => item.sourceId),
+          review,
+          reviewedAt: clock(),
+          authority: {
+            mutatesContent: false,
+            mutatesJob: false,
+            grantsApproval: false,
+            publishes: false,
+            promotesMemory: false,
+          },
+        };
+        const artifact = await writeIndependentArtifact("ordinary-viewer-reviews", id, record);
+        return { status: 201, body: { reviewArtifactId: id, review, inspectionMode: record.inspectionMode, artifact } };
+      });
+    }
+
+    const jobOrdinaryReviewMatch = pathname.match(
+      /^\/api\/jobs\/([A-Za-z0-9._-]+)\/multi-agent\/ordinary-review$/
+    );
+    if (req.method === "POST" && jobOrdinaryReviewMatch) {
+      requireAdvisoryEnabled();
+      return idempotentMutation(req, pathname, async (body, key) => {
+        assertNoClientAuthorityFields(body, [
+          "script", "transcript", "media", "render", "frameEvidence", "candidate", "job",
+          "facts", "factSheet", "evidence", "approvedDirection", "review", "publish",
+          "productionApproval", "memoryPromotion",
+        ], "job ordinary review");
+        const jobId = jobOrdinaryReviewMatch[1];
+        const reader = requireDependency(readJob, "readJob");
+        const loaded = await reader(jobId);
+        if (!loaded) throw httpError(404, "job not found");
+        const job = structuredClone(loaded);
+        if (!Number.isInteger(Number(job.output?.version)) || !String(job.output?.path || "").trim()) {
+          throw httpError(409, "job has no immutable rendered output version");
+        }
+        if (typeof ordinaryViewerCritic?.review !== "function") {
+          throw httpError(503, "ordinary viewer critic is not configured");
+        }
+        let directionRecord = {
+          ...job,
+          ...job.contentDirection,
+        };
+        if (job.contentId && typeof readContent === "function") {
+          const linkedContent = await readContent(String(job.contentId));
+          if (linkedContent) directionRecord = structuredClone(linkedContent);
+        }
+        const approvedDirection = await confirmedDirection(
+          body.directionConfirmationArtifactId,
+          { ...directionRecord },
+          { expectedLockedDirection: lockedDirectionFromRecord(directionRecord) }
+        );
+        const audit = await auditRenderedJobOrdinaryViewer({
+          job,
+          approvedDirection,
+          critic: ordinaryViewerCritic,
+          writeArtifact: async (kind, id, value) => writeIndependentArtifact(kind, id, value),
+          readArtifact,
+          allowedRoots: allowedRenderedRoots,
+          trigger: "manual_api",
+          attemptKey: `manual:${key}`,
+          clock,
+        });
+        return {
+          status: 201,
+          body: {
+            reviewArtifactId: audit.artifactId,
+            status: audit.artifact.status,
+            review: audit.artifact.review,
+            error: audit.artifact.error,
+            inspectionMode: audit.artifact.inspectionMode,
+            outputVersion: audit.artifact.outputVersion,
+            mediaSha256: audit.artifact.mediaSha256,
+            transcriptSha256: audit.artifact.transcriptSha256,
+            artifact: audit.artifactHref,
+          },
+        };
+      });
+    }
+
     const proposalMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/multi-agent\/proposals$/);
     if (req.method === "POST" && proposalMatch) {
       requireEnabled();
@@ -376,10 +811,7 @@ export function createMultiAgentApi({
       return true;
     } catch (error) {
       const pathname = decodeURIComponent(url.pathname);
-      if (!pathname.startsWith("/api/multi-agent/")
-        && !/^\/api\/jobs\/[^/]+\/multi-agent\//.test(pathname)) {
-        return false;
-      }
+      if (!isMultiAgentPath(pathname)) return false;
       sendJson(res, error.statusCode || 500, { error: errorMessage(error) });
       return true;
     }

@@ -1,0 +1,97 @@
+{
+  "id": "koubo-ordinary-viewer-rubric-v1",
+  "schemaVersion": 1,
+  "status": "candidate",
+  "source": "docs/research/2026-07-24-reference-creator-content-distillation.md",
+  "viewer": {
+    "description": "每天看到很多AI内容、收藏很多方法但还没有真正开始行动的普通观众",
+    "assumptions": [
+      "不是程序员，不默认理解Agent、Skill、工作流或API",
+      "时间有限，对创作者项目本身没有天然兴趣",
+      "会追问这和我有什么关系、我为什么信你、我今天能做什么",
+      "对空泛成长、项目汇报、AI万能论和未经证明的结果高度敏感"
+    ]
+  },
+  "stages": {
+    "script": {
+      "requiredContent": ["approvedDirection", "script", "facts"],
+      "blockerCitation": "exact-script-quote"
+    },
+    "render": {
+      "requiredContent": ["approvedDirection", "anonymousMedia", "transcript", "facts"],
+      "blockerCitation": "numeric-time-range"
+    }
+  },
+  "inScope": [
+    "普通观众是否能理解",
+    "内容与普通观众是否相关",
+    "关键结论是否可信且有证据",
+    "观众是否得到可执行动作"
+  ],
+  "outOfScope": [
+    "技术QA与媒体编码",
+    "节奏、停顿、疲劳和掉点预测",
+    "动效或声音密度",
+    "候选比较、排名或winner选择"
+  ],
+  "checks": [
+    "是否清楚说明这和普通观众有什么关系",
+    "是否把个人项目当成观众必须关心的主角",
+    "删除姓名、项目名和工具名后是否仍是任何AI账号都能复述的通用稿",
+    "关键结论是否有真实行动、原始证据或可观察结果",
+    "是否把相关性、单次结果或AI猜测说成因果",
+    "专业词是否被解释为普通人能理解的动作或结果",
+    "是否给出一个普通人今天能完成的动作",
+    "资产、系统、Agent、有效和自动化是否具体可见",
+    "是否隐藏失败、限制、人工确认、维护或回滚",
+    "是否使用羞辱、焦虑或穷富标签制造说服力",
+    "观众是否有真实的收藏、分享或评论理由",
+    "即使不关注下一集，本条是否仍提供完整价值"
+  ],
+  "outputContract": {
+    "sharpConclusion": {
+      "required": true,
+      "maxSentences": 1,
+      "maxCharacters": 100
+    },
+    "blockers": {
+      "required": true,
+      "maxItems": 3,
+      "requiredFields": ["issue", "classification"],
+      "scriptReferenceField": "quote",
+      "renderReferenceFields": ["start", "end"]
+    },
+    "viewerValueGap": { "required": true },
+    "evidenceGap": { "required": true },
+    "minimalFix": {
+      "required": true,
+      "maxCharacters": 300
+    },
+    "viewerDecision": { "required": true },
+    "classifications": {
+      "required": true,
+      "buckets": ["fact", "subjective", "uncertain"]
+    }
+  },
+  "viewerDecisions": [
+    "清楚且有用",
+    "听懂但无用",
+    "证据不足",
+    "无法理解",
+    "整体不接受"
+  ],
+  "classifications": [
+    "fact",
+    "subjective",
+    "uncertain"
+  ],
+  "prohibitions": [
+    "侮辱、贬低或羞辱创作者",
+    "擅自换题或建议另选主题",
+    "整篇重写稿件",
+    "用情绪代替引用、时间码或理由",
+    "执行技术QA、留存预测、掉点判断、节奏评分或候选选优",
+    "批准发布、上线、生产晋升或记忆晋升",
+    "因必须选优而接受整体不合格的候选"
+  ]
+}

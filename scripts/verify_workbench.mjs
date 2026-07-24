@@ -239,6 +239,15 @@ for (const id of [
   "tutorial-ingest-panel",
   "memory-governance-panel",
 ]) assert(html.includes(`id="${id}"`), `Missing multi-agent UI: ${id}`);
+for (const id of [
+  "content-direction",
+  "content-evidence-summary",
+  "analyze-content-direction",
+  "content-strategy-analysis",
+  "confirm-content-strategy",
+  "generate-content",
+  "ordinary-viewer-result",
+]) assert(html.includes(`id="${id}"`), `Missing content strategy UI: ${id}`);
 for (const route of [
   "/api/multi-agent/status",
   "/multi-agent/proposals",
@@ -246,12 +255,23 @@ for (const route of [
   "/api/multi-agent/tutorials",
   "/api/multi-agent/memory",
 ]) assert(app.includes(route), `Missing multi-agent client route: ${route}`);
+for (const route of [
+  "/api/multi-agent/content-strategy/analyze",
+  "/api/multi-agent/content-strategy/confirm",
+  "/api/contents/generate",
+]) assert(app.includes(route), `Missing content strategy client route: ${route}`);
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
 const referenced = new Set([...app.matchAll(/byId\("([^"]+)"\)/g)].map(match => match[1]));
 for (const id of referenced) assert(ids.has(id), `app.js 引用了不存在的 #${id}`);
 assert(!/\/api\/jobs\/\$\{encodeURIComponent\(currentVideoJob\.id\)\}\/render`/.test(app), "网页仍引用旧的手动 render 接口");
 assert(!app.includes("copy-ai-edit-prompt"), "网页仍保留复制高级剪辑指令的旧流程");
 assert(app.includes("/api/contents/generate"), "网页未接入口播生成接口");
+assert(app.includes("lockedDirectionHash: directionHash") && app.includes("strategyConfirmationArtifactId: contentStrategyDraft.confirmationArtifactId"), "网页生成请求没有绑定方向哈希和人工确认 artifact");
+assert(app.includes('actor: { type: "human", id: "local-owner" }') && app.includes('confirmationPayload.confirmation?.scriptHandoffAllowed !== true'), "网页没有执行独立人工确认门或检查写稿授权");
+assert(app.includes('globalThis.crypto.subtle.digest("SHA-256"') && app.includes('JSON.stringify({ lockedDirection: direction })'), "网页没有按服务端契约计算锁定方向哈希");
+assert(app.includes("analysis.audience") && app.includes("analysis.viewerBenefit") && app.includes("analysis.strengths") && app.includes("analysis.weaknesses") && app.includes("analysis.evidence?.missing"), "网页没有完整展示内容顾问的受众、价值、优缺点和证据缺口");
+assert(app.includes("review.sharpConclusion") && app.includes("review.minimalFix"), "网页没有展示普通观众的尖锐结论和最小修改");
+assert(!app.includes("新口播已生成，可以直接拍摄"), "网页仍在隐藏普通观众点评并直接提示可以拍摄");
 assert(app.includes("/revise`"), "网页未接入自然语言返修接口");
 assert(app.includes("/approve`"), "网页未接入最终审核接口");
 assert(ids.has("edit-caption-style") && ids.has("edit-information-panels"), "网页缺少动态字幕或分屏信息板控制项");

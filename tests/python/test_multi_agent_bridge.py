@@ -1,14 +1,20 @@
 import json
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from unittest import mock
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
 BRIDGE = ROOT / "video" / "multi_agent_bridge.py"
+BRIDGE_SPEC = importlib.util.spec_from_file_location("koubo_multi_agent_bridge", BRIDGE)
+BRIDGE_MODULE = importlib.util.module_from_spec(BRIDGE_SPEC)
+assert BRIDGE_SPEC.loader is not None
+BRIDGE_SPEC.loader.exec_module(BRIDGE_MODULE)
 
 
 def run_bridge(request):
@@ -121,6 +127,170 @@ class MultiAgentBridgeTests(unittest.TestCase):
         self.assertEqual(result["success"], False)
         self.assertEqual(result["error"], "prompt is required")
         self.assertNotIn("Traceback", json.dumps(result))
+
+    def test_advisory_roles_receive_specific_non_authoritative_boundaries(self):
+        strategist = BRIDGE_MODULE.instructions_for_agent(
+            "agent_proposals", "content-strategist"
+        )
+        self.assertIn("explicit user-locked content direction", strategist)
+        self.assertIn("Never invent or replace the topic", strategist)
+        self.assertIn("never draft scripts", strategist)
+        self.assertIn("never approve, publish, or promote memory", strategist)
+
+        ordinary = BRIDGE_MODULE.instructions_for_agent(
+            "agent_critique", "ordinary-viewer-critic"
+        )
+        self.assertIn("sharp but non-insulting ordinary viewer", ordinary)
+        self.assertIn("Do not change the topic", ordinary)
+        self.assertIn("perform technical QA", ordinary)
+        self.assertIn("predict retention", ordinary)
+        self.assertIn("Never claim visual or audio observations", ordinary)
+
+        generic = BRIDGE_MODULE.instructions_for_agent("agent_critique", "blind-critic")
+        self.assertEqual(generic, BRIDGE_MODULE.AGENT_INSTRUCTIONS["agent_critique"])
+
+    def test_advisory_roles_reject_out_of_scope_operations_before_fixture_execution(self):
+        cases = (
+            (
+                "content-strategist",
+                "agent_critique",
+                "agent_proposals",
+            ),
+            (
+                "ordinary-viewer-critic",
+                "agent_proposals",
+                "agent_critique",
+            ),
+            (
+                "ordinary-viewer-critic",
+                "extract_techniques",
+                "agent_critique",
+            ),
+        )
+        for agent_id, operation, required_operation in cases:
+            with self.subTest(agent_id=agent_id, operation=operation):
+                completed, result = run_bridge(
+                    {
+                        "operation": operation,
+                        "agent_id": agent_id,
+                        "fixture_response": {"must_not": "execute"},
+                    }
+                )
+
+                self.assertEqual(completed.returncode, 2)
+                self.assertEqual(
+                    result,
+                    {
+                        "success": False,
+                        "error": (
+                            f"agent {agent_id} only supports operation "
+                            f"{required_operation}; received {operation}"
+                        ),
+                    },
+                )
+                self.assertNotIn("must_not", json.dumps(result))
+
+    def test_advisory_role_mismatch_does_not_import_or_call_agents_sdk(self):
+        original_import = __import__
+
+        def guarded_import(name, *args, **kwargs):
+            if name == "agents":
+                raise AssertionError("agents SDK must not be imported")
+            return original_import(name, *args, **kwargs)
+
+        request = {
+            "operation": "agent_critique",
+            "agent_id": "content-strategist",
+            "prompt": "This prompt must never reach a model.",
+        }
+        with mock.patch("builtins.__import__", side_effect=guarded_import):
+            with self.assertRaisesRegex(
+                BRIDGE_MODULE.RequestError,
+                "content-strategist only supports operation agent_proposals",
+            ):
+                BRIDGE_MODULE.dispatch(request)
+
+    def test_existing_generic_roles_keep_proposal_and_critique_compatibility(self):
+        cases = (
+            ("caption-agent", "agent_proposals"),
+            ("blind-critic", "agent_critique"),
+        )
+        for agent_id, operation in cases:
+            with self.subTest(agent_id=agent_id, operation=operation):
+                completed, result = run_bridge(
+                    {
+                        "operation": operation,
+                        "agent_id": agent_id,
+                        "fixture_response": {"compatible": True},
+                    }
+                )
+
+                self.assertEqual(completed.returncode, 0)
+                self.assertTrue(result["success"])
+                self.assertEqual(result["agent_id"], agent_id)
+                self.assertEqual(result["result"], {"compatible": True})
+
+        completed, result = run_bridge(
+            {
+                "operation": "agent_proposals",
+                "fixture_response": {"compatible": True},
+            }
+        )
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(result["agent_id"], "fixture-agent")
+
+    def test_advisory_roles_expose_strict_structured_output_contracts(self):
+        strategist_type = BRIDGE_MODULE.advisory_output_type("content-strategist")
+        critic_type = BRIDGE_MODULE.advisory_output_type("ordinary-viewer-critic")
+
+        strategist_schema = strategist_type.model_json_schema()
+        critic_schema = critic_type.model_json_schema()
+
+        self.assertFalse(strategist_schema["additionalProperties"])
+        self.assertFalse(critic_schema["additionalProperties"])
+        self.assertEqual(
+            set(strategist_schema["properties"]),
+            {
+                "lockedDirection",
+                "directionRestatement",
+                "audience",
+                "viewerBenefit",
+                "strengths",
+                "weaknesses",
+                "evidence",
+                "testableQuestion",
+                "principleCitations",
+                "recommendation",
+                "nextQuestions",
+                "status",
+                "uncertainties",
+            },
+        )
+        self.assertEqual(
+            set(critic_schema["properties"]),
+            {
+                "sharpConclusion",
+                "blockers",
+                "viewerValueGap",
+                "evidenceGap",
+                "minimalFix",
+                "viewerDecision",
+                "classifications",
+            },
+        )
+        self.assertIsNone(BRIDGE_MODULE.advisory_output_type("caption-agent"))
+
+    def test_agent_tracing_is_disabled_unless_explicitly_opted_in(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(BRIDGE_MODULE.agent_tracing_enabled())
+        with mock.patch.dict(
+            os.environ, {"KOUBO_AGENT_TRACING_ENABLED": "1"}, clear=True
+        ):
+            self.assertTrue(BRIDGE_MODULE.agent_tracing_enabled())
+        with mock.patch.dict(
+            os.environ, {"KOUBO_AGENT_TRACING_ENABLED": "true"}, clear=True
+        ):
+            self.assertFalse(BRIDGE_MODULE.agent_tracing_enabled())
 
 
 if __name__ == "__main__":

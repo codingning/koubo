@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { createOrchestrator } from "../../video/multi-agent/orchestrator.mjs";
+import { buildContentStrategistInput } from "../../video/multi-agent/content-strategy.mjs";
+import { contentHash } from "../../video/multi-agent/contracts.mjs";
+
+const principleLibrary = JSON.parse(fs.readFileSync(
+  path.resolve("config", "multi-agent", "content-principles.json"),
+  "utf8"
+));
 
 const input = {
   jobId: "job.fixture",
@@ -295,5 +304,119 @@ test("retention critic cannot impose an effect-every-second rule", async () => {
   await assert.rejects(
     () => orchestrator.retentionAudit({ id: "candidate-a", duration: 5.1 }, { jobId: input.jobId }),
     /effect-every-second rule is forbidden/
+  );
+});
+
+test("content strategist runs before scripting without entering specialist or fallback paths", async () => {
+  let captured;
+  const principle = principleLibrary.principles[0];
+  const directionInput = buildContentStrategistInput({
+    direction: "分享我如何审计并试用一个开源 Skill",
+    evidence: [{
+      id: "evidence.skill-audit",
+      sourceId: "audit-report.v1",
+      provenance: "workspace_verified",
+      kind: "audit-report",
+      summary: "包含许可证、安全、维护状态和真实试用结果",
+    }],
+  });
+  const orchestrator = createOrchestrator({
+    memory: memoryFixture(),
+    contentPrinciples: principleLibrary,
+    invokeAgent: async request => {
+      captured = request;
+      return {
+        success: true,
+        result: {
+          lockedDirection: directionInput.lockedDirection,
+          directionRestatement: "分析用户给出的开源 Skill 分享方向",
+          audience: "收藏了很多AI方法但尚未行动的普通观众",
+          viewerBenefit: "知道怎样判断一个 Skill 是否值得安全试用",
+          strengths: ["有真实审计与试用证据"],
+          weaknesses: ["不能把单次试用推广为普遍结论"],
+          evidence: { available: [{ id: "evidence.skill-audit", relevance: "证明真实试用" }], missing: [] },
+          testableQuestion: "观众能否据此完成一次最小审计？",
+          principleCitations: [{
+            principleId: principle.id,
+            contentHash: contentHash(principle),
+            relevance: "用于检查完成成果与观众发现之间的关系",
+          }],
+          recommendation: "single_piece",
+          nextQuestions: ["观众最终能拿走哪一张检查表？"],
+          status: "ready_for_script",
+          uncertainties: ["真实发布反馈尚未知"],
+        },
+      };
+    },
+  });
+  const result = await orchestrator.analyzeContentDirection(directionInput);
+
+  assert.equal(captured.agentId, "content-strategist");
+  assert.equal(captured.operation, "agent_proposals");
+  assert.equal(captured.task, "content_direction_analysis");
+  assert.equal("script" in captured, false);
+  assert.equal(result.analysis.scriptGate.mayHandOffToScriptAgent, false);
+  assert.equal(result.events.at(-1).action, "content_direction_analyzed");
+});
+
+test("ordinary viewer audit is isolated from Blind, Retention, winner, and production authority", async () => {
+  let captured;
+  const orchestrator = createOrchestrator({
+    memory: memoryFixture(),
+    invokeAgent: async request => {
+      captured = request;
+      return {
+        success: true,
+        result: {
+          sharpConclusion: "这是一份项目周报，普通观众拿不到可执行结果",
+          blockers: [{
+            issue: "项目进度没有翻译成观众收益",
+            quote: "我们完成了十二个接口",
+            classification: "subjective",
+          }],
+          viewerValueGap: "没有说明普通人能完成什么",
+          evidenceGap: "没有展示输入、执行和结果",
+          minimalFix: "保留方向，只补一个真实任务、结果证据和观众可复制动作",
+          viewerDecision: "听懂但无用",
+          classifications: { fact: [], subjective: ["内容以项目进度为主"], uncertain: [] },
+        },
+      };
+    },
+  });
+  const result = await orchestrator.ordinaryViewerAudit({
+    stage: "script",
+    approvedDirection: {
+      audience: "尚未开始行动的普通人",
+      viewerBenefit: "得到一个可执行动作",
+      coreQuestion: "项目如何转化为观众价值",
+    },
+    script: "我们完成了十二个接口，但还没有展示普通人如何使用。",
+    facts: [],
+    author: "hidden",
+  });
+
+  const serialized = JSON.stringify(captured);
+  assert.equal(captured.agentId, "ordinary-viewer-critic");
+  assert.equal(captured.operation, "agent_critique");
+  assert.equal(serialized.includes("hidden"), false);
+  assert.equal("winner" in result.review, false);
+  assert.equal("approval" in result.review, false);
+  assert.equal(result.events.at(-1).action, "ordinary_viewer_reviewed");
+});
+
+test("advisory agent failures stop explicitly without v4 or script fallback", async () => {
+  const orchestrator = createOrchestrator({
+    memory: memoryFixture(),
+    contentPrinciples: principleLibrary,
+    limits: { retries: 0, timeoutMs: 100 },
+    invokeAgent: async () => { throw new Error("advisory unavailable"); },
+  });
+  const directionInput = buildContentStrategistInput({
+    direction: "分享训练 Agent 的真实过程",
+    evidence: [],
+  });
+  await assert.rejects(
+    () => orchestrator.analyzeContentDirection(directionInput),
+    /advisory unavailable/
   );
 });

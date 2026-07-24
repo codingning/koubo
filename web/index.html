@@ -60,15 +60,47 @@
             <div>
               <span class="start-kicker">不用找文件 · 不用运行脚本</span>
               <h2>别再继续准备，第一条先做起来</h2>
-              <p>以后只要双击项目根目录的 <strong>打开AI口播工作台.vbs</strong>，点击生成、照着拍、上传原片，最后审核成片。</p>
+              <p>以后只要双击项目根目录的 <strong>打开AI口播工作台.vbs</strong>，先锁定方向、阅读分析并确认，再生成口播、上传原片，最后审核成片。</p>
             </div>
             <div class="entry-path">
               <span>固定入口</span>
               <code>项目根目录\打开AI口播工作台.vbs</code>
-              <button id="generate-content" class="btn btn-primary" disabled>AI生成新口播</button>
-              <small id="generation-status">正在连接本地工作流……</small>
+              <small>新口播先由你锁定方向，再由内容顾问分析；系统不会自动替你选题或确认。</small>
             </div>
           </div>
+
+          <section class="panel content-strategy-gate" aria-labelledby="content-strategy-title">
+            <div class="panel-head strategy-gate-head">
+              <div>
+                <span class="step-tag">写稿前两步门</span>
+                <h3 id="content-strategy-title">先确认这次到底要讲什么</h3>
+                <p>填写一个明确方向和一段真实经历。分析只帮助你看清价值与证据，不会写稿、换题或自动确认。</p>
+              </div>
+            </div>
+            <div class="strategy-gate-grid">
+              <div class="strategy-form">
+                <label for="content-direction">本次方向</label>
+                <input id="content-direction" type="text" maxlength="240" placeholder="例如：分享我如何审计并试用一个开源 Skill">
+                <label for="content-evidence-summary">真实经历 / 证据摘要</label>
+                <textarea id="content-evidence-summary" rows="5" maxlength="1600" placeholder="只写真实发生过的过程、输入、失败、修改和结果；没有的不要补。"></textarea>
+                <button id="analyze-content-direction" class="btn btn-secondary" disabled>第 1 步：分析方向</button>
+              </div>
+              <div id="content-strategy-analysis" class="strategy-analysis is-empty" aria-live="polite">
+                填写左侧两项后点击“分析方向”，这里会展示观众收益、优缺点、证据缺口和最多三个追问。
+              </div>
+            </div>
+            <div class="strategy-confirmation">
+              <label>
+                <input id="confirm-content-strategy" type="checkbox" disabled>
+                <span>我已阅读分析，确认方向和证据无误，并同意进入写稿。</span>
+              </label>
+              <button id="generate-content" class="btn btn-primary" disabled>第 2 步：确认并生成口播</button>
+              <small id="generation-status">正在连接本地工作流……</small>
+            </div>
+            <section id="ordinary-viewer-result" class="ordinary-viewer-result is-empty" aria-live="polite">
+              新口播生成后，普通观众 Agent 会在这里给出最尖锐的一句话、具体阻碍和最小修改。
+            </section>
+          </section>
 
           <div class="operation-steps" aria-label="拍摄操作步骤">
             <button class="operation-step is-current" data-go="today"><b>1</b><span><strong>确认拍哪条</strong><small>当前页已经选好主稿</small></span></button>

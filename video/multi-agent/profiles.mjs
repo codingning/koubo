@@ -24,6 +24,51 @@ export const SPECIALIST_PROFILES = Object.freeze([
   }),
 ]);
 
+export const ADVISORY_PROFILES = Object.freeze([
+  Object.freeze({
+    agentId: "content-strategist",
+    taskKind: "content-direction-analysis",
+    memoryNamespaces: ["shared.evidence", "shared.content-principles", "content-strategy.private"],
+    responsibilities: [
+      "interview-user-direction",
+      "analyze-audience-value",
+      "identify-evidence-gaps",
+      "recommend-single-series-defer-or-abandon",
+      "cite-source-principles",
+    ],
+    prohibitions: [
+      "invent topic",
+      "replace user direction",
+      "draft script title hook shots or edit plan",
+      "approve output",
+      "promote memory",
+      "publish",
+    ],
+  }),
+  Object.freeze({
+    agentId: "ordinary-viewer-critic",
+    taskKind: "ordinary-viewer-review",
+    memoryNamespaces: ["shared.evidence", "shared.content-principles", "shared.evaluation"],
+    responsibilities: [
+      "challenge-audience-relevance",
+      "challenge-credibility-and-evidence",
+      "challenge-understanding-cost",
+      "challenge-actionability",
+      "cite-script-or-timecodes",
+    ],
+    prohibitions: [
+      "insult creator",
+      "change topic",
+      "rewrite whole script",
+      "perform technical QA or retention prediction",
+      "rank candidates or select winner",
+      "approve output",
+      "promote memory",
+      "publish",
+    ],
+  }),
+]);
+
 const HIDDEN_BLIND_KEYS = new Set([
   "agent",
   "agentid",

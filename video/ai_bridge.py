@@ -463,6 +463,10 @@ def reference_issues(data: dict[str, Any], research: dict[str, Any], topic_plan:
 def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
     evidence = payload.get("evidence", {})
     content_style = payload.get("content_style", {})
+    locked_direction = str(payload.get("locked_direction") or "").strip()
+    locked_direction_hash = str(payload.get("locked_direction_hash") or "").strip()
+    direction_source = str(payload.get("direction_source") or "").strip()
+    strategy_artifact = payload.get("strategy_artifact", {}) if isinstance(payload.get("strategy_artifact"), dict) else {}
     schema = {
         "topic": "明确包含AI对象或AI实践的主选题",
         "shortTopic": "12字以内且能看出AI话题",
@@ -478,9 +482,18 @@ def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
         "searchQueries": ["抖音同题搜索词1", "搜索词2", "搜索词3"],
         "keywords": ["用于匹配参考视频的关键词"],
         "whyNow": "为什么今天的真实进度适合讲这个AI题目",
+        "lockedDirection": "必须逐字回显服务端锁定方向",
+        "lockedDirectionHash": "必须逐字回显服务端方向哈希",
+        "directionSource": "必须逐字回显方向权限来源",
     }
-    system = """你是AI使用案例内容编辑。选题必须回答“普通人怎样使用AI得到一个具体结果”，而不是“创作者怎样开发了一套软件”。优先选择能展示使用前、使用后、给AI的输入、第一版问题、具体返修和最终边界的案例。个人项目只承担真实试验场和证据角色；代码、文件名、Git、接口、安装过程默认不进入主题。不要选纯生活感悟、泛成长、职业自由或项目进度汇报。输出单个JSON对象，不要Markdown。"""
-    user = f"""真实证据：\n{json.dumps(evidence, ensure_ascii=False, indent=2)}\n\n用户本次明确要求：\n{json.dumps(payload.get('editorial_brief', {}), ensure_ascii=False, indent=2)}\n\n内容定位：\n{json.dumps(content_style, ensure_ascii=False, indent=2)}\n\n已有标题：\n{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n要求：topic、shortTopic和aiAngle都要让普通观众一眼看出在讲AI；viewerUseCase必须描述观众可复用的AI用法；visibleTransformation和proofOpening必须能拍成画面；methodPromise给2—4步人话方法。searchQueries写2—3个适合抖音检索的具体同题词；keywords写5—10个可用于匹配参考视频的短词；不要把Day编号、代码量、文件名、安装命令或Git状态当成选题。"""
+    lock_instruction = (
+        f"用户方向已经锁定为：{locked_direction}。topic 必须逐字等于该方向，不能改写、替换或另选主题；"
+        "shortTopic、aiAngle和搜索词只能服务这个方向。"
+        if locked_direction
+        else "只有服务端明确允许了 Agent 找题；选定一个方向后不得在后续成稿阶段更换。"
+    )
+    system = f"""你是AI使用案例内容编辑。{lock_instruction} 选题必须回答“普通人怎样使用AI得到一个具体结果”，而不是“创作者怎样开发了一套软件”。优先选择能展示使用前、使用后、给AI的输入、第一版问题、具体返修和最终边界的案例。个人项目只承担真实试验场和证据角色；代码、文件名、Git、接口、安装过程默认不进入主题。不要选纯生活感悟、泛成长、职业自由或项目进度汇报。Content Strategist 的分析只用于理解受众、收益、证据、弱点和风险，不能授权换题、编造事实或提前写稿。输出单个JSON对象，不要Markdown。"""
+    user = f"""服务端锁定方向：\n{locked_direction or '本次由用户显式允许 Agent 找题'}\n\nContent Strategist 已确认的分析上下文：\n{json.dumps(strategy_artifact, ensure_ascii=False, indent=2)}\n\n真实证据：\n{json.dumps(evidence, ensure_ascii=False, indent=2)}\n\n用户本次明确要求：\n{json.dumps(payload.get('editorial_brief', {}), ensure_ascii=False, indent=2)}\n\n内容定位：\n{json.dumps(content_style, ensure_ascii=False, indent=2)}\n\n已有标题：\n{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n要求：{lock_instruction} viewerUseCase 必须落实 Strategist 已确认的 audience 与 viewerBenefit；coreQuestion 必须服务其 testableQuestion；同时诚实保留 weaknesses、uncertainties 和证据边界。topic、shortTopic和aiAngle都要让普通观众一眼看出在讲AI；viewerUseCase必须描述观众可复用的AI用法；visibleTransformation和proofOpening必须能拍成画面；methodPromise给2—4步人话方法。searchQueries写2—3个适合抖音检索的具体同题词；keywords写5—10个可用于匹配参考视频的短词；不要把Day编号、代码量、文件名、安装命令或Git状态当成选题。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=3000)
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
     if not AI_TOPIC_PATTERN.search(str(data.get("topic") or "") + str(data.get("aiAngle") or "")):
@@ -489,6 +502,12 @@ def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("选题规划没有给出2—3个同题视频搜索词")
     if len(str(data.get("viewerUseCase") or "").strip()) < 10 or len(str(data.get("proofOpening") or "").strip()) < 8:
         raise RuntimeError("选题规划没有锁定观众可复用的AI用法和结果先行开场")
+    if locked_direction and str(data.get("topic") or "").strip() != locked_direction:
+        raise RuntimeError("选题规划更改了用户锁定方向")
+    if locked_direction:
+        data["lockedDirection"] = locked_direction
+        data["lockedDirectionHash"] = locked_direction_hash
+        data["directionSource"] = direction_source
     requested_source = str((payload.get("editorial_brief") or {}).get("requiredReference") or "").strip()
     if requested_source:
         data["requiredSourceIds"] = [requested_source]
@@ -530,6 +549,22 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
     content_style = json.loads(style_path.read_text(encoding="utf-8-sig")) if style_path.exists() else {}
     meme_pool = json.loads(meme_path.read_text(encoding="utf-8-sig")) if meme_path.exists() else {"items": []}
     active_memes = [item for item in meme_pool.get("items", []) if item.get("status") == "active"]
+    locked_direction = str(
+        payload.get("locked_direction")
+        or topic_plan.get("lockedDirection")
+        or ""
+    ).strip()
+    locked_direction_hash = str(
+        payload.get("locked_direction_hash")
+        or topic_plan.get("lockedDirectionHash")
+        or ""
+    ).strip()
+    direction_source = str(
+        payload.get("direction_source")
+        or topic_plan.get("directionSource")
+        or ""
+    ).strip()
+    strategy_artifact = payload.get("strategy_artifact", {}) if isinstance(payload.get("strategy_artifact"), dict) else {}
     schema = {
         "mainTopic": "主选题",
         "shortTopic": "12字以内短标题",
@@ -602,8 +637,16 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
         "evidence": [{"name": "证据", "proof": "能证明什么", "path": "本地相对路径", "public": True}],
         "risks": [{"text": "风险检查", "done": False}],
         "tomorrowChallenge": "下一集挑战",
+        "lockedDirection": "必须逐字回显服务端锁定方向",
+        "lockedDirectionHash": "必须逐字回显服务端方向哈希",
+        "directionSource": "必须逐字回显方向权限来源",
     }
-    system = """你是个人AI实践账号的总编和短视频口播编导。观众来听的是“普通人怎样使用AI得到一个具体结果”，不是创作者写代码、建接口、看Git或汇报项目进度。每条内容先用最终效果、前后对比或真实结果建立观看理由，再解释给AI什么输入、AI第一版做成什么、哪里有问题、如何用自然语言具体返修，以及什么仍需人工判断。代码和系统开发只能作为幕后证据，除非本集受众明确要学编程。只根据提供的真实证据写内容，不得虚构完成项、错误、数据、热点、粉丝反馈、评论或投票结果。输出必须是单个JSON对象，不要Markdown。语言自然、口语化，像和一个具体的人对话，不用新闻播音腔。可以复用高表现内容的问题顺序、证据位置、视觉节奏和信息交付方式，但绝不能复刻别人的措辞、案例、标题、画面或人设。"""
+    lock_instruction = (
+        f"本次方向已经锁定为“{locked_direction}”；mainTopic 必须逐字等于它，任何段落都不得换题。"
+        if locked_direction
+        else "本次方向来自服务端已锁定的 topic_plan，不得在成稿阶段重新选题。"
+    )
+    system = f"""你是个人AI实践账号的总编和短视频口播编导。{lock_instruction} 观众来听的是“普通人怎样使用AI得到一个具体结果”，不是创作者写代码、建接口、看Git或汇报项目进度。每条内容先用最终效果、前后对比或真实结果建立观看理由，再解释给AI什么输入、AI第一版做成什么、哪里有问题、如何用自然语言具体返修，以及什么仍需人工判断。代码和系统开发只能作为幕后证据，除非本集受众明确要学编程。只根据提供的真实证据写内容，不得虚构完成项、错误、数据、热点、粉丝反馈、评论或投票结果。Content Strategist 已确认的 audience、viewerBenefit、testableQuestion、weaknesses、uncertainties 和证据边界必须进入内容判断，但它不授权换题或杜撰。输出必须是单个JSON对象，不要Markdown。语言自然、口语化，像和一个具体的人对话，不用新闻播音腔。可以复用高表现内容的问题顺序、证据位置、视觉节奏和信息交付方式，但绝不能复刻别人的措辞、案例、标题、画面或人设。"""
     user = f"""日期：{today}
 成长天数：Day {day_number}
 
@@ -615,6 +658,9 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 
 真实证据：
 {json.dumps(evidence, ensure_ascii=False, indent=2)}
+
+Content Strategist 已确认的分析上下文：
+{json.dumps(strategy_artifact, ensure_ascii=False, indent=2)}
 
 已经锁定的AI选题规划：
 {json.dumps(topic_plan, ensure_ascii=False, indent=2)}
@@ -629,7 +675,7 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 
 硬性要求：
-1. 主选题必须明确属于AI工具、AI方法、AI项目、AI工作流、AI学习或AI能力边界。topic_plan 是主线，个人进度只能作为案例和证据，不能把Day编号、代码量、Git状态或泛成长感悟当成主题。
+1. {lock_instruction} 主选题必须明确属于AI工具、AI方法、AI项目、AI工作流、AI学习或AI能力边界。topic_plan 是主线，个人进度只能作为案例和证据，不能把Day编号、代码量、Git状态或泛成长感悟当成主题。
 2. 选题必须从普通人的AI使用场景出发：原来做不到或效果普通 → 给AI什么素材与目标 → 第一版结果 → 具体反馈和迭代 → 可见结果与边界。不得把开发文件、代码实现、Git记录、接口或安装过程写成正文主线。
 3. 完整版固定为2—3分钟、550—950个有效字符、7—12段；默认拍摄完整版。只选 evidence-story 或 saveable-map：前者写2—4个框架项，后者写3—5个框架项。shortScript 是60—90秒衍生稿，必须比完整版短且信息闭环。
 4. 开头0—8秒必须先展示成片效果、前后对比或其他真实结果证据，再承诺本集会拆解如何用AI做到；不能先自我介绍、解释项目背景或罗列工具。resultFirstProof 和 shooting.openingProof 必须可实际拍摄/剪辑。若 topic_plan.productionMode 是 self-demonstrating-final-video，可以把“观众正在看的最终成片”作为证据并按成片状态说话，不要在开头插入“测试素材、尚未验证”削弱钩子；但 resultFirstProof.publicationCondition 必须规定只有实际渲染出所述效果并人工审核后才能发布。
@@ -648,6 +694,20 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 """
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     result = call_json(messages, temperature=0.4, max_tokens=10000)
+    def direction_issues(data: dict[str, Any]) -> list[str]:
+        if not locked_direction:
+            return []
+        output = []
+        if str(data.get("mainTopic") or "").strip() != locked_direction:
+            output.append("mainTopic 更改了服务端锁定方向")
+        if str(data.get("lockedDirection") or locked_direction).strip() != locked_direction:
+            output.append("lockedDirection 与服务端锁定方向不一致")
+        if str(data.get("lockedDirectionHash") or locked_direction_hash).strip() != locked_direction_hash:
+            output.append("lockedDirectionHash 与服务端锁定哈希不一致")
+        if str(data.get("directionSource") or direction_source).strip() != direction_source:
+            output.append("directionSource 更改了方向权限来源")
+        return output
+
     issues = (
         structure_issues(result.get("data", {}))
         + duration_issues(result.get("data", {}))
@@ -656,6 +716,7 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
         + reference_issues(result.get("data", {}), reference_research, topic_plan)
         + engagement_issues(result.get("data", {}), content_style)
         + factual_issues(result.get("data", {}), evidence)
+        + direction_issues(result.get("data", {}))
     )
     initial_issues = list(issues)
     repair_attempts = 0
@@ -670,7 +731,7 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
 上一版JSON：
 {json.dumps(result.get('data', {}), ensure_ascii=False, indent=2)}
 
-        请在不增加任何新事实的前提下重写完整JSON。主线必须是普通观众如何使用AI得到具体结果，开头0—8秒先展示成片效果或前后对比，然后再解释输入、第一版、具体返修、结果和边界；删除文件名、Git、代码量和内部实现汇报。若topic_plan.productionMode为self-demonstrating-final-video，让最终Day 2成片本身承担结果证据，不要用“测试素材、真人待验证”拆掉开头钩子；改为填写严格的publicationCondition，只有最终渲染和人工审核确认画面真实具备所述效果时才允许发布。完整版必须达到2—3分钟、550—950个有效字符并拆成7—12段。证据写着尚未拍摄或发布时，不能虚构拍摄遍数、耗时或发布结果。只能把reference_research.fullContentSources中的全文核验来源写入referenceResearch.sourceIds，并包含topic_plan.requiredSourceIds；外部知识和结构全部重新组织，不复制原句或画面。resultFirstProof与shooting.openingProof必须具体，shooting.visualBeats至少4项。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
+        请在不增加任何新事实的前提下重写完整JSON。{lock_instruction} mainTopic 必须逐字等于服务端锁定方向；Content Strategist 已确认的受众、观众收益、核心问题、弱点、不确定性和证据边界必须被保留。主线必须是普通观众如何使用AI得到具体结果，开头0—8秒先展示成片效果或前后对比，然后再解释输入、第一版、具体返修、结果和边界；删除文件名、Git、代码量和内部实现汇报。若topic_plan.productionMode为self-demonstrating-final-video，让最终Day 2成片本身承担结果证据，不要用“测试素材、真人待验证”拆掉开头钩子；改为填写严格的publicationCondition，只有最终渲染和人工审核确认画面真实具备所述效果时才允许发布。完整版必须达到2—3分钟、550—950个有效字符并拆成7—12段。证据写着尚未拍摄或发布时，不能虚构拍摄遍数、耗时或发布结果。只能把reference_research.fullContentSources中的全文核验来源写入referenceResearch.sourceIds，并包含topic_plan.requiredSourceIds；外部知识和结构全部重新组织，不复制原句或画面。resultFirstProof与shooting.openingProof必须具体，shooting.visualBeats至少4项。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
         result = call_json(messages + [{"role": "assistant", "content": json.dumps(result.get("data", {}), ensure_ascii=False)}, {"role": "user", "content": repair}], temperature=0.15, max_tokens=10000)
         issues = (
             structure_issues(result.get("data", {}))
@@ -680,9 +741,16 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
             + reference_issues(result.get("data", {}), reference_research, topic_plan)
             + engagement_issues(result.get("data", {}), content_style)
             + factual_issues(result.get("data", {}), evidence)
+            + direction_issues(result.get("data", {}))
         )
     if issues:
         raise RuntimeError("内容质量与事实一致性门禁未通过：" + "；".join(issues))
+    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    if locked_direction:
+        data["lockedDirection"] = locked_direction
+        data["lockedDirectionHash"] = locked_direction_hash
+        data["directionSource"] = direction_source
+        result["data"] = data
     result["quality_revision"] = {
         "repaired": repair_attempts > 0,
         "repair_attempts": repair_attempts,

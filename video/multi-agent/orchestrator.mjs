@@ -9,6 +9,8 @@ import {
   roleMinimalInput,
   stripAuthority,
 } from "./profiles.mjs";
+import { createContentStrategist } from "./content-strategy.mjs";
+import { createOrdinaryViewerCritic } from "./ordinary-viewer-critic.mjs";
 
 const DEFAULT_LIMITS = Object.freeze({
   concurrency: 3,
@@ -223,6 +225,7 @@ function reviewRecord({
 export function createOrchestrator({
   invokeAgent,
   memory,
+  contentPrinciples = [],
   clock = () => new Date().toISOString(),
   limits = {},
 } = {}) {
@@ -416,10 +419,42 @@ export function createOrchestrator({
     });
   }
 
+  async function analyzeContentDirection(input, { principles = contentPrinciples } = {}) {
+    events.length = 0;
+    const strategist = createContentStrategist({
+      invokeAgent: invokeWithRetry,
+      principles,
+    });
+    const analysis = await strategist.analyze(input);
+    trace("content_direction_analyzed", {
+      agentId: "content-strategist",
+      lockedDirection: input.lockedDirection,
+      status: analysis.status,
+      recommendation: analysis.recommendation,
+      scriptHandoffAllowed: analysis.scriptGate.mayHandOffToScriptAgent,
+    });
+    return { analysis, events: structuredClone(events) };
+  }
+
+  async function ordinaryViewerAudit(input, { stage = input?.stage } = {}) {
+    events.length = 0;
+    const critic = createOrdinaryViewerCritic({ invokeAgent: invokeWithRetry });
+    const review = await critic.review(input, { stage });
+    trace("ordinary_viewer_reviewed", {
+      agentId: "ordinary-viewer-critic",
+      stage,
+      viewerDecision: review.viewerDecision,
+      blockerCount: review.blockers.length,
+    });
+    return { review, events: structuredClone(events) };
+  }
+
   return {
     propose,
     direct,
     criticize,
     retentionAudit,
+    analyzeContentDirection,
+    ordinaryViewerAudit,
   };
 }

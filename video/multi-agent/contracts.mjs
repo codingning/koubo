@@ -8,7 +8,7 @@ export const SCHEMA_VERSION = 1;
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(moduleDir, "..", "..");
 const schemaDirectory = path.join(repositoryRoot, "config", "multi-agent", "schemas");
-const schemaKinds = [
+const commonSchemaKinds = [
   "technique-card",
   "asset-record",
   "combination-recipe",
@@ -18,12 +18,18 @@ const schemaKinds = [
   "production-event",
   "agent-profile",
 ];
+const librarySchemaKinds = ["content-principle"];
+const schemaKinds = [...commonSchemaKinds, ...librarySchemaKinds];
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, "utf8").replace(/^\uFEFF/, ""));
 }
 
-const schemas = new Map(schemaKinds.map(kind => [
+const schemas = new Map(commonSchemaKinds.map(kind => [
+  kind,
+  readJson(path.join(schemaDirectory, `${kind}.schema.json`)),
+]));
+const librarySchemas = new Map(librarySchemaKinds.map(kind => [
   kind,
   readJson(path.join(schemaDirectory, `${kind}.schema.json`)),
 ]));
@@ -56,6 +62,9 @@ function validateSchemaValue(schema, value, parts = []) {
   }
   if (typeof value === "number") {
     if (schema.minimum !== undefined && value < schema.minimum) fail(parts, `must be >= ${schema.minimum}`);
+    if (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum) {
+      fail(parts, `must be > ${schema.exclusiveMinimum}`);
+    }
     if (schema.maximum !== undefined && value > schema.maximum) fail(parts, `must be <= ${schema.maximum}`);
   }
   if (Array.isArray(value)) {
@@ -137,6 +146,33 @@ export function validateRecord(kind, value) {
   return value;
 }
 
+export function validateLibrary(kind, value) {
+  const schema = librarySchemas.get(kind);
+  if (!schema) throw new Error(`unknown library kind: ${kind}`);
+  validateSchemaValue(schema, value);
+  if (kind === "content-principle") {
+    const sourceIds = new Set();
+    for (const [index, source] of value.sources.entries()) {
+      if (sourceIds.has(source.videoId)) fail(["sources", String(index), "videoId"], "must be unique");
+      sourceIds.add(source.videoId);
+    }
+    const ids = new Set();
+    for (const [index, principle] of value.principles.entries()) {
+      if (ids.has(principle.id)) fail(["principles", String(index), "id"], "must be unique");
+      ids.add(principle.id);
+      if (!sourceIds.has(principle.sourceVideoId)) {
+        fail(["principles", String(index), "sourceVideoId"], "must reference a declared source");
+      }
+      for (const [rangeIndex, range] of principle.timecodes.entries()) {
+        if (range.endSeconds <= range.startSeconds) {
+          fail(["principles", String(index), "timecodes", String(rangeIndex)], "must satisfy endSeconds > startSeconds");
+        }
+      }
+    }
+  }
+  return value;
+}
+
 function canonicalValue(value, seen) {
   if (value === null || typeof value === "boolean" || typeof value === "string") return value;
   if (typeof value === "number") {
@@ -186,12 +222,20 @@ export async function validateRepositoryContracts(root = repositoryRoot) {
   if (configuredSchemas.length !== schemaKinds.length) {
     throw new Error(`expected ${schemaKinds.length} schemas, found ${configuredSchemas.length}`);
   }
-  for (const kind of schemaKinds) {
+  for (const kind of commonSchemaKinds) {
     const schema = readJson(path.join(root, "config", "multi-agent", "schemas", `${kind}.schema.json`));
     if (schema.type !== "object" || schema["x-koubo-common-record"] !== true || !schema.$id?.endsWith("/v1")) {
       throw new Error(`invalid repository schema: ${kind}`);
     }
   }
+  for (const kind of librarySchemaKinds) {
+    const schema = readJson(path.join(root, "config", "multi-agent", "schemas", `${kind}.schema.json`));
+    if (schema.type !== "object" || schema["x-koubo-common-record"] !== false || !schema.$id?.endsWith("/v1")) {
+      throw new Error(`invalid repository library schema: ${kind}`);
+    }
+  }
+  const contentPrinciples = readJson(path.join(root, "config", "multi-agent", "content-principles.json"));
+  validateLibrary("content-principle", contentPrinciples);
   const profiles = await loadAgentProfiles(root);
   const rubric = readJson(path.join(root, "config", "multi-agent", "evaluation-rubric.json"));
   if (rubric.schemaVersion !== SCHEMA_VERSION || !String(rubric.id || "").trim()) {
@@ -207,5 +251,9 @@ export async function validateRepositoryContracts(root = repositoryRoot) {
     schemas: configuredSchemas.length,
     profiles: profiles.length,
     rubric: rubric.id,
+    libraries: {
+      contentPrinciples: contentPrinciples.principles.length,
+      status: contentPrinciples.status,
+    },
   };
 }
