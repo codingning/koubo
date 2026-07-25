@@ -1042,6 +1042,7 @@ function captionText(text, script = "") {
   if (String(script).includes("口播工作台")) result = result.replace(/口婆(?=工作台)/g, "口播");
   if (String(script).includes("我是三金")) result = result.replace(/我是三斤/g, "我是三金");
   if (String(script).includes("管他三七二十一")) result = result.replace(/管它(?=三七二十一)/g, "管他");
+  if (String(script).includes("迈出第一步")) result = result.replace(/卖出第一步/g, "迈出第一步");
   return result;
 }
 const captionSegmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
@@ -2452,7 +2453,7 @@ async function ensureWorkflowCleanSource(job) {
 }
 
 async function runHyperframes(args, cwd, timeoutMs = 30 * 60 * 1000) {
-  return run("npx", ["--yes", "hyperframes@0.7.68", ...args], { cwd, shell: true, timeoutMs, env: process.env });
+  return run("npx", ["--yes", "hyperframes@0.7.71", ...args], { cwd, shell: true, timeoutMs, env: process.env });
 }
 
 async function inspectHyperframesProject(projectDir, timestamps = []) {

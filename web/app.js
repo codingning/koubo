@@ -53,7 +53,11 @@
   let contentGenerating = false;
   let selectedVideoFile = null;
   let currentVideoJob = null;
+  let availableVideoJobs = [];
+  let videoJobsLoading = false;
+  let editExperienceMode = persisted.editExperienceMode === "demo" ? "demo" : "daily";
   let videoPollTimer = null;
+  let videoJobContextToken = 0;
   const directorStageOrder = ["style_research", "content_breakdown", "keyframes", "keyframe_review", "motion_sample", "full_render"];
   const videoRunningStatuses = ["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising", "researching_style", "breaking_down_content", "generating_keyframes", "rendering_sample", "rendering_final"];
   let directorWorkflowDefaults = null;
@@ -173,10 +177,12 @@
   function switchView(view) {
     if (!pageNames[view]) return;
     currentView = view;
+    document.body.classList.toggle("is-edit-view", view === "edit");
     $$(".view").forEach(section => section.classList.toggle("is-active", section.id === `view-${view}`));
     $$(".nav-item").forEach(button => button.classList.toggle("is-active", button.dataset.view === view));
     byId("page-eyebrow").textContent = pageNames[view][0];
     byId("page-title").textContent = pageNames[view][1];
+    if (view === "edit") renderEditExperienceMode();
     $(".sidebar").classList.remove("is-open");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -485,6 +491,147 @@
     const minutes = Math.floor(value / 60);
     const rest = Math.round(value % 60);
     return `${minutes}分${String(rest).padStart(2, "0")}秒`;
+  }
+
+  function jobHasStandardOutput(job) {
+    return !!job?.output?.url;
+  }
+
+  function jobMotionSample(job) {
+    const artifacts = job?.workflow?.stages?.motion_sample?.artifacts;
+    return artifacts?.url ? artifacts : null;
+  }
+
+  function jobDateLabel(job) {
+    const date = new Date(job?.updatedAt || job?.createdAt || "");
+    if (!Number.isFinite(date.getTime())) return "时间未知";
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(date).replaceAll("/", "-");
+  }
+
+  function jobResultLabel(job) {
+    if (jobHasStandardOutput(job)) return job?.status === "approved" ? "已通过，可预览和下载" : "可预览、返修和下载";
+    if (jobMotionSample(job)) return "只有真实动态样片";
+    if (videoRunningStatuses.includes(job?.status)) return "正在处理";
+    return "没有标准成片";
+  }
+
+  function jobPickerTitle(job) {
+    const source = String(job?.fileName || job?.contentId || job?.id || "本地任务");
+    return `${jobDateLabel(job)} · ${jobResultLabel(job)} · ${source}`;
+  }
+
+  function upsertAvailableVideoJob(job) {
+    if (!job?.id) return;
+    availableVideoJobs = [job, ...availableVideoJobs.filter(item => item.id !== job.id)]
+      .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")));
+  }
+
+  function renderVideoJobPicker() {
+    const picker = byId("video-job-picker");
+    if (!picker) return;
+    picker.innerHTML = [
+      '<option value="">新建任务：上传一段原片</option>',
+      ...availableVideoJobs.map(job => `<option value="${htmlEscape(job.id)}">${htmlEscape(jobPickerTitle(job))}</option>`),
+    ].join("");
+    picker.value = currentVideoJob?.id && availableVideoJobs.some(job => job.id === currentVideoJob.id)
+      ? currentVideoJob.id
+      : "";
+    picker.disabled = videoJobsLoading || !videoServiceOnline;
+    byId("refresh-video-jobs").disabled = videoJobsLoading || !videoServiceOnline;
+  }
+
+  function renderVideoServiceDetail() {
+    const detail = byId("video-service-detail");
+    const status = byId("video-service-status");
+    if (!detail) return;
+    if (!videoServiceOnline) {
+      detail.textContent = "请双击项目根目录的“打开AI口播工作台.vbs”；它会静默启动服务并重新打开网页。";
+      return;
+    }
+    if (editExperienceMode === "demo") {
+      if (status) status.textContent = "本地工作台已就绪";
+      detail.textContent = "本地工作台已连接。原视频保留在本机，有真实结果时才会显示预览。";
+      return;
+    }
+    if (status) status.textContent = "视觉导演 v4 工作流已就绪";
+    const modelText = serviceHealth?.ai?.configured ? `文本模型 ${serviceHealth.ai.model}` : "文本模型未配置";
+    detail.textContent = `HyperFrames默认 · 2K母版 · 两道审核门 · ${modelText} · 本地转录 ${serviceHealth?.ai?.transcriptionModel || "faster-whisper/small"}`;
+  }
+
+  function renderDemoPreview(job = currentVideoJob) {
+    const panel = byId("demo-preview-panel");
+    const video = byId("demo-sample-video");
+    if (!panel || !video) return;
+    video.pause();
+    if (editExperienceMode !== "demo" || jobHasStandardOutput(job)) {
+      panel.classList.add("is-hidden");
+      video.classList.add("is-hidden");
+      video.removeAttribute("src");
+      return;
+    }
+    panel.classList.remove("is-hidden");
+    const sample = jobMotionSample(job);
+    if (sample) {
+      byId("demo-preview-title").textContent = "真实动态样片";
+      byId("demo-preview-message").textContent = "这段视频可以检查字幕、动效和声音方向，但它还不是完整成片，因此这里不会开放最终返修和下载。";
+      byId("demo-preview-badge").textContent = "仅样片，不冒充成片";
+      video.src = `${videoApiBase}${sample.url}`;
+      video.classList.remove("is-hidden");
+      return;
+    }
+    video.classList.add("is-hidden");
+    video.removeAttribute("src");
+    byId("demo-preview-badge").textContent = "真实结果边界";
+    if (!job) {
+      byId("demo-preview-title").textContent = "还没有选择处理任务";
+      byId("demo-preview-message").textContent = "上传一段原片开始新任务，或者从上方选择一个标有“可预览、返修和下载”的已有任务。";
+      return;
+    }
+    if (videoRunningStatuses.includes(job.status)) {
+      byId("demo-preview-title").textContent = "任务仍在处理中";
+      byId("demo-preview-message").textContent = "工作台还没有生成可核验的标准成片，完成前不会显示占位预览。";
+      return;
+    }
+    byId("demo-preview-title").textContent = "这个任务没有标准成片";
+    byId("demo-preview-message").textContent = "它可能是效果方向证明、历史发布记录或未完成任务，不能在这里当作完整结果返修或下载。请选择带“可预览、返修和下载”的任务，或上传新原片。";
+  }
+
+  function renderEditExperienceMode() {
+    const demo = editExperienceMode === "demo";
+    document.body.classList.toggle("is-demo-mode", demo);
+    byId("edit-mode-daily").classList.toggle("is-active", !demo);
+    byId("edit-mode-demo").classList.toggle("is-active", demo);
+    byId("edit-intro-kicker").textContent = demo ? "不会剪辑，也能先看真实效果" : "默认视觉导演 v4 · 每一步可配置";
+    byId("edit-intro-title").textContent = demo
+      ? "上传原片，等工作台处理；不满意就直接说哪里要改"
+      : "先分析同题高质量视频，再拆解口播、审关键帧、审动态样片，最后渲染2K全片";
+    byId("edit-intro-description").textContent = demo
+      ? "页面只保留上传、处理进度、效果预览、自然语言返修和下载。没有真实结果时会明确说明。"
+      : "不改设置就使用默认提示词。关键帧和15—25秒动态样片分别是硬审核门；未批准不会继续生成完整视频。旧任务仍可按原 FFmpeg v3 流程打开。";
+    byId("edit-result-title").textContent = demo ? "效果预览" : "完整预览与分段审核";
+    byId("edit-result-description").textContent = demo
+      ? "先看工作台真实生成的成片；不满意就在右侧用一句话说明，满意后直接下载。"
+      : "先看完整节奏，再用15—30秒上下文小样定位问题；通过后才进入最终审核。";
+    if (currentView === "edit") byId("page-eyebrow").textContent = demo ? "拍完口播，交给工作台" : pageNames.edit[0];
+    renderVideoServiceDetail();
+    renderDemoPreview(currentVideoJob);
+    if (currentVideoJob?.output) showVideoVersion(currentVideoJob.output.version);
+  }
+
+  function setEditExperienceMode(mode, save = true) {
+    editExperienceMode = mode === "demo" ? "demo" : "daily";
+    if (save) {
+      persisted.editExperienceMode = editExperienceMode;
+      saveState();
+    }
+    renderEditExperienceMode();
+  }
+
+  function setAnalyzeVideoDisabled(disabled) {
+    byId("analyze-video").disabled = disabled;
+    byId("demo-analyze-video").disabled = disabled;
   }
 
   function setEditProgress(value, message) {
@@ -1383,10 +1530,7 @@
       videoServiceOnline = !!serviceHealth.ok && !!serviceHealth.ffmpeg;
       status.textContent = videoServiceOnline ? "视觉导演 v4 工作流已就绪" : "已连接，但FFmpeg不可用";
       status.className = `service-status ${videoServiceOnline ? "is-online" : "is-offline"}`;
-      const modelText = serviceHealth.ai?.configured ? `文本模型 ${serviceHealth.ai.model}` : "文本模型未配置";
-      detail.textContent = videoServiceOnline
-        ? `HyperFrames默认 · 2K母版 · 两道审核门 · ${modelText} · 本地转录 ${serviceHealth.ai?.transcriptionModel || "faster-whisper/small"}`
-        : "请确认 FFmpeg 已安装并重新打开工作台。";
+      renderVideoServiceDetail();
       byId("generation-status").textContent = serviceHealth.ai?.configured
         ? `已连接 ${serviceHealth.ai.model}；请先输入本次方向和真实证据，再让内容顾问分析。`
         : "视频仍可本地处理，但AI口播生成和语义剪辑需要文本模型配置。";
@@ -1404,44 +1548,51 @@
       }
       await refreshMultiAgentStatus();
       await refreshGeneratedContents();
-      if (!currentVideoJob) await restoreLatestVideoJob();
+      if (!currentVideoJob) await refreshVideoJobs({ selectId: persisted.selectedVideoJobId || null });
     } catch (_) {
       serviceHealth = null;
       videoServiceOnline = false;
       status.textContent = "全自动工作流未启动";
       status.className = "service-status is-offline";
-      detail.textContent = "请双击项目根目录的“打开AI口播工作台.vbs”；它会静默启动服务并重新打开网页。";
+      renderVideoServiceDetail();
       byId("generation-status").textContent = "请先通过“打开AI口播工作台.vbs”启动本地工作流。";
       multiAgentStatus = null;
       renderMultiAgentStatus();
+      renderVideoJobPicker();
       updateContentStrategyControls();
     }
-    byId("analyze-video").disabled = !(videoServiceOnline && selectedVideoFile);
+    setAnalyzeVideoDisabled(!(videoServiceOnline && selectedVideoFile));
   }
 
   function handleVideoSelection(file) {
+    videoJobContextToken += 1;
     const hadActiveJob = !!currentVideoJob;
     selectedVideoFile = file || null;
     currentVideoJob = null;
+    persisted.selectedVideoJobId = "";
+    saveState();
     proposalBundle = null;
     blindReviewBundle = null;
     multiAgentReviews = null;
     renderMultiAgentProposals();
     renderMultiAgentReview();
     renderMultiAgentStatus();
+    renderVideoJobPicker();
     if (hadActiveJob && directorWorkflowDefaults) directorDraftConfig = cloneJson(directorWorkflowDefaults);
     directorRenderSignature = "";
     renderDirectorWorkflow(null, true);
     clearTimeout(videoPollTimer);
     byId("edit-results").classList.add("is-hidden");
+    byId("asset-review-panel").classList.add("is-hidden");
     byId("edit-analysis").classList.add("is-hidden");
     byId("retry-video").classList.add("is-hidden");
     if (!file) {
       byId("selected-video-info").textContent = "尚未选择视频";
       byId("video-preview").classList.add("is-hidden");
-      byId("analyze-video").disabled = true;
+      setAnalyzeVideoDisabled(true);
       setEditProgress(0, "等待选择视频");
       renderAutomationRail("upload");
+      renderDemoPreview(null);
       return;
     }
     const preview = byId("video-preview");
@@ -1451,15 +1602,18 @@
     preview.src = objectUrl;
     preview.classList.remove("is-hidden");
     byId("selected-video-info").innerHTML = `<strong>${htmlEscape(file.name)}</strong><span>${formatBytes(file.size)} · ${htmlEscape(file.type || "视频文件")}</span>`;
-    byId("analyze-video").disabled = !videoServiceOnline;
+    setAnalyzeVideoDisabled(!videoServiceOnline);
     setEditProgress(0, "视频已选择，点击一次即可开始全自动处理");
     renderAutomationRail("upload");
+    renderDemoPreview(null);
   }
 
   function currentEditOptions() {
+    const attachCurrentContent = editExperienceMode !== "demo";
     const editedScript = String(itemState().editedScript || "").trim();
     const workflowConfig = collectDirectorWorkflowOverrides();
     const contentSettings = workflowConfig.stages?.content_breakdown?.settings || {};
+    const localVideoTitle = String(selectedVideoFile?.name || "口播视频").replace(/\.[^.]+$/, "").trim();
     return {
       pipeline: "visual-director-v4",
       workflowConfig,
@@ -1470,21 +1624,25 @@
       informationPanels: byId("edit-information-panels").checked,
       generateVariants: byId("edit-generate-variants").checked,
       generateCover: byId("edit-generate-cover").checked,
-      coverTitle: byId("edit-cover-title").value.trim(),
-      contentTitle: String(itemState().selectedTitle || currentItem.mainTopic || currentItem.shortTopic || "").trim(),
+      coverTitle: attachCurrentContent ? byId("edit-cover-title").value.trim() : "",
+      contentTitle: attachCurrentContent
+        ? String(itemState().selectedTitle || currentItem.mainTopic || currentItem.shortTopic || "").trim()
+        : localVideoTitle,
       silenceDuration: Number(contentSettings.silenceDuration ?? 0.45),
       transcriptionModel: contentSettings.transcriptionModel || "small",
       visualStrategy: "rich-media-first",
-      cloudImageGenerationEnabled: true,
+      cloudImageGenerationEnabled: attachCurrentContent,
       paidImageGenerationConfirmation: false,
-      rightsReviewMode: "advisory",
-      script: editedScript || shortText(currentItem)
+      rightsReviewMode: attachCurrentContent ? "advisory" : "strict",
+      script: attachCurrentContent ? editedScript || shortText(currentItem) : ""
     };
   }
 
   async function analyzeSelectedVideo() {
     if (!selectedVideoFile || !videoServiceOnline) return;
-    byId("analyze-video").disabled = true;
+    const requestToken = ++videoJobContextToken;
+    const attachCurrentContent = editExperienceMode !== "demo";
+    setAnalyzeVideoDisabled(true);
     setEditProgress(1, `正在把 ${selectedVideoFile.name} 复制到本地任务目录……`);
     try {
       const options = currentEditOptions();
@@ -1495,23 +1653,34 @@
       });
       const draftPayload = await draftResponse.json();
       if (!draftResponse.ok) throw new Error(draftPayload.error || "工作流配置保存失败");
+      const uploadHeaders = {
+        "Content-Type": selectedVideoFile.type || "application/octet-stream",
+        "X-File-Name": encodeURIComponent(selectedVideoFile.name),
+        "X-Workflow-Draft": draftPayload.draftId
+      };
+      if (attachCurrentContent) uploadHeaders["X-Content-Id"] = encodeURIComponent(currentItem.id);
       const response = await fetch(`${videoApiBase}/api/jobs`, {
         method: "POST",
-        headers: {
-          "Content-Type": selectedVideoFile.type || "application/octet-stream",
-          "X-File-Name": encodeURIComponent(selectedVideoFile.name),
-          "X-Content-Id": encodeURIComponent(currentItem.id),
-          "X-Workflow-Draft": draftPayload.draftId
-        },
+        headers: uploadHeaders,
         body: selectedVideoFile
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "视频上传失败");
+      upsertAvailableVideoJob(payload.job);
+      if (requestToken !== videoJobContextToken) {
+        renderVideoJobPicker();
+        return;
+      }
       currentVideoJob = payload.job;
+      persisted.selectedVideoJobId = currentVideoJob.id;
+      saveState();
+      renderVideoJobPicker();
+      renderDemoPreview(currentVideoJob);
       setEditProgress(4, "上传完成，工作流会自动继续，无需再次点击");
-      pollVideoJob(currentVideoJob.id);
+      pollVideoJob(currentVideoJob.id, requestToken);
     } catch (error) {
-      byId("analyze-video").disabled = false;
+      if (requestToken !== videoJobContextToken) return;
+      setAnalyzeVideoDisabled(false);
       setEditProgress(0, `启动失败：${error.message}`);
     }
   }
@@ -1527,9 +1696,11 @@
       rendering_sample: "正在渲染15—25秒HyperFrames动态样片",
       awaiting_sample_review: "动态样片已完成，请观看后批准",
       rendering_final: "正在把批准的设计扩展到2K完整视频并执行QA",
-      awaiting_asset_review: "素材候选已准备，可逐条审核", revising: "正在按你的意见生成新版本", awaiting_review: "2K全片与1080p审核版已完成，请从头到尾检查", approved: "已审核通过", error: "自动处理失败"
+      awaiting_asset_review: "素材候选已准备，可逐条审核", revising: "正在按你的意见生成新版本", awaiting_review: "完整成片已生成，可以预览和返修", approved: "已审核通过", error: "自动处理失败",
+      effect_proof_approved: "效果方向已确认，但这不是标准成片任务",
+      published_by_user: "历史视频已由用户发布，但这不是标准成片任务"
     };
-    return labels[job.status] || job.status || "处理中";
+    return labels[job.status] || (editExperienceMode === "demo" ? "任务状态待确认" : job.status) || "处理中";
   }
 
   function renderAutomationRail(input) {
@@ -1557,20 +1728,24 @@
     });
   }
 
-  async function pollVideoJob(id) {
+  async function pollVideoJob(id, contextToken = videoJobContextToken) {
     clearTimeout(videoPollTimer);
     try {
       const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(id)}`, { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "任务读取失败");
+      if (contextToken !== videoJobContextToken || currentVideoJob?.id !== id) return;
       currentVideoJob = payload.job;
+      upsertAvailableVideoJob(currentVideoJob);
+      renderVideoJobPicker();
       renderVideoJob(currentVideoJob);
       if (videoRunningStatuses.includes(currentVideoJob.status)) {
-        videoPollTimer = setTimeout(() => pollVideoJob(id), 1400);
+        videoPollTimer = setTimeout(() => pollVideoJob(id, contextToken), 1400);
       }
     } catch (error) {
+      if (contextToken !== videoJobContextToken || currentVideoJob?.id !== id) return;
       setEditProgress(currentVideoJob?.progress || 0, `读取任务失败：${error.message}，正在重试……`);
-      videoPollTimer = setTimeout(() => pollVideoJob(id), 2600);
+      videoPollTimer = setTimeout(() => pollVideoJob(id, contextToken), 2600);
     }
   }
 
@@ -1585,7 +1760,11 @@
     renderMediaAssets(job);
     renderMultiAgentStatus();
     if (job.output) renderEditResult(job);
-    if (job.status === "error") byId("analyze-video").disabled = false;
+    else byId("edit-results").classList.add("is-hidden");
+    renderDemoPreview(job);
+    upsertAvailableVideoJob(job);
+    renderVideoJobPicker();
+    if (job.status === "error") setAnalyzeVideoDisabled(!(videoServiceOnline && selectedVideoFile));
   }
 
   function renderEditAnalysis(job) {
@@ -1618,9 +1797,11 @@
     byId("download-final").href = finalUrl;
     byId("download-final").download = `${currentItem.day || "koubo"}-AI剪辑-v${output.version}.mp4`;
     byId("result-version").textContent = `版本 ${output.version}`;
-    byId("review-preview-note").textContent = reviewBundle?.preview
-      ? `当前播放${previewMetadata.width || ""}×${previewMetadata.height || ""}完整审核预览；共 ${reviewBundle.segments?.length || 0} 个上下文小样。高清母版已保留，但不会自动发布。`
-      : "当前版本生成于旧流程，直接播放完整成片；下一次渲染会同时生成分段小样。";
+    byId("review-preview-note").textContent = editExperienceMode === "demo"
+      ? "这是该任务真实生成的完整效果预览。页面不会用样片或占位画面冒充最终成片，也不会自动发布。"
+      : reviewBundle?.preview
+        ? `当前播放${previewMetadata.width || ""}×${previewMetadata.height || ""}完整审核预览；共 ${reviewBundle.segments?.length || 0} 个上下文小样。高清母版已保留，但不会自动发布。`
+        : "当前版本生成于旧流程，直接播放完整成片；下一次渲染会同时生成分段小样。";
     byId("review-segments").innerHTML = (reviewBundle?.segments || []).map((segment, index) => `
       <article class="review-segment-card ${landscapePreview ? "is-landscape" : ""}">
         <video controls playsinline preload="metadata" poster="${videoApiBase}${htmlEscape(segment.thumbnailUrl || "")}" src="${videoApiBase}${htmlEscape(segment.url)}"></video>
@@ -1751,16 +1932,87 @@
     pollVideoJob(currentVideoJob.id);
   }
 
-  async function restoreLatestVideoJob() {
+  function clearSelectedVideoFilePreview() {
+    selectedVideoFile = null;
+    const input = byId("video-file");
+    if (input) input.value = "";
+    const preview = byId("video-preview");
+    if (preview.dataset.objectUrl) URL.revokeObjectURL(preview.dataset.objectUrl);
+    preview.dataset.objectUrl = "";
+    preview.removeAttribute("src");
+    preview.classList.add("is-hidden");
+    byId("selected-video-info").textContent = "当前正在查看已有任务；重新选择视频会创建新任务。";
+    setAnalyzeVideoDisabled(true);
+  }
+
+  async function loadVideoJob(id, { announce = true } = {}) {
+    if (!id) {
+      handleVideoSelection(null);
+      return null;
+    }
+    const requestToken = ++videoJobContextToken;
+    clearTimeout(videoPollTimer);
+    byId("video-job-picker").disabled = true;
+    byId("refresh-video-jobs").disabled = true;
+    setEditProgress(currentVideoJob?.progress || 0, "正在打开已有任务……");
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(id)}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok || !payload.job) throw new Error(payload.error || "任务读取失败");
+      if (requestToken !== videoJobContextToken) return null;
+      currentVideoJob = payload.job;
+      clearSelectedVideoFilePreview();
+      proposalBundle = null;
+      blindReviewBundle = null;
+      multiAgentReviews = null;
+      directorRenderSignature = "";
+      persisted.selectedVideoJobId = currentVideoJob.id;
+      saveState();
+      upsertAvailableVideoJob(currentVideoJob);
+      renderVideoJob(currentVideoJob);
+      renderMultiAgentProposals();
+      renderMultiAgentReview();
+      if (videoRunningStatuses.includes(currentVideoJob.status)) pollVideoJob(currentVideoJob.id, requestToken);
+      if (announce) toast(jobHasStandardOutput(currentVideoJob) ? "已打开可预览任务" : "已打开任务；结果边界已显示");
+      return currentVideoJob;
+    } catch (error) {
+      if (requestToken !== videoJobContextToken) return null;
+      setEditProgress(currentVideoJob?.progress || 0, `任务打开失败：${error.message}`);
+      toast(`任务打开失败：${error.message}`);
+      return null;
+    } finally {
+      renderVideoJobPicker();
+    }
+  }
+
+  async function refreshVideoJobs({ selectId = null, loadSelected = true } = {}) {
+    if (!videoServiceOnline || videoJobsLoading) return;
+    videoJobsLoading = true;
+    renderVideoJobPicker();
     try {
       const response = await fetch(`${videoApiBase}/api/jobs`, { cache: "no-store" });
       const payload = await response.json();
-      const job = payload.jobs?.[0];
-      if (!response.ok || !job) return;
-      currentVideoJob = job;
-      renderVideoJob(job);
-      if (videoRunningStatuses.includes(job.status)) pollVideoJob(job.id);
-    } catch (_) {}
+      if (!response.ok) throw new Error(payload.error || "任务列表读取失败");
+      availableVideoJobs = Array.isArray(payload.jobs) ? payload.jobs.filter(job => job?.id) : [];
+      const preferred = selectId && availableVideoJobs.some(job => job.id === selectId)
+        ? selectId
+        : currentVideoJob?.id && availableVideoJobs.some(job => job.id === currentVideoJob.id)
+          ? currentVideoJob.id
+          : persisted.selectedVideoJobId && availableVideoJobs.some(job => job.id === persisted.selectedVideoJobId)
+            ? persisted.selectedVideoJobId
+            : availableVideoJobs[0]?.id || "";
+      if (loadSelected && preferred) await loadVideoJob(preferred, { announce: false });
+      else if (!preferred) renderDemoPreview(null);
+    } catch (error) {
+      toast(`任务列表读取失败：${error.message}`);
+    } finally {
+      videoJobsLoading = false;
+      renderVideoJobPicker();
+    }
+  }
+
+  async function restoreLatestVideoJob() {
+    await refreshVideoJobs({ selectId: persisted.selectedVideoJobId || null });
   }
 
   async function replanVideoJob() {
@@ -2047,6 +2299,10 @@
   byId("generate-content").addEventListener("click", generateNewContent);
   byId("video-file").addEventListener("change", event => handleVideoSelection(event.target.files?.[0]));
   byId("analyze-video").addEventListener("click", analyzeSelectedVideo);
+  byId("demo-analyze-video").addEventListener("click", analyzeSelectedVideo);
+  $$("[data-edit-mode]").forEach(button => button.addEventListener("click", () => setEditExperienceMode(button.dataset.editMode)));
+  byId("video-job-picker").addEventListener("change", event => loadVideoJob(event.target.value));
+  byId("refresh-video-jobs").addEventListener("click", () => refreshVideoJobs({ selectId: currentVideoJob?.id || persisted.selectedVideoJobId || null }));
   byId("retry-video").addEventListener("click", retryVideoJob);
   byId("replan-video").addEventListener("click", replanVideoJob);
   byId("revise-video").addEventListener("click", submitVideoRevision);
@@ -2131,6 +2387,8 @@
   renderMultiAgentReview();
   renderTutorialCheckpoint();
   renderMemoryRecords();
+  renderVideoJobPicker();
   setScriptMode(persisted.scriptMode || "full");
+  setEditExperienceMode(editExperienceMode, false);
   checkVideoService();
 })();

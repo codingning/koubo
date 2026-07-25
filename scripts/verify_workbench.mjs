@@ -287,10 +287,22 @@ assert(ids.has("asset-review-panel") && ids.has("render-with-assets") && ids.has
 assert(ids.has("rediscover-media") && app.includes("/assets/rediscover") && app.includes("rich-media-first"), "网页缺少富媒体候选重建入口");
 assert(ids.has("auto-review-preview") && ids.has("review-preview-note") && ids.has("review-segments"), "网页缺少完整预览或分段小样审核入口");
 assert(app.includes("/assets/auto-review-preview") && app.includes("reviewBundle"), "网页未接入自动本地素材决策或审核预览包");
+for (const id of ["edit-mode-demo", "video-job-picker", "refresh-video-jobs", "demo-analyze-video", "demo-preview-panel", "demo-sample-video"]) {
+  assert(ids.has(id), `网页缺少普通观众演示入口：${id}`);
+}
+assert(app.includes("refreshVideoJobs") && app.includes("loadVideoJob") && app.includes("/api/jobs/${encodeURIComponent(id)}"), "网页没有接入可选择的真实任务列表");
+assert(app.includes("jobHasStandardOutput") && app.includes("仅样片，不冒充成片") && app.includes("没有标准成片"), "演示模式没有区分标准成片、动态样片与未完成任务");
+assert(app.includes("videoJobContextToken") && app.includes("contextToken !== videoJobContextToken"), "任务切换没有隔离旧轮询响应");
+assert(app.includes('if (attachCurrentContent) uploadHeaders["X-Content-Id"]') && app.includes('script: attachCurrentContent ? editedScript || shortText(currentItem) : ""'), "演示模式仍可能静默绑定隐藏的内容稿");
+assert(app.includes('job?.status === "approved" ? "已通过，可预览和下载"'), "已通过任务仍被错误标记为可返修");
+assert(app.includes('document.body.classList.toggle("is-demo-mode"') && html.includes("上传原片 → 等待处理 → 看真实效果 → 用一句话返修 → 下载成片"), "演示模式没有收敛成普通用户五步路径");
+assert(read("web/styles.css").includes("body.is-demo-mode #view-edit .demo-hide"), "演示模式没有隐藏技术治理区域");
 assert(app.includes("commentary-quotation") && app.includes("data-attribution-text") && app.includes("data-reject-media"), "素材审核板缺少评论性引用、来源署名或拒绝操作");
 assert(serverSource.includes("口播稿没有自然说明所采用的创作者名称"), "外部素材未检查稿件中的创作者披露");
 assert(serverSource.includes("paidGenerationRequiresConfirmation") && serverSource.includes("paymentConfirmed"), "付费素材缺少费用确认门禁");
 assert(serverSource.includes("asset.composited = rendered.has(asset.id)"), "批准素材没有在成功渲染后写入实际合成状态");
+assert(serverSource.includes('hyperframes@0.7.71'), "标准 v4 仍未固定到已验证的 HyperFrames 0.7.71");
+assert(serverSource.includes('result.replace(/卖出第一步/g, "迈出第一步")'), "已知真人原片字幕纠错规则缺失");
 
 const sandbox = { window: {} };
 vm.runInNewContext(read("web/data/content-data.js"), sandbox, { filename: "content-data.js" });
