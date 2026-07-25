@@ -502,6 +502,20 @@
     return artifacts?.url ? artifacts : null;
   }
 
+  function jobKeyframeReview(job) {
+    const stage = job?.workflow?.stages?.keyframes;
+    const gate = job?.workflow?.stages?.keyframe_review;
+    const frames = Array.isArray(stage?.artifacts?.frames) ? stage.artifacts.frames : [];
+    if (!frames.length || !["awaiting_review", "rejected"].includes(gate?.status)) return null;
+    return { stage, gate, frames, version: Number(stage.currentVersion || gate.currentVersion || 0) };
+  }
+
+  function jobMotionReview(job) {
+    const stage = job?.workflow?.stages?.motion_sample;
+    if (!stage?.artifacts?.url || !["awaiting_review", "rejected"].includes(stage.status)) return null;
+    return { stage, artifacts: stage.artifacts, version: Number(stage.currentVersion || 0) };
+  }
+
   function jobDateLabel(job) {
     const date = new Date(job?.updatedAt || job?.createdAt || "");
     if (!Number.isFinite(date.getTime())) return "时间未知";
@@ -512,8 +526,12 @@
 
   function jobResultLabel(job) {
     if (jobHasStandardOutput(job)) return job?.status === "approved" ? "已通过，可预览和下载" : "可预览、返修和下载";
-    if (jobMotionSample(job)) return "只有真实动态样片";
+    const keyframeReview = jobKeyframeReview(job);
+    if (keyframeReview) return keyframeReview.gate.status === "rejected" ? "关键帧已拒绝，已暂停" : `待审核：${keyframeReview.frames.length}张关键帧`;
+    const motionReview = jobMotionReview(job);
+    if (motionReview) return motionReview.stage.status === "rejected" ? "动态样片已拒绝，已暂停" : "待审核：动态样片";
     if (videoRunningStatuses.includes(job?.status)) return "正在处理";
+    if (jobMotionSample(job)) return "只有真实动态样片";
     return "没有标准成片";
   }
 
@@ -563,15 +581,98 @@
   function renderDemoPreview(job = currentVideoJob) {
     const panel = byId("demo-preview-panel");
     const video = byId("demo-sample-video");
-    if (!panel || !video) return;
+    const keyframes = byId("demo-keyframe-grid");
+    const actions = byId("demo-stage-review-actions");
+    const feedback = byId("demo-stage-feedback");
+    const revise = byId("demo-stage-revise");
+    const reject = byId("demo-stage-reject");
+    const approve = byId("demo-stage-approve");
+    if (!panel || !video || !keyframes || !actions || !feedback || !revise || !reject || !approve) return;
     video.pause();
+    video.classList.add("is-hidden");
+    video.removeAttribute("src");
+    keyframes.classList.add("is-hidden");
+    keyframes.innerHTML = "";
+    actions.classList.add("is-hidden");
     if (editExperienceMode !== "demo" || jobHasStandardOutput(job)) {
       panel.classList.add("is-hidden");
-      video.classList.add("is-hidden");
-      video.removeAttribute("src");
       return;
     }
     panel.classList.remove("is-hidden");
+
+    const configureReviewActions = ({ stageId, version, rejected, reviseText, approveText, feedbackTitle, feedbackHelp, boundary, initialFeedback = "" }) => {
+      const context = `${job.id}:${stageId}:${version}`;
+      if (actions.dataset.context !== context) feedback.value = initialFeedback;
+      actions.dataset.context = context;
+      actions.classList.remove("is-hidden");
+      byId("demo-stage-feedback-title").textContent = feedbackTitle;
+      byId("demo-stage-feedback-help").textContent = feedbackHelp;
+      byId("demo-stage-boundary").textContent = boundary;
+      for (const button of [revise, reject, approve]) {
+        button.dataset.demoJobId = job.id;
+        button.dataset.demoStageId = stageId;
+        button.dataset.demoExpectedVersion = String(version);
+        button.disabled = false;
+      }
+      revise.dataset.demoStageAction = "run";
+      reject.dataset.demoStageAction = "reject";
+      approve.dataset.demoStageAction = "approve";
+      revise.textContent = reviseText;
+      reject.textContent = rejected ? "本轮已拒绝，任务已暂停" : "整版不接受，先停在这里";
+      approve.textContent = approveText;
+      reject.disabled = rejected;
+      approve.disabled = rejected;
+    };
+
+    const keyframeReview = jobKeyframeReview(job);
+    if (keyframeReview) {
+      const rejected = keyframeReview.gate.status === "rejected";
+      const sampleDuration = Number(job.workflow?.config?.stages?.motion_sample?.settings?.durationSeconds || 20);
+      byId("demo-preview-title").textContent = rejected ? "这版关键帧已拒绝，任务已暂停" : `先看这 ${keyframeReview.frames.length} 张关键帧`;
+      byId("demo-preview-message").textContent = rejected
+        ? "旧图会保留，不会继续生成样片。如需继续，请写清问题后重做关键帧。"
+        : `只判断构图、文字和信息层级。通过后只生成约 ${sampleDuration} 秒动态样片，不会直接生成全片或发布。`;
+      byId("demo-preview-badge").textContent = rejected ? "已拒绝 · 零后续生成" : "第1道人工审核";
+      keyframes.innerHTML = keyframeReview.frames.map((frame, index) => `<a href="${videoApiBase}${htmlEscape(frame.url)}" target="_blank" rel="noreferrer" title="打开原图"><img src="${videoApiBase}${htmlEscape(frame.url)}?v=${keyframeReview.version}" alt="关键帧 ${index + 1}"><span>${htmlEscape(frame.id || `关键帧 ${index + 1}`)} · ${htmlEscape(frame.purpose || "检查构图和信息层级")}</span></a>`).join("");
+      keyframes.classList.remove("is-hidden");
+      configureReviewActions({
+        stageId: "keyframe_review",
+        version: keyframeReview.version,
+        rejected,
+        reviseText: "按意见重做关键帧",
+        approveText: `通过并生成约${sampleDuration}秒样片`,
+        feedbackTitle: "关键帧哪里需要修改",
+        feedbackHelp: "返修时必须写清具体哪一张、什么问题、希望怎样改。",
+        boundary: rejected ? "当前不会生成任何后续视频；只有你主动重做，工作流才会继续。" : "整版拒绝只记录决定并停在这里；不会自动重做，也不会生成样片。",
+        initialFeedback: rejected ? String(keyframeReview.gate.feedback || "") : "",
+      });
+      return;
+    }
+
+    const motionReview = jobMotionReview(job);
+    if (motionReview) {
+      const rejected = motionReview.stage.status === "rejected";
+      byId("demo-preview-title").textContent = rejected ? "这版动态样片已拒绝，任务已暂停" : "先看真实动态样片";
+      byId("demo-preview-message").textContent = rejected
+        ? "旧样片会保留，不会继续生成完整视频。如需继续，请写清问题后重做样片。"
+        : "重点检查字幕是否跟随、动效是否帮助理解、声音是否清楚。通过后才会生成完整视频。";
+      byId("demo-preview-badge").textContent = rejected ? "已拒绝 · 零后续生成" : "第2道人工审核";
+      video.src = `${videoApiBase}${motionReview.artifacts.url}`;
+      video.classList.remove("is-hidden");
+      configureReviewActions({
+        stageId: "motion_sample",
+        version: motionReview.version,
+        rejected,
+        reviseText: "按意见重做动态样片",
+        approveText: "通过并生成完整视频",
+        feedbackTitle: "样片哪里需要修改",
+        feedbackHelp: "返修时写清时间点、具体问题和目标效果。",
+        boundary: rejected ? "当前不会生成完整视频；只有你主动重做，工作流才会继续。" : "整版拒绝只记录决定并停在这里；不会自动重做，也不会生成完整视频。",
+        initialFeedback: rejected ? String(motionReview.stage.feedback || "") : "",
+      });
+      return;
+    }
+
     const sample = jobMotionSample(job);
     if (sample) {
       byId("demo-preview-title").textContent = "真实动态样片";
@@ -581,8 +682,6 @@
       video.classList.remove("is-hidden");
       return;
     }
-    video.classList.add("is-hidden");
-    video.removeAttribute("src");
     byId("demo-preview-badge").textContent = "真实结果边界";
     if (!job) {
       byId("demo-preview-title").textContent = "还没有选择处理任务";
@@ -596,6 +695,12 @@
     }
     byId("demo-preview-title").textContent = "这个任务没有标准成片";
     byId("demo-preview-message").textContent = "它可能是效果方向证明、历史发布记录或未完成任务，不能在这里当作完整结果返修或下载。请选择带“可预览、返修和下载”的任务，或上传新原片。";
+  }
+
+  function renderReplanAvailability(job = currentVideoJob) {
+    const rejected = ["keyframe_review_rejected", "motion_sample_rejected"].includes(job?.status);
+    const available = !!job?.transcript && !videoRunningStatuses.includes(job.status) && editExperienceMode !== "demo" && !rejected;
+    byId("replan-video").classList.toggle("is-hidden", !available);
   }
 
   function renderEditExperienceMode() {
@@ -617,6 +722,7 @@
     if (currentView === "edit") byId("page-eyebrow").textContent = demo ? "拍完口播，交给工作台" : pageNames.edit[0];
     renderVideoServiceDetail();
     renderDemoPreview(currentVideoJob);
+    renderReplanAvailability(currentVideoJob);
     if (currentVideoJob?.output) showVideoVersion(currentVideoJob.output.version);
   }
 
@@ -998,6 +1104,7 @@
       completed: "已生成",
       awaiting_review: "待审核",
       approved: "已批准",
+      rejected: "已拒绝",
       error: "失败"
     })[status] || status || "等待中";
   }
@@ -1059,8 +1166,11 @@
     const save = `<button class="btn btn-secondary" data-director-save="${stageId}">${hasJob ? "保存本步配置" : "保留本步设置"}</button>`;
     if (!hasJob) return save;
     const feedback = `<textarea class="director-feedback" data-director-feedback rows="2" placeholder="可选：写本次重做意见；留空按当前配置生成"></textarea>`;
-    if (stageId === "keyframe_review") return `${feedback}<div class="inline-actions"><button class="btn btn-secondary" data-director-run="${stageId}" ${running ? "disabled" : ""}>按意见重做关键帧</button><button class="btn btn-primary" data-director-approve="${stageId}" ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>批准并生成动态样片</button></div>`;
-    if (stageId === "motion_sample") return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}" ${workflow?.stages?.keyframe_review?.status !== "approved" || running ? "disabled" : ""}>重做动态样片</button><button class="btn btn-primary" data-director-approve="${stageId}" ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>批准并生成2K全片</button></div>`;
+    const reviewVersion = stageId === "keyframe_review" ? Number(workflow?.stages?.keyframes?.currentVersion || 0) : Number(stage?.currentVersion || 0);
+    const expectedVersion = reviewVersion > 0 ? ` data-director-expected-version="${reviewVersion}"` : "";
+    const reject = `<button class="btn btn-secondary" data-director-reject="${stageId}"${expectedVersion} ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>整版拒绝并暂停</button>`;
+    if (stageId === "keyframe_review") return `${feedback}<div class="inline-actions"><button class="btn btn-secondary" data-director-run="${stageId}"${expectedVersion} ${running ? "disabled" : ""}>按意见重做关键帧</button>${reject}<button class="btn btn-primary" data-director-approve="${stageId}"${expectedVersion} ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>批准并生成动态样片</button></div>`;
+    if (stageId === "motion_sample") return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}"${expectedVersion} ${workflow?.stages?.keyframe_review?.status !== "approved" || running ? "disabled" : ""}>重做动态样片</button>${reject}<button class="btn btn-primary" data-director-approve="${stageId}"${expectedVersion} ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>批准并生成2K全片</button></div>`;
     if (stageId === "full_render") return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}" ${workflow?.stages?.motion_sample?.status !== "approved" || running ? "disabled" : ""}>重新渲染全片</button></div>`;
     return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}" ${running ? "disabled" : ""}>从本步重新生成</button></div>`;
   }
@@ -1130,7 +1240,7 @@
   }
 
   async function handleDirectorAction(button) {
-    const stageId = button.dataset.directorSave || button.dataset.directorRun || button.dataset.directorApprove;
+    const stageId = button.dataset.directorSave || button.dataset.directorRun || button.dataset.directorApprove || button.dataset.directorReject;
     if (!stageId) return;
     const value = readDirectorStageCard(stageId);
     if (!visualWorkflowJob()) {
@@ -1140,13 +1250,25 @@
       toast("本步设置已保留，上传后生效");
       return;
     }
-    const action = button.dataset.directorSave ? "config" : button.dataset.directorApprove ? "approve" : "run";
+    const action = button.dataset.directorSave ? "config" : button.dataset.directorApprove ? "approve" : button.dataset.directorReject ? "reject" : "run";
+    const reviewAction = ["run", "approve", "reject"].includes(action) && ["keyframe_review", "motion_sample"].includes(stageId);
+    const expectedVersion = Number(button.dataset.directorExpectedVersion || 0);
+    if (reviewAction && (!Number.isInteger(expectedVersion) || expectedVersion <= 0)) {
+      toast("审核版本已经变化，请刷新任务后再操作");
+      return;
+    }
     button.disabled = true;
     try {
+      const versionBinding = reviewAction ? { expectedVersion } : {};
+      const body = action === "run"
+        ? { settings: value.settings, prompt: value.prompt, feedback: value.feedback, ...versionBinding }
+        : action === "config"
+          ? { settings: value.settings, prompt: value.prompt }
+          : { feedback: value.feedback, ...versionBinding };
       const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/workflow/stages/${encodeURIComponent(stageId)}/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: value.settings, prompt: value.prompt, feedback: value.feedback })
+        body: JSON.stringify(body)
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "阶段操作失败");
@@ -1154,13 +1276,58 @@
       directorRenderSignature = "";
       renderDirectorWorkflow(currentVideoJob, true);
       if (action === "config") toast("本步配置已保存，未自动重跑");
+      else if (action === "reject") toast("已记录整版不接受，任务停在当前审核门");
       else {
         toast(action === "approve" ? "已批准，工作流开始下一步" : "已启动本步重新生成");
         pollVideoJob(currentVideoJob.id);
       }
     } catch (error) {
       toast(`操作失败：${error.message}`);
+      if (reviewAction && currentVideoJob?.id) await loadVideoJob(currentVideoJob.id, { announce: false });
       button.disabled = false;
+    }
+  }
+
+  async function handleDemoStageAction(button) {
+    const jobId = String(button.dataset.demoJobId || "");
+    const stageId = String(button.dataset.demoStageId || "");
+    const action = String(button.dataset.demoStageAction || "");
+    const expectedVersion = Number(button.dataset.demoExpectedVersion || 0);
+    if (!jobId || currentVideoJob?.id !== jobId || !["keyframe_review", "motion_sample"].includes(stageId) || !["run", "approve", "reject"].includes(action) || !Number.isInteger(expectedVersion) || expectedVersion <= 0) {
+      toast("当前审核任务已经变化，请刷新后再操作");
+      renderDemoPreview(currentVideoJob);
+      return;
+    }
+    const feedback = String(byId("demo-stage-feedback").value || "").trim();
+    if (action === "run" && !feedback) {
+      toast("请先写清具体问题，再启动返修");
+      byId("demo-stage-feedback").focus();
+      return;
+    }
+    const contextToken = videoJobContextToken;
+    const actionButtons = [byId("demo-stage-revise"), byId("demo-stage-reject"), byId("demo-stage-approve")];
+    actionButtons.forEach(item => { item.disabled = true; });
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(jobId)}/workflow/stages/${encodeURIComponent(stageId)}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback, expectedVersion }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "审核操作失败");
+      if (contextToken !== videoJobContextToken || currentVideoJob?.id !== jobId) return;
+      currentVideoJob = payload.job || currentVideoJob;
+      directorRenderSignature = "";
+      renderVideoJob(currentVideoJob);
+      if (action === "reject") toast("已记录整版不接受；没有生成任何后续视频");
+      else {
+        toast(action === "approve" ? "已通过，工作台开始下一步" : "已按意见启动返修");
+        pollVideoJob(jobId, contextToken);
+      }
+    } catch (error) {
+      toast(`审核操作失败：${error.message}`);
+      if (currentVideoJob?.id === jobId) await loadVideoJob(jobId, { announce: false });
+      else renderDemoPreview(currentVideoJob);
     }
   }
 
@@ -1693,8 +1860,10 @@
       breaking_down_content: "正在转录、保守删错句并拆解信息段",
       generating_keyframes: "正在用真人原片生成3—5张关键帧",
       awaiting_keyframe_review: "关键帧已完成，请逐张检查后批准",
+      keyframe_review_rejected: "这版关键帧已拒绝，任务已暂停",
       rendering_sample: "正在渲染15—25秒HyperFrames动态样片",
       awaiting_sample_review: "动态样片已完成，请观看后批准",
+      motion_sample_rejected: "这版动态样片已拒绝，任务已暂停",
       rendering_final: "正在把批准的设计扩展到2K完整视频并执行QA",
       awaiting_asset_review: "素材候选已准备，可逐条审核", revising: "正在按你的意见生成新版本", awaiting_review: "完整成片已生成，可以预览和返修", approved: "已审核通过", error: "自动处理失败",
       effect_proof_approved: "效果方向已确认，但这不是标准成片任务",
@@ -1755,7 +1924,7 @@
     setEditProgress(job.progress || 0, `${statusLabel(job)}${detail}`);
     if (job.analysis) renderEditAnalysis(job);
     byId("retry-video").classList.toggle("is-hidden", job.status !== "error");
-    byId("replan-video").classList.toggle("is-hidden", !(job.transcript && !videoRunningStatuses.includes(job.status)));
+    renderReplanAvailability(job);
     renderDirectorWorkflow(job);
     renderMediaAssets(job);
     renderMultiAgentStatus();
@@ -2300,6 +2469,9 @@
   byId("video-file").addEventListener("change", event => handleVideoSelection(event.target.files?.[0]));
   byId("analyze-video").addEventListener("click", analyzeSelectedVideo);
   byId("demo-analyze-video").addEventListener("click", analyzeSelectedVideo);
+  for (const id of ["demo-stage-revise", "demo-stage-reject", "demo-stage-approve"]) {
+    byId(id).addEventListener("click", event => handleDemoStageAction(event.currentTarget));
+  }
   $$("[data-edit-mode]").forEach(button => button.addEventListener("click", () => setEditExperienceMode(button.dataset.editMode)));
   byId("video-job-picker").addEventListener("change", event => loadVideoJob(event.target.value));
   byId("refresh-video-jobs").addEventListener("click", () => refreshVideoJobs({ selectId: currentVideoJob?.id || persisted.selectedVideoJobId || null }));
@@ -2328,7 +2500,7 @@
     if (button && card) transitionMemory(card, button.dataset.memoryAction);
   });
   byId("director-stage-cards").addEventListener("click", event => {
-    const button = event.target.closest("[data-director-save],[data-director-run],[data-director-approve]");
+    const button = event.target.closest("[data-director-save],[data-director-run],[data-director-approve],[data-director-reject]");
     if (button) handleDirectorAction(button);
   });
   byId("media-assets").addEventListener("click", event => {

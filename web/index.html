@@ -394,7 +394,21 @@
               <div><h3 id="demo-preview-title">效果预览暂不可用</h3><p id="demo-preview-message"></p></div>
               <span id="demo-preview-badge" class="mini-label">真实结果边界</span>
             </div>
+            <div id="demo-keyframe-grid" class="demo-keyframe-grid is-hidden"></div>
             <video id="demo-sample-video" class="demo-sample-video is-hidden" controls playsinline preload="metadata"></video>
+            <div id="demo-stage-review-actions" class="demo-stage-review-actions is-hidden">
+              <label for="demo-stage-feedback">
+                <strong id="demo-stage-feedback-title">哪里需要修改</strong>
+                <small id="demo-stage-feedback-help">写清具体画面、字幕、动效或声音问题。</small>
+              </label>
+              <textarea id="demo-stage-feedback" rows="3" placeholder="例如：第二张字太小；结尾提示词需要完整保留。"></textarea>
+              <div class="inline-actions">
+                <button id="demo-stage-revise" class="btn btn-secondary">按意见重做</button>
+                <button id="demo-stage-reject" class="btn btn-secondary">整版不接受，先停在这里</button>
+                <button id="demo-stage-approve" class="btn btn-primary">通过并进入下一步</button>
+              </div>
+              <small id="demo-stage-boundary" class="demo-stage-boundary">未通过时不会继续生成后续视频。</small>
+            </div>
           </article>
 
           <article id="director-workflow-panel" class="panel director-workflow-panel demo-hide">

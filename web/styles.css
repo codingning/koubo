@@ -374,6 +374,16 @@ a { color: inherit; }
 .demo-preview-panel { margin-bottom: 16px; border-color: #bce5df; background: linear-gradient(180deg,#fff,#f7fcfb); }
 .demo-preview-panel .panel-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
 .demo-sample-video { width: 100%; max-height: 560px; display: block; border-radius: 14px; background: #08141c; }
+.demo-keyframe-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.demo-keyframe-grid a { min-width: 0; display: block; overflow: hidden; border: 1px solid #bce5df; border-radius: 12px; color: var(--text); background: #fff; text-decoration: none; box-shadow: var(--shadow-sm); }
+.demo-keyframe-grid img { width: 100%; aspect-ratio: 16/9; display: block; object-fit: cover; background: #08141c; }
+.demo-keyframe-grid span { min-height: 58px; padding: 9px 10px; display: block; color: #31586e; font-size: 11px; font-weight: 800; line-height: 1.5; }
+.demo-stage-review-actions { margin-top: 15px; padding: 14px; border: 1px solid #bce5df; border-radius: 12px; background: #f6fcfb; }
+.demo-stage-review-actions label, .demo-stage-review-actions label strong, .demo-stage-review-actions label small { display: block; }
+.demo-stage-review-actions label small { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.demo-stage-review-actions textarea { width: 100%; margin: 10px 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--text); background: #fff; resize: vertical; font: inherit; }
+.demo-stage-review-actions .inline-actions { flex-wrap: wrap; }
+.demo-stage-boundary { margin-top: 9px; display: block; color: var(--muted); line-height: 1.55; }
 body.is-demo-mode #view-edit .demo-mode-intro { display: flex; }
 body.is-demo-mode #view-edit .demo-flow-rail { display: grid; }
 body.is-demo-mode #view-edit .demo-upload-action { display: block; }
@@ -496,6 +506,7 @@ body.is-demo-mode.is-edit-view .top-actions { display: none; }
   .media-asset { grid-template-columns: 1fr; }
   .edit-experience-toolbar { grid-template-columns: 1fr; align-items: stretch; }
   .demo-flow-rail { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .demo-keyframe-grid { grid-template-columns: 1fr; }
   .demo-mode-intro { align-items: flex-start; flex-direction: column; }
   .demo-mode-intro small { max-width: none; text-align: left; }
   .roadmap-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }

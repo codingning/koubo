@@ -112,6 +112,76 @@ export function ensureVisualWorkflowState(job, config) {
   return job.workflow;
 }
 
+function visualReviewError(message, statusCode = 409) {
+  return Object.assign(new Error(message), { statusCode });
+}
+
+export function visualGateVersion(job, stageId) {
+  if (stageId === "keyframe_review") return Number(job?.workflow?.stages?.keyframes?.currentVersion || 0);
+  if (stageId === "motion_sample") return Number(job?.workflow?.stages?.motion_sample?.currentVersion || 0);
+  throw visualReviewError("该阶段不使用审核版本", 400);
+}
+
+export function assertVisualGateVersion(job, stageId, expectedVersion) {
+  const expected = Number(expectedVersion);
+  if (!Number.isInteger(expected) || expected <= 0) throw visualReviewError("缺少有效的审核版本", 400);
+  const actual = visualGateVersion(job, stageId);
+  if (actual !== expected) throw visualReviewError(`审核版本已更新：页面为 v${expected}，当前为 v${actual}`);
+  return actual;
+}
+
+export function rejectVisualGateState(job, stageId, feedback = "", at = new Date().toISOString()) {
+  const workflow = job?.workflow;
+  if (!workflow?.stages) throw visualReviewError("视觉工作流尚未初始化");
+  const reason = String(feedback || "").trim().slice(0, 4000) || "本轮全部不接受";
+  let version = 0;
+
+  if (stageId === "keyframe_review") {
+    const source = workflow.stages.keyframes;
+    const gate = workflow.stages.keyframe_review;
+    if (!source?.artifacts?.frames?.length || source.status === "error") throw visualReviewError("还没有可拒绝的关键帧");
+    if (gate?.status !== "awaiting_review") throw visualReviewError("当前关键帧不在待审核状态");
+    version = Number(source.currentVersion || gate.currentVersion || 0);
+    source.status = "rejected";
+    source.approvedVersion = null;
+    source.rejectedVersion = version;
+    source.rejectedAt = at;
+    source.updatedAt = at;
+    delete source.approvedAt;
+    gate.status = "rejected";
+    gate.approvedVersion = null;
+    gate.rejectedVersion = version;
+    gate.feedback = reason;
+    gate.rejectedAt = at;
+    gate.updatedAt = at;
+    delete gate.approvedAt;
+    job.status = "keyframe_review_rejected";
+    job.progress = visualStageProgress("keyframes", "complete");
+  } else if (stageId === "motion_sample") {
+    const stage = workflow.stages.motion_sample;
+    if (!stage?.artifacts?.url || stage.status === "error") throw visualReviewError("还没有可拒绝的动态样片");
+    if (stage.status !== "awaiting_review") throw visualReviewError("当前动态样片不在待审核状态");
+    version = Number(stage.currentVersion || 0);
+    stage.status = "rejected";
+    stage.approvedVersion = null;
+    stage.rejectedVersion = version;
+    stage.feedback = reason;
+    stage.rejectedAt = at;
+    stage.updatedAt = at;
+    delete stage.approvedAt;
+    job.status = "motion_sample_rejected";
+    job.progress = visualStageProgress("motion_sample", "complete");
+  } else {
+    throw visualReviewError("该阶段不使用拒绝接口", 400);
+  }
+
+  workflow.currentStage = stageId;
+  workflow.updatedAt = at;
+  workflow.audit ||= [];
+  workflow.audit.push({ type: "stage-rejected", stageId, version, feedback: reason, at });
+  return { stageId, version, feedback: reason, at };
+}
+
 export function invalidateVisualStages(workflow, afterStageId, reason = "上游阶段生成了新版本") {
   const index = VISUAL_STAGE_ORDER.indexOf(afterStageId);
   if (index < 0) return [];
@@ -125,6 +195,10 @@ export function invalidateVisualStages(workflow, afterStageId, reason = "上游�
     stage.artifacts = null;
     stage.invalidatedAt = new Date().toISOString();
     stage.invalidatedReason = reason;
+    delete stage.approvedAt;
+    delete stage.rejectedAt;
+    delete stage.rejectedVersion;
+    delete stage.feedback;
   }
   workflow.audit ||= [];
   if (invalidated.length) workflow.audit.push({ type: "downstream-invalidated", afterStageId, stages: invalidated, reason, at: new Date().toISOString() });

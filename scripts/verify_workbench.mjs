@@ -209,7 +209,9 @@ for (const route of ["/replan", "/rerender", "/cover", "/assets", "/approve"]) {
   assert(serverSource.includes(route), `Missing workflow endpoint: ${route}`);
 }
 for (const route of ["/api/video-workflow/defaults", "/api/video-workflow/drafts", "workflow\\/stages\\/"]) assert(serverSource.includes(route), `Missing visual-director v4 endpoint: ${route}`);
-for (const capability of ["runStyleResearchStage", "runContentBreakdownStage", "runKeyframeStage", "runMotionSampleStage", "runFullRenderStage", "runVisualWorkflowChain", "approveVisualGate"]) assert(serverSource.includes(`function ${capability}`), `Missing visual-director stage implementation: ${capability}`);
+for (const capability of ["runStyleResearchStage", "runContentBreakdownStage", "runKeyframeStage", "runMotionSampleStage", "runFullRenderStage", "runVisualWorkflowChain", "approveVisualGate", "rejectVisualGate"]) assert(serverSource.includes(`function ${capability}`), `Missing visual-director stage implementation: ${capability}`);
+assert(visualDirectorSource.includes("export function rejectVisualGateState"), "视觉导演缺少不触发生成的正式审核拒绝状态迁移");
+assert(visualDirectorSource.includes("export function assertVisualGateVersion"), "视觉审核动作没有绑定用户实际看到的产物版本");
 const keyframeSchemaSource = sourceBetween(bridgeSource, "def keyframe_direction", "def motion_sample_direction");
 for (const token of ["presentation", "showInternalLabels", "showSafeGuides", "visualIntent", "factCards", "primaryVisual", "memo-action", "copy-prompt"]) {
   assert(keyframeSchemaSource.includes(token), `关键帧AI合同缺少字段或类型：${token}`);
@@ -221,8 +223,15 @@ for (const token of ["presentation", "visualIntent", "factCards"]) {
 assert(keyframeNormalizerSource.includes('showInternalLabels: presentation.showInternalLabels === true') && keyframeNormalizerSource.includes('showSafeGuides: presentation.showSafeGuides === true'), "关键帧规范化没有安全默认关闭内部标签或安全框");
 const keyframeStageSource = sourceBetween(serverSource, "async function runKeyframeStage", "async function ensurePreviewAssetDecisions");
 assert(keyframeStageSource.includes("previous,") && keyframeStageSource.includes("feedback,") && keyframeStageSource.includes("custom_prompt: feedback ? job.workflow.config.stages.keyframe_review.prompt"), "关键帧返修没有把上一版、反馈和返修提示词传给下一版");
+const executeVisualStageSource = sourceBetween(serverSource, "async function executeVisualStage", "async function runVisualWorkflowChain");
+for (const token of ["delete stage.approvedAt", "delete stage.rejectedAt", "delete stage.rejectedVersion", "delete stage.feedback"]) assert(executeVisualStageSource.includes(token), `视觉阶段重做未清理旧审核状态：${token}`);
 const workflowStageRouteSource = sourceBetween(serverSource, "const workflowStageMatch", "const retryMatch");
 assert(workflowStageRouteSource.includes('requestedStageId === "keyframe_review" && action === "run" ? "keyframes"') && workflowStageRouteSource.includes("runVisualWorkflowChain(job, stageId, feedback)"), "keyframe_review/run 没有携带 feedback 进入关键帧新版本");
+assert(workflowStageRouteSource.includes("config|run|approve|reject") && workflowStageRouteSource.includes('action === "reject"'), "视觉审核路由缺少整版拒绝动作");
+assert(workflowStageRouteSource.includes("assertVisualGateVersion(job, requestedStageId, body.expectedVersion)"), "视觉审核路由没有在写操作前校验 expectedVersion");
+const runGateIndex = workflowStageRouteSource.indexOf('if (stageId === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved")');
+const runConfigIndex = workflowStageRouteSource.indexOf("if (body.settings !== undefined || body.prompt !== undefined) await updateVisualStageConfig");
+assert(workflowStageRouteSource.includes('if (action === "run")') && runGateIndex >= 0 && runConfigIndex > runGateIndex, "视觉阶段 run 没有在配置落盘前检查上游审核门");
 const motionSampleStageSource = sourceBetween(serverSource, "async function runMotionSampleStage", "async function normalizeHyperframesMaster");
 const fullRenderStageSource = sourceBetween(serverSource, "async function runFullRenderStage", "function visualJobStatus");
 assert(motionSampleStageSource.includes("keyframeDirection:"), "动态样片构建没有传播已批准关键帧的 presentation/visualIntent");
@@ -423,11 +432,16 @@ assert(ids.has("asset-review-panel") && ids.has("render-with-assets") && ids.has
 assert(ids.has("rediscover-media") && app.includes("/assets/rediscover") && app.includes("rich-media-first"), "网页缺少富媒体候选重建入口");
 assert(ids.has("auto-review-preview") && ids.has("review-preview-note") && ids.has("review-segments"), "网页缺少完整预览或分段小样审核入口");
 assert(app.includes("/assets/auto-review-preview") && app.includes("reviewBundle"), "网页未接入自动本地素材决策或审核预览包");
-for (const id of ["edit-mode-demo", "video-job-picker", "refresh-video-jobs", "demo-analyze-video", "demo-preview-panel", "demo-sample-video"]) {
+for (const id of ["edit-mode-demo", "video-job-picker", "refresh-video-jobs", "demo-analyze-video", "demo-preview-panel", "demo-keyframe-grid", "demo-sample-video", "demo-stage-review-actions", "demo-stage-feedback", "demo-stage-revise", "demo-stage-reject", "demo-stage-approve"]) {
   assert(ids.has(id), `网页缺少普通观众演示入口：${id}`);
 }
 assert(app.includes("refreshVideoJobs") && app.includes("loadVideoJob") && app.includes("/api/jobs/${encodeURIComponent(id)}"), "网页没有接入可选择的真实任务列表");
-assert(app.includes("jobHasStandardOutput") && app.includes("仅样片，不冒充成片") && app.includes("没有标准成片"), "演示模式没有区分标准成片、动态样片与未完成任务");
+assert(app.includes("jobHasStandardOutput") && app.includes("jobKeyframeReview") && app.includes("jobMotionReview") && app.includes("仅样片，不冒充成片") && app.includes("没有标准成片"), "演示模式没有区分标准成片、两道人审与未完成任务");
+assert(app.includes("整版不接受，先停在这里") && app.includes("已记录整版不接受；没有生成任何后续视频"), "演示模式缺少零生成的整版拒绝语义");
+assert(app.includes('body: JSON.stringify({ feedback, expectedVersion })') && app.includes('action === "run" && !feedback'), "演示审核没有使用版本绑定的最小请求体或空反馈返修门禁");
+assert(app.includes("demoJobId") && app.includes("currentVideoJob?.id !== jobId"), "演示审核按钮没有绑定当前任务，存在跨任务误操作风险");
+assert(app.includes("demoExpectedVersion") && app.includes("directorExpectedVersion"), "两种审核界面没有绑定当前关键帧或样片版本");
+assert(app.includes('editExperienceMode !== "demo" && !rejected') && app.includes("renderReplanAvailability"), "演示模式或已拒绝任务仍可能显示整链重新规划入口");
 assert(app.includes("videoJobContextToken") && app.includes("contextToken !== videoJobContextToken"), "任务切换没有隔离旧轮询响应");
 assert(app.includes('if (attachCurrentContent) uploadHeaders["X-Content-Id"]') && app.includes('script: attachCurrentContent ? editedScript || shortText(currentItem) : ""'), "演示模式仍可能静默绑定隐藏的内容稿");
 assert(app.includes('job?.status === "approved" ? "已通过，可预览和下载"'), "已通过任务仍被错误标记为可返修");

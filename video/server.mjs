@@ -13,6 +13,8 @@ import {
   createVisualWorkflowState,
   ensureVisualWorkflowState,
   invalidateVisualStages,
+  assertVisualGateVersion,
+  rejectVisualGateState,
   visualStageProgress,
   normalizeVisualStyleReport,
   normalizeContentBreakdown,
@@ -2974,6 +2976,10 @@ async function executeVisualStage(job, stageId, feedback = "") {
   stage.currentVersion = version;
   stage.status = "running";
   stage.approvedVersion = null;
+  delete stage.approvedAt;
+  delete stage.rejectedAt;
+  delete stage.rejectedVersion;
+  delete stage.feedback;
   stage.runs = [...(stage.runs || []), runRecord];
   stage.updatedAt = new Date().toISOString();
   workflow.currentStage = stageId;
@@ -3004,6 +3010,11 @@ async function executeVisualStage(job, stageId, feedback = "") {
       gate.currentVersion = version;
       gate.artifacts = artifacts;
       gate.updatedAt = stage.updatedAt;
+      gate.approvedVersion = null;
+      delete gate.approvedAt;
+      delete gate.rejectedAt;
+      delete gate.rejectedVersion;
+      delete gate.feedback;
       workflow.currentStage = "keyframe_review";
       job.status = "awaiting_keyframe_review";
     } else if (stageId === "motion_sample") {
@@ -3090,6 +3101,7 @@ async function approveVisualGate(job, stageId, body = {}) {
     const source = workflow.stages.keyframes;
     if (!source?.artifacts?.frames?.length || source.status === "error") throw Object.assign(new Error("还没有可批准的关键帧"), { statusCode: 409 });
     const gate = workflow.stages.keyframe_review;
+    if (gate?.status !== "awaiting_review") throw Object.assign(new Error("当前关键帧不在待审核状态"), { statusCode: 409 });
     gate.status = "approved";
     gate.approvedVersion = source.currentVersion;
     gate.feedback = String(body.feedback || "");
@@ -3104,6 +3116,7 @@ async function approveVisualGate(job, stageId, body = {}) {
   if (stageId === "motion_sample") {
     const stage = workflow.stages.motion_sample;
     if (!stage?.artifacts?.url || stage.status === "error") throw Object.assign(new Error("还没有可批准的动态样片"), { statusCode: 409 });
+    if (stage.status !== "awaiting_review") throw Object.assign(new Error("当前动态样片不在待审核状态"), { statusCode: 409 });
     stage.status = "approved";
     stage.approvedVersion = stage.currentVersion;
     stage.feedback = String(body.feedback || "");
@@ -3114,6 +3127,13 @@ async function approveVisualGate(job, stageId, body = {}) {
     return;
   }
   throw Object.assign(new Error("该阶段不使用此批准接口"), { statusCode: 400 });
+}
+
+async function rejectVisualGate(job, stageId, body = {}) {
+  ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  const rejection = rejectVisualGateState(job, stageId, body.feedback);
+  await saveJob(job);
+  return rejection;
 }
 
 async function renderVersion(job, version) {
@@ -3919,7 +3939,7 @@ const server = http.createServer(async (req, res) => {
     }
     const jobMatch = pathname.match(/^\/api\/jobs\/([^/]+)$/);
     if (req.method === "GET" && jobMatch) return json(res, 200, { job: await readJob(jobMatch[1]) });
-    const workflowStageMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/workflow\/stages\/([^/]+)\/(config|run|approve)$/);
+    const workflowStageMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/workflow\/stages\/([^/]+)\/(config|run|approve|reject)$/);
     if (req.method === "POST" && workflowStageMatch) {
       const [, jobId, requestedStageId, action] = workflowStageMatch;
       const body = await readBodyJson(req, 256 * 1024);
@@ -3932,14 +3952,23 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { job, stage });
       }
       if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      if (body.settings !== undefined || body.prompt !== undefined) await updateVisualStageConfig(job, requestedStageId, body);
+      if (["run", "approve", "reject"].includes(action) && ["keyframe_review", "motion_sample"].includes(requestedStageId)) {
+        assertVisualGateVersion(job, requestedStageId, body.expectedVersion);
+      }
+      if (action === "run") {
+        if (stageId === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") return json(res, 409, { error: "请先批准关键帧" });
+        if (stageId === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+        if (body.settings !== undefined || body.prompt !== undefined) await updateVisualStageConfig(job, requestedStageId, body);
+      }
       if (action === "approve") {
         await approveVisualGate(job, requestedStageId, body);
         return json(res, 202, { job, nextStage: requestedStageId === "keyframe_review" ? "motion_sample" : "full_render" });
       }
+      if (action === "reject") {
+        const rejection = await rejectVisualGate(job, requestedStageId, body);
+        return json(res, 200, { job, rejection });
+      }
       const feedback = String(body.feedback || "").trim();
-      if (stageId === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") return json(res, 409, { error: "请先批准关键帧" });
-      if (stageId === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
       runVisualWorkflowChain(job, stageId, feedback);
       return json(res, 202, { job, stageId });
     }
