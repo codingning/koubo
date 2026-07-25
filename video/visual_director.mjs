@@ -287,6 +287,50 @@ function evenlySpaced(items, count) {
   return unique(result);
 }
 
+const KEYFRAME_PRIMARY_VISUAL_KINDS = new Set(["inherit", "hook-contrast", "memo-action", "copy-prompt"]);
+
+function inferKeyframePrimaryVisualKind(frame, segment) {
+  const text = `${frame?.composition || ""} ${segment?.rightVisual?.type || ""} ${segment?.rightVisual?.description || ""}`;
+  if (/(备忘录|便签|记录动作|笔记)/.test(text)) return "memo-action";
+  if (/(可复制|复制.*指令|指令卡|提示词)/.test(text)) return "copy-prompt";
+  if (/(工具.*第一步|第一步.*工具|工具.*行动|行动.*工具|对比)/.test(text)) return "hook-contrast";
+  return "inherit";
+}
+
+function normalizeKeyframeFactCards(value) {
+  return array(value).slice(0, 3).map((fact, index) => ({
+    label: cleanText(fact?.label || ["重点", "方法", "结果"][index], 12),
+    value: cleanText(fact?.value || fact?.text, 48),
+  })).filter((fact) => fact.label || fact.value);
+}
+
+function normalizeKeyframeVisualIntent(raw, segment, frame = {}) {
+  const value = isObject(raw) ? raw : {};
+  const primaryRaw = isObject(value.primaryVisual) ? value.primaryVisual : {};
+  const inferredKind = inferKeyframePrimaryVisualKind(frame, segment);
+  const requestedKind = cleanText(primaryRaw.kind, 40);
+  const kind = KEYFRAME_PRIMARY_VISUAL_KINDS.has(requestedKind) ? requestedKind : inferredKind;
+  let lines = array(primaryRaw.lines).map((line) => cleanText(line, 140)).filter(Boolean).slice(0, 6);
+  if (!lines.length && kind !== "inherit") lines = array(segment?.rightVisual?.data).map((line) => cleanText(line, 140)).filter(Boolean).slice(0, 6);
+  if (!lines.length && kind === "hook-contrast") {
+    lines = [segment?.factCards?.[0]?.value, segment?.factCards?.[2]?.value].map((line) => cleanText(line, 140)).filter(Boolean);
+  }
+  const hasFactCards = Object.prototype.hasOwnProperty.call(value, "factCards");
+  const optionalText = (key, limit) => Object.prototype.hasOwnProperty.call(value, key) && value[key] !== null ? cleanText(value[key], limit) : null;
+  return {
+    title: optionalText("title", 72),
+    keyLine: optionalText("keyLine", 90),
+    summary: optionalText("summary", 220),
+    factCards: hasFactCards && value.factCards !== null ? normalizeKeyframeFactCards(value.factCards) : null,
+    primaryVisual: {
+      kind,
+      lines,
+      text: cleanText(primaryRaw.text || (kind === "copy-prompt" ? lines.join("，") : ""), 300),
+      highlights: array(primaryRaw.highlights).map((item) => cleanText(item, 80)).filter(Boolean).slice(0, 5),
+    },
+  };
+}
+
 export function normalizeKeyframeDirection(raw, breakdown, count = 4) {
   const value = isObject(raw) ? raw : {};
   const target = Math.max(3, Math.min(5, Math.round(Number(count || 4))));
@@ -306,11 +350,17 @@ export function normalizeKeyframeDirection(raw, breakdown, count = 4) {
       motionBefore: cleanText(supplied.motionBefore || "主标题先出现，人物保持右侧主卡。", 300),
       motionAfter: cleanText(supplied.motionAfter || "事实卡依次弹出，右侧二维视觉展开。", 300),
       validationFocus: cleanText(supplied.validationFocus || "检查标题清晰度、信息层级、颜色统一和脸部中轴安全。", 400),
+      visualIntent: normalizeKeyframeVisualIntent(supplied.visualIntent, segment, supplied),
     };
   });
+  const presentation = isObject(value.presentation) ? value.presentation : {};
   return {
     schemaVersion: 1,
     rationale: cleanText(value.rationale || "覆盖开场、方法、证据和结尾四类关键视觉状态。", 800),
+    presentation: {
+      showInternalLabels: presentation.showInternalLabels === true,
+      showSafeGuides: presentation.showSafeGuides === true,
+    },
     frames,
     revisionSummary: cleanText(value.revisionSummary, 800),
     generatedAt: new Date().toISOString(),
@@ -369,7 +419,9 @@ export function normalizeFullDirection(raw, breakdown) {
         visualMode: cleanText(item.visualMode || segment.rightVisual?.type || "二维信息动效", 120),
         titleAt: clampNumber(item.titleAt, 0.08, 0, 3),
         summaryAt: clampNumber(item.summaryAt, 0.85, 0.2, 4),
-        factsAt: array(item.factsAt).length === 3 ? item.factsAt.map((time, factIndex) => clampNumber(time, 1.65 + factIndex * 0.32, 0.4, 6)) : [1.65, 1.97, 2.29],
+        factsAt: Array.isArray(item.factsAt)
+          ? item.factsAt.slice(0, 3).map((time, factIndex) => clampNumber(time, 1.65 + factIndex * 0.32, 0.4, 6))
+          : [1.65, 1.97, 2.29],
         visualAt: clampNumber(item.visualAt, Math.min(4.2, Math.max(2.7, (segment.editedTime.end - segment.editedTime.start) * 0.42)), 1.5, 10),
         transition: cleanText(item.transition || (index % 2 ? "轻推入" : "淡入＋缩放"), 120),
         reason: cleanText(item.reason || "按本段信息结构安排，不机械重复上一段。", 400),
@@ -378,6 +430,28 @@ export function normalizeFullDirection(raw, breakdown) {
     qaExpectations: unique(array(value.qaExpectations).map((item) => cleanText(item, 300))).slice(0, 20),
     generatedAt: new Date().toISOString(),
   };
+}
+
+export function lockedKeyframeVisualWindows(breakdown, keyframeDirection) {
+  const byId = new Map(array(breakdown?.segments).map((segment) => [segment.id, segment]));
+  return array(keyframeDirection?.frames).flatMap((frame) => {
+    const segment = byId.get(frame?.segmentId);
+    if (!segment) return [];
+    const intent = normalizeKeyframeVisualIntent(frame?.visualIntent, segment, frame || {});
+    if (intent.primaryVisual.kind === "inherit") return [];
+    const start = Number(segment.editedTime?.start);
+    const end = Number(segment.editedTime?.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+    return [{ segmentId: segment.id, kind: intent.primaryVisual.kind, start, end }];
+  });
+}
+
+export function findLockedVisualIntentConflict(asset, breakdown, keyframeDirection) {
+  const start = Number(asset?.placement?.start);
+  const end = Number(asset?.placement?.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  return lockedKeyframeVisualWindows(breakdown, keyframeDirection)
+    .find((window) => end > window.start && start < window.end) || null;
 }
 
 function html(value) {
@@ -406,6 +480,49 @@ function visualMarkup(segment) {
   if (kind === "qa") return `<div class="qa-board v-step"><div class="qa-scan"></div>${segment.factCards.map((fact, index) => `<div class="qa-row v-step"><span>0${index + 1}</span><b>${html(fact.label)}</b><small>${html(fact.value)}</small><i>✓</i></div>`).join("")}</div>`;
   if (kind === "chart") return `<div class="chart v-step">${segment.factCards.map((fact, index) => `<article><i style="--height:${46 + index * 18}%"></i><b>${html(fact.label)}</b><small>${html(fact.value)}</small></article>`).join("")}</div>`;
   return `<div class="visual-cards">${segment.factCards.map((fact, index) => `<article class="v-step"><span>0${index + 1}</span><b>${html(fact.label)}</b><small>${html(fact.value)}</small></article>`).join("")}</div>`;
+}
+
+function highlightedHtml(text, highlights = []) {
+  let output = html(text);
+  for (const highlight of unique(array(highlights).map((item) => cleanText(item, 80)))) {
+    const escaped = html(highlight);
+    if (escaped) output = output.split(escaped).join(`<mark>${escaped}</mark>`);
+  }
+  return output;
+}
+
+function resolveScenePresentation(segment, frame) {
+  const intent = normalizeKeyframeVisualIntent(frame?.visualIntent, segment, frame || {});
+  const kind = intent.primaryVisual.kind;
+  const inheritedFacts = array(segment?.factCards);
+  const factCards = intent.factCards === null
+    ? (["hook-contrast", "memo-action", "copy-prompt"].includes(kind) ? [] : inheritedFacts)
+    : intent.factCards;
+  return {
+    title: intent.title === null ? cleanText(segment?.upperLeftTitle, 72) : intent.title,
+    keyLine: intent.keyLine === null ? cleanText(segment?.subtitleOrKeyLine, 90) : intent.keyLine,
+    summary: intent.summary === null ? cleanText(segment?.oneSentenceSummary, 220) : intent.summary,
+    factCards,
+    primaryVisual: intent.primaryVisual,
+  };
+}
+
+function primaryVisualMarkup(presentation, segment) {
+  const primary = presentation.primaryVisual || { kind: "inherit", lines: [], text: "", highlights: [] };
+  if (primary.kind === "hook-contrast") {
+    const action = primary.lines[1] || primary.lines.at(-1) || "迈出第一步";
+    return `<div class="hook-contrast"><div class="tool-stack v-step"><span></span><span></span><span></span><b>AI 工具</b></div><em class="v-step">→</em><div class="first-step v-step"><small>现在只做</small><b>${html(action)}</b></div></div>`;
+  }
+  if (primary.kind === "memo-action") {
+    const note = primary.lines[1] || primary.lines[0] || presentation.summary || "写下一件最想让 AI 解决的麻烦";
+    const next = primary.lines[2] || "写完后告诉 AI";
+    return `<div class="memo-card v-step"><header><i></i><b>备忘录</b><span>完成</span></header><div class="memo-note"><small>今天</small><p>${html(note)}</p><i class="memo-cursor"></i></div><footer><span>✓</span><b>${html(next)}</b></footer></div>`;
+  }
+  if (primary.kind === "copy-prompt") {
+    const prompt = primary.text || primary.lines.join("，") || "别给计划，只给我一个30秒内能完成的动作。做完，再给下一步。";
+    return `<div class="copy-prompt-card v-step"><header><span>可复制</span><i>⌘ C</i></header><blockquote>${highlightedHtml(prompt, primary.highlights)}</blockquote><footer>一次只推动一步</footer></div>`;
+  }
+  return visualMarkup({ ...segment, factCards: presentation.factCards });
 }
 
 async function linkOrCopy(source, target) {
@@ -454,6 +571,10 @@ export async function buildHyperframesDirectorProject(options) {
   if (fs.existsSync(gsapSource) && !fs.existsSync(path.join(assetsDir, "gsap.min.js"))) await fsp.copyFile(gsapSource, path.join(assetsDir, "gsap.min.js"));
 
   const allSegments = array(breakdown?.segments);
+  const keyframeBySegmentId = new Map(array(keyframeDirection?.frames).map((frame) => [frame.segmentId, frame]));
+  const keyframePresentation = isObject(keyframeDirection?.presentation) ? keyframeDirection.presentation : {};
+  const showInternalLabels = keyframePresentation.showInternalLabels === true;
+  const showSafeGuides = keyframePresentation.showSafeGuides === true;
   let duration;
   let scenes;
   let snapshotTimes = [];
@@ -470,12 +591,19 @@ export async function buildHyperframesDirectorProject(options) {
     const total = Math.max(0.1, ...allSegments.map((segment) => Number(segment.editedTime?.end || 0)));
     const end = rangeEnd === null ? total : Math.min(total, Number(rangeEnd));
     duration = Math.max(0.1, end - Number(rangeStart || 0));
-    scenes = allSegments.map((segment) => ({ segment, window: sceneWindow(segment, rangeStart, end) })).filter((item) => item.window);
+    scenes = allSegments.map((segment) => ({ segment, frame: keyframeBySegmentId.get(segment.id) || null, window: sceneWindow(segment, rangeStart, end) })).filter((item) => item.window);
     snapshotTimes = scenes.slice(0, 5).map((item) => Number((item.window.start + Math.min(3.2, item.window.duration * 0.5)).toFixed(3)));
   }
+  scenes = scenes.map((scene) => ({ ...scene, presentation: resolveScenePresentation(scene.segment, scene.frame) }));
 
   const copiedAssets = [];
+  const skippedAssetConflicts = [];
   for (const asset of approvedAssets.filter((item) => item?.path && fs.existsSync(item.path) && item.placement)) {
+    const conflict = findLockedVisualIntentConflict(asset, breakdown, keyframeDirection);
+    if (conflict) {
+      skippedAssetConflicts.push({ assetId: asset.id, ...conflict });
+      continue;
+    }
     const extension = path.extname(asset.path) || (asset.mediaKind === "video" ? ".mp4" : ".png");
     const fileName = `extra-${String(copiedAssets.length + 1).padStart(2, "0")}${extension}`;
     await linkOrCopy(asset.path, path.join(assetsDir, fileName));
@@ -501,22 +629,27 @@ export async function buildHyperframesDirectorProject(options) {
     const start = Math.min(Math.max(rawStart, revealAt), latestUsefulStart);
     return { asset, index, rawStart, start, end, ownerScene: ownerScene?.scene || null };
   }).filter((entry) => entry.end - entry.start >= 0.2);
+  const compositedAssetIds = evidenceEntries.map((entry) => entry.asset.id);
   const sceneUsesEvidence = (window) => evidenceEntries.some((entry) => entry.end > window.start && entry.start < window.end);
-  const sceneHtml = scenes.map(({ segment, window }) => {
+  const sceneHtml = scenes.map(({ segment, presentation, window }) => {
     const hasEvidence = sceneUsesEvidence(window);
+    const visualKindClass = ` primary-${presentation.primaryVisual.kind}`;
+    const titleHtml = presentation.title ? `<h1>${html(presentation.title)}</h1><div class="title-rule"></div>` : "";
+    const keyLineHtml = presentation.keyLine ? `<p>${html(presentation.keyLine)}</p>` : "";
+    const summaryHtml = presentation.summary ? `<section class="summary"><i>↳</i><span>${html(presentation.summary)}</span><b></b></section>` : "";
+    const factsHtml = presentation.factCards.length ? `<section class="facts">${presentation.factCards.map((fact, index) => `<article class="fact fact-${index + 1}"><span>0${index + 1}</span><small>${html(fact.label)}</small><b>${html(fact.value)}</b></article>`).join("")}</section>` : "";
+    const visualHead = showInternalLabels ? `<div class="visual-head"><span>${html(segment.rightVisual.type)}</span><b>${html(segment.id)}</b></div>` : "";
     return `
-    <section id="scene-${html(segment.id)}" class="scene clip${hasEvidence ? " has-evidence" : ""}" data-start="${window.start.toFixed(3)}" data-duration="${window.duration.toFixed(3)}" data-track-index="${10 + allSegments.indexOf(segment)}">
-      <div class="scene-number">${html(segment.id)} / ${String(allSegments.length).padStart(2, "0")}</div>
-      <div class="eyebrow">AI VISUAL DIRECTOR · HYPERFRAMES</div>
+    <section id="scene-${html(segment.id)}" class="scene clip${hasEvidence ? " has-evidence" : ""}${showInternalLabels ? " show-internal-labels" : " audience-facing"}${visualKindClass}" data-start="${window.start.toFixed(3)}" data-duration="${window.duration.toFixed(3)}" data-track-index="${10 + allSegments.indexOf(segment)}">
+      ${showInternalLabels ? `<div class="scene-number">${html(segment.id)} / ${String(allSegments.length).padStart(2, "0")}</div><div class="eyebrow">AI VISUAL DIRECTOR · HYPERFRAMES</div>` : ""}
       <header class="title-block">
-        <h1>${html(segment.upperLeftTitle)}</h1>
-        <div class="title-rule"></div>
-        <p>${html(segment.subtitleOrKeyLine)}</p>
+        ${titleHtml}
+        ${keyLineHtml}
       </header>
-      <section class="summary"><i>↳</i><span>${html(segment.oneSentenceSummary)}</span><b></b></section>
-      <div class="information-label">CORE MESSAGE / 信息卡不是字幕</div>
-      <section class="facts">${segment.factCards.map((fact, index) => `<article class="fact fact-${index + 1}"><span>0${index + 1}</span><small>${html(fact.label)}</small><b>${html(fact.value)}</b></article>`).join("")}</section>
-      ${hasEvidence ? "" : `<section class="visual-panel"><div class="visual-head"><span>${html(segment.rightVisual.type)}</span><b>${html(segment.id)}</b></div><div class="visual-body">${visualMarkup(segment)}</div></section>`}
+      ${summaryHtml}
+      ${showInternalLabels && presentation.factCards.length ? `<div class="information-label">CORE MESSAGE / 信息卡不是字幕</div>` : ""}
+      ${factsHtml}
+      ${hasEvidence ? "" : `<section class="visual-panel${showInternalLabels ? "" : " audience-facing"}">${visualHead}<div class="visual-body">${primaryVisualMarkup(presentation, segment)}</div></section>`}
     </section>`;
   }).join("");
 
@@ -542,31 +675,43 @@ export async function buildHyperframesDirectorProject(options) {
 
   const scale = width / 1920;
   const animationLines = [];
-  scenes.forEach(({ segment, window }) => {
+  scenes.forEach(({ segment, presentation, window }) => {
     const id = `#scene-${segment.id}`;
     const motion = motionById.get(segment.id) || {};
     const titleAt = window.start + Number(motion.titleAt ?? 0.08);
     const summaryAt = window.start + Number(motion.summaryAt ?? (mode === "keyframes" ? 0.22 : 0.85));
-    const factsAt = mode === "keyframes" ? [0.34, 0.44, 0.54] : array(motion.factsAt).length === 3 ? motion.factsAt : [1.65, 1.97, 2.29];
+    const configuredFactsAt = mode === "keyframes"
+      ? [0.34, 0.44, 0.54]
+      : Array.isArray(motion.factsAt) ? motion.factsAt.slice(0, 3) : [1.65, 1.97, 2.29];
+    const factsAt = presentation.factCards.map((_, index) => clampNumber(
+      configuredFactsAt[index],
+      mode === "keyframes" ? 0.34 + index * 0.1 : 1.65 + index * 0.32,
+      0,
+      6,
+    ));
     const visualAt = visualRevealAt({ segment, window });
     const visualMotion = sceneUsesEvidence(window) ? "" : `
       tl.from("${id} .visual-panel", {opacity:0,x:70,scale:.94,duration:.66,ease:"power4.out"}, ${visualAt.toFixed(3)});
       tl.from("${id} .v-step", {opacity:0,y:20,scale:.95,duration:.42,stagger:.16,ease:"power3.out"}, ${(visualAt + 0.18).toFixed(3)});`;
+    const internalMotion = showInternalLabels ? `tl.from("${id} .eyebrow", {opacity:0,x:-28,duration:.38}, ${titleAt.toFixed(3)});` : "";
+    const titleMotion = presentation.title ? `tl.from("${id} h1", {opacity:0,y:34,scale:.97,filter:"blur(8px)",duration:.62,ease:"power4.out"}, ${titleAt.toFixed(3)});tl.from("${id} .title-rule", {scaleX:0,duration:.48,ease:"power3.out"}, ${(titleAt + 0.48).toFixed(3)});` : "";
+    const keyLineMotion = presentation.keyLine ? `tl.from("${id} .title-block p", {opacity:0,x:-20,duration:.38}, ${(titleAt + 0.58).toFixed(3)});` : "";
+    const summaryMotion = presentation.summary ? `tl.from("${id} .summary", {opacity:0,x:-90,duration:.58,ease:"power4.out"}, ${summaryAt.toFixed(3)});tl.from("${id} .summary i", {opacity:0,scale:.3,rotate:-90,duration:.36,ease:"back.out(1.8)"}, ${(summaryAt + 0.12).toFixed(3)});` : "";
+    const factsMotion = presentation.factCards.length ? `${showInternalLabels ? `tl.from("${id} .information-label", {opacity:0,x:-18,duration:.34}, ${(window.start + factsAt[0] - 0.22).toFixed(3)});` : ""}${presentation.factCards.map((_, index) => `tl.from("${id} .fact-${index + 1}", {opacity:0,y:38,scale:.86,duration:.5,ease:"back.out(1.65)"}, ${(window.start + Number(factsAt[index] ?? factsAt.at(-1))).toFixed(3)});`).join("")}` : "";
     animationLines.push(`
-      tl.from("${id} .eyebrow", {opacity:0,x:-28,duration:.38}, ${titleAt.toFixed(3)});
-      tl.from("${id} h1", {opacity:0,y:34,scale:.97,filter:"blur(8px)",duration:.62,ease:"power4.out"}, ${titleAt.toFixed(3)});
-      tl.from("${id} .title-rule", {scaleX:0,duration:.48,ease:"power3.out"}, ${(titleAt + 0.48).toFixed(3)});
-      tl.from("${id} .title-block p", {opacity:0,x:-20,duration:.38}, ${(titleAt + 0.58).toFixed(3)});
-      tl.from("${id} .summary", {opacity:0,x:-90,duration:.58,ease:"power4.out"}, ${summaryAt.toFixed(3)});
-      tl.from("${id} .summary i", {opacity:0,scale:.3,rotate:-90,duration:.36,ease:"back.out(1.8)"}, ${(summaryAt + 0.12).toFixed(3)});
-      tl.from("${id} .information-label", {opacity:0,x:-18,duration:.34}, ${(window.start + factsAt[0] - 0.22).toFixed(3)});
-      ${factsAt.map((time, index) => `tl.from("${id} .fact-${index + 1}", {opacity:0,y:38,scale:.86,duration:.5,ease:"back.out(1.65)"}, ${(window.start + Number(time)).toFixed(3)});`).join("\n")}
+      ${internalMotion}
+      ${titleMotion}
+      ${keyLineMotion}
+      ${summaryMotion}
+      ${factsMotion}
       ${visualMotion}
       tl.to("${id}", {opacity:.04,duration:.34,ease:"power2.in"}, ${(window.end - 0.34).toFixed(3)});`);
   });
   evidenceEntries.forEach(({ index, start, end }) => {
     animationLines.push(`tl.from("#evidence-${index + 1}",{opacity:0,scale:.94,x:44,duration:.52,ease:"power3.out"},${start.toFixed(3)});tl.to("#speakerStage",{scale:.52,duration:.52,ease:"power3.inOut"},${start.toFixed(3)});tl.to("#evidence-${index + 1}",{opacity:0,duration:.25},${Math.max(start, end - 0.25).toFixed(3)});tl.to("#speakerStage",{scale:1,duration:.32,ease:"power3.out"},${Math.max(start, end - 0.3).toFixed(3)});`);
   });
+  const speakerLabelCss = showInternalLabels ? `.speaker-stage:before{content:"REAL TALKING HEAD";position:absolute;z-index:4;left:${24 * scale}px;top:${22 * scale}px;padding:${9 * scale}px ${14 * scale}px;border-radius:${99 * scale}px;background:rgba(7,9,15,.8);color:var(--warning);font:700 ${14 * scale}px/1 monospace;letter-spacing:${1.4 * scale}px}` : "";
+  const safeGuideCss = showSafeGuides ? `.speaker-safe{position:absolute;z-index:4;inset:${20 * scale}px;border:1px dashed rgba(85,214,255,.25);border-radius:${25 * scale}px;pointer-events:none}` : "";
 
   const documentHtml = `<!doctype html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=${width},height=${height}"><script src="assets/gsap.min.js"></script>
@@ -577,9 +722,10 @@ export async function buildHyperframesDirectorProject(options) {
 *{box-sizing:border-box}html,body{width:${width}px;height:${height}px;margin:0;overflow:hidden;background:var(--bg);color:var(--text);font-family:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",sans-serif}body:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 82% 42%,rgba(85,214,255,.13),transparent 34%),linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:auto,${64 * scale}px ${64 * scale}px,${64 * scale}px ${64 * scale}px}
 #root{position:relative;width:100%;height:100%;overflow:hidden}.top-progress{position:absolute;z-index:90;left:${56 * scale}px;right:${56 * scale}px;top:${35 * scale}px;height:${5 * scale}px;background:rgba(255,255,255,.08);overflow:hidden}.top-progress i{display:block;width:100%;height:100%;background:linear-gradient(90deg,var(--primary),var(--secondary));transform-origin:left}
 .scene{position:absolute;inset:0;padding:${70 * scale}px ${690 * scale}px ${120 * scale}px ${70 * scale}px}.scene-number{position:absolute;right:${72 * scale}px;top:${67 * scale}px;color:var(--secondary);font:700 ${18 * scale}px/1 monospace;letter-spacing:${2 * scale}px}.eyebrow{color:var(--secondary);font-size:${20 * scale}px;font-weight:800;letter-spacing:${2.5 * scale}px}.title-block{margin-top:${24 * scale}px;max-width:${780 * scale}px}.title-block h1{font-size:${62 * scale}px;line-height:1.13;margin:0;letter-spacing:-${2 * scale}px;max-width:${760 * scale}px}.title-rule{width:${170 * scale}px;height:${7 * scale}px;margin:${22 * scale}px 0 ${16 * scale}px;background:linear-gradient(90deg,var(--primary),var(--warning));transform-origin:left}.title-block p{margin:0;color:var(--warning);font-size:${27 * scale}px;font-weight:700}.summary{position:absolute;left:${70 * scale}px;top:${300 * scale}px;width:${760 * scale}px;min-height:${86 * scale}px;padding:${20 * scale}px ${28 * scale}px ${20 * scale}px ${64 * scale}px;background:linear-gradient(100deg,rgba(255,106,61,.18),rgba(17,22,33,.92));border-left:${6 * scale}px solid var(--primary);border-radius:0 ${18 * scale}px ${18 * scale}px 0;box-shadow:0 ${18 * scale}px ${48 * scale}px rgba(0,0,0,.2)}.summary i{position:absolute;left:${24 * scale}px;top:${22 * scale}px;color:var(--primary);font-size:${30 * scale}px}.summary span{font-size:${24 * scale}px;line-height:1.55}.summary b{position:absolute;left:0;bottom:0;height:${3 * scale}px;width:100%;background:linear-gradient(90deg,var(--primary),transparent)}.information-label{position:absolute;left:${70 * scale}px;top:${425 * scale}px;color:var(--muted);font:700 ${16 * scale}px/1 monospace;letter-spacing:${1.5 * scale}px}.facts{position:absolute;left:${70 * scale}px;top:${462 * scale}px;width:${760 * scale}px;display:grid;grid-template-columns:repeat(3,1fr);gap:${16 * scale}px}.fact{min-height:${165 * scale}px;padding:${20 * scale}px;background:linear-gradient(145deg,rgba(24,31,45,.98),rgba(10,14,22,.96));border:1px solid rgba(255,255,255,.12);border-radius:${18 * scale}px;box-shadow:0 ${16 * scale}px ${36 * scale}px rgba(0,0,0,.24)}.fact>span{color:var(--primary);font:800 ${19 * scale}px/1 monospace}.fact small{display:block;color:var(--muted);font-size:${17 * scale}px;margin:${18 * scale}px 0 ${10 * scale}px}.fact b{font-size:${22 * scale}px;line-height:1.32}.visual-panel{position:absolute;left:${70 * scale}px;top:${300 * scale}px;width:${785 * scale}px;height:${360 * scale}px;padding:${58 * scale}px ${28 * scale}px ${24 * scale}px;background:rgba(10,14,22,.96);border:${2 * scale}px solid rgba(85,214,255,.45);border-radius:${24 * scale}px;box-shadow:0 ${24 * scale}px ${70 * scale}px rgba(0,0,0,.38);z-index:12}.visual-head{position:absolute;left:${26 * scale}px;right:${26 * scale}px;top:${18 * scale}px;display:flex;justify-content:space-between;color:var(--secondary);font-size:${17 * scale}px;font-weight:800}.visual-body{height:100%}.compare{display:grid;grid-template-columns:1fr auto 1fr;gap:${20 * scale}px;align-items:center;height:100%}.compare article{height:80%;padding:${24 * scale}px;border-radius:${18 * scale}px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}.compare article.after{border-color:var(--secondary);background:rgba(85,214,255,.09)}.compare small,.compare b{display:block}.compare b{font-size:${26 * scale}px;margin-top:${30 * scale}px}.compare article i{display:block;height:${8 * scale}px;margin-top:${38 * scale}px;background:var(--primary)}.compare article.after i{background:var(--secondary)}.compare>em{font-size:${34 * scale}px;color:var(--warning)}.scan{position:absolute;left:${40 * scale}px;right:${40 * scale}px;top:${100 * scale}px;height:${3 * scale}px;background:var(--warning);box-shadow:0 0 ${22 * scale}px var(--warning)}.flow{display:flex;align-items:center;justify-content:space-between;height:100%}.flow article,.visual-cards article{width:30%;min-height:${190 * scale}px;padding:${22 * scale}px;border-radius:${18 * scale}px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}.flow article span,.visual-cards span{color:var(--secondary);font:800 ${18 * scale}px/1 monospace}.flow b,.visual-cards b{display:block;margin:${24 * scale}px 0 ${12 * scale}px;font-size:${25 * scale}px}.flow small,.visual-cards small{color:var(--muted);font-size:${17 * scale}px}.flow>i{color:var(--warning);font-size:${30 * scale}px}.browser{height:100%;padding:${62 * scale}px ${25 * scale}px ${20 * scale}px;border-radius:${16 * scale}px;background:#f1f3f6;color:#111827}.browser-bar{position:absolute;left:${28 * scale}px;right:${28 * scale}px;top:${18 * scale}px;height:${30 * scale}px}.browser-bar i{display:inline-block;width:${10 * scale}px;height:${10 * scale}px;border-radius:50%;background:var(--primary);margin-right:${6 * scale}px}.browser-bar span{float:right;font:700 ${14 * scale}px/1 monospace}.browser p{font-size:${18 * scale}px;margin:0 0 ${16 * scale}px}.prompt-line{display:flex;gap:${18 * scale}px;padding:${12 * scale}px ${16 * scale}px;margin-top:${10 * scale}px;background:#fff;border-left:${5 * scale}px solid var(--secondary)}.prompt-line b{min-width:${110 * scale}px}.qa-board{height:100%;position:relative}.qa-row{display:grid;grid-template-columns:${50 * scale}px ${120 * scale}px 1fr ${35 * scale}px;align-items:center;gap:${12 * scale}px;padding:${14 * scale}px ${18 * scale}px;margin-bottom:${12 * scale}px;border-radius:${14 * scale}px;background:rgba(255,255,255,.06)}.qa-row span{color:var(--secondary);font:700 ${17 * scale}px/1 monospace}.qa-row i{color:#5ee3a1;font-style:normal}.qa-scan{position:absolute;left:0;right:0;top:${30 * scale}px;height:${3 * scale}px;background:var(--warning);box-shadow:0 0 ${18 * scale}px var(--warning)}.chart{display:flex;align-items:flex-end;justify-content:space-around;height:100%;padding-top:${20 * scale}px}.chart article{width:28%;height:100%;display:flex;flex-direction:column;justify-content:flex-end;text-align:center}.chart article i{display:block;height:var(--height);background:linear-gradient(var(--secondary),rgba(85,214,255,.1));border-top:${5 * scale}px solid var(--warning);border-radius:${12 * scale}px ${12 * scale}px 0 0}.chart b{margin-top:${12 * scale}px}.chart small{color:var(--muted);margin-top:${6 * scale}px}.visual-cards{display:flex;align-items:center;justify-content:space-between;height:100%}
-.speaker-stage{position:absolute;z-index:20;right:${70 * scale}px;top:${92 * scale}px;width:${560 * scale}px;height:${880 * scale}px;border:${3 * scale}px solid rgba(255,106,61,.72);border-radius:${34 * scale}px;overflow:hidden;background:#090d14;box-shadow:0 ${35 * scale}px ${90 * scale}px rgba(0,0,0,.46)}.speaker-stage:before{content:"REAL TALKING HEAD";position:absolute;z-index:4;left:${24 * scale}px;top:${22 * scale}px;padding:${9 * scale}px ${14 * scale}px;border-radius:${99 * scale}px;background:rgba(7,9,15,.8);color:var(--warning);font:700 ${14 * scale}px/1 monospace;letter-spacing:${1.4 * scale}px}.speaker-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}.speaker-safe{position:absolute;z-index:4;inset:${20 * scale}px;border:1px dashed rgba(85,214,255,.25);border-radius:${25 * scale}px;pointer-events:none}.caption{position:absolute;z-index:100;left:50%;bottom:${38 * scale}px;transform:translateX(-50%);max-width:${1220 * scale}px;padding:${12 * scale}px ${26 * scale}px;color:#fff;background:rgba(5,8,13,.72);border-radius:${13 * scale}px;font-size:${31 * scale}px;font-weight:800;line-height:1.3;text-align:center;text-shadow:0 ${3 * scale}px ${8 * scale}px #000;border:1px solid rgba(255,255,255,.12)}.evidence{position:absolute;z-index:50;left:${65 * scale}px;top:${180 * scale}px;width:${1120 * scale}px;height:${700 * scale}px;padding:${14 * scale}px;border:${3 * scale}px solid var(--secondary);border-radius:${24 * scale}px;background:#080c12;box-shadow:0 ${32 * scale}px ${90 * scale}px rgba(0,0,0,.55);overflow:hidden}.evidence-media{width:100%;height:100%;object-fit:contain;background:#06090e}.evidence small{position:absolute;left:${24 * scale}px;bottom:${22 * scale}px;padding:${10 * scale}px ${15 * scale}px;background:rgba(0,0,0,.78);border-radius:${8 * scale}px;color:#fff;font-size:${17 * scale}px}
+.speaker-stage{position:absolute;z-index:20;right:${70 * scale}px;top:${92 * scale}px;width:${560 * scale}px;height:${880 * scale}px;border:${3 * scale}px solid rgba(255,106,61,.72);border-radius:${34 * scale}px;overflow:hidden;background:#090d14;box-shadow:0 ${35 * scale}px ${90 * scale}px rgba(0,0,0,.46)}${speakerLabelCss}.speaker-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}${safeGuideCss}.caption{position:absolute;z-index:100;left:50%;bottom:${38 * scale}px;transform:translateX(-50%);max-width:${1220 * scale}px;padding:${12 * scale}px ${26 * scale}px;color:#fff;background:rgba(5,8,13,.72);border-radius:${13 * scale}px;font-size:${31 * scale}px;font-weight:800;line-height:1.3;text-align:center;text-shadow:0 ${3 * scale}px ${8 * scale}px #000;border:1px solid rgba(255,255,255,.12)}.evidence{position:absolute;z-index:50;left:${65 * scale}px;top:${180 * scale}px;width:${1120 * scale}px;height:${700 * scale}px;padding:${14 * scale}px;border:${3 * scale}px solid var(--secondary);border-radius:${24 * scale}px;background:#080c12;box-shadow:0 ${32 * scale}px ${90 * scale}px rgba(0,0,0,.55);overflow:hidden}.evidence-media{width:100%;height:100%;object-fit:contain;background:#06090e}.evidence small{position:absolute;left:${24 * scale}px;bottom:${22 * scale}px;padding:${10 * scale}px ${15 * scale}px;background:rgba(0,0,0,.78);border-radius:${8 * scale}px;color:#fff;font-size:${17 * scale}px}
 .speaker-stage{z-index:60;transform-origin:right bottom}.evidence{left:${860 * scale}px;top:${180 * scale}px;width:${990 * scale}px;height:${700 * scale}px}.visual-panel{left:${860 * scale}px;top:${300 * scale}px;width:${390 * scale}px;height:${360 * scale}px;padding:${54 * scale}px ${18 * scale}px ${18 * scale}px}.visual-head{left:${18 * scale}px;right:${18 * scale}px}.flow,.visual-cards{align-items:stretch;flex-direction:column;gap:${9 * scale}px}.flow article,.visual-cards article{width:100%;min-height:0;flex:1;padding:${12 * scale}px ${14 * scale}px}.flow article span,.visual-cards span{font-size:${14 * scale}px}.flow b,.visual-cards b{display:inline-block;margin:${8 * scale}px ${8 * scale}px 4px 0;font-size:${17 * scale}px}.flow small,.visual-cards small{font-size:${13 * scale}px}.flow>i{display:none}.browser{padding:${55 * scale}px ${15 * scale}px ${12 * scale}px}.browser p{font-size:${14 * scale}px}.prompt-line{gap:${8 * scale}px;padding:${7 * scale}px ${8 * scale}px}.prompt-line b{min-width:${70 * scale}px}.qa-row{grid-template-columns:${34 * scale}px ${70 * scale}px 1fr ${20 * scale}px;padding:${9 * scale}px}.chart b{font-size:${14 * scale}px}.chart small{font-size:${11 * scale}px}.compare{gap:${8 * scale}px}.compare article{padding:${12 * scale}px}.compare b{font-size:${17 * scale}px;margin-top:${18 * scale}px}
-</style></head><body><div id="root" data-composition-id="main" data-start="0" data-duration="${duration.toFixed(3)}" data-width="${width}" data-height="${height}" data-fps="${fps}"><div class="top-progress"><i id="progress"></i></div>${audioHtml}${sceneHtml}<aside class="speaker-stage" id="speakerStage" data-layout-allow-overflow>${speakerHtml}<div class="speaker-safe"></div></aside>${evidenceHtml}${captionHtml}</div>
+.scene.audience-facing .title-block{margin-top:${8 * scale}px}.scene.audience-facing.primary-hook-contrast .visual-panel,.scene.audience-facing.primary-memo-action .visual-panel,.scene.audience-facing.primary-copy-prompt .visual-panel{left:${70 * scale}px;top:${430 * scale}px;width:${1050 * scale}px;height:${430 * scale}px;padding:${24 * scale}px ${28 * scale}px}.visual-panel.audience-facing{padding-top:${24 * scale}px}.hook-contrast{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:${42 * scale}px;height:100%}.tool-stack{position:relative;height:${260 * scale}px}.tool-stack span{position:absolute;left:${40 * scale}px;width:${300 * scale}px;height:${150 * scale}px;border:1px solid rgba(255,255,255,.15);border-radius:${18 * scale}px;background:linear-gradient(145deg,rgba(255,255,255,.11),rgba(255,255,255,.04));box-shadow:0 ${16 * scale}px ${36 * scale}px rgba(0,0,0,.25)}.tool-stack span:nth-child(1){top:${78 * scale}px;transform:rotate(-8deg);opacity:.45}.tool-stack span:nth-child(2){top:${46 * scale}px;left:${78 * scale}px;transform:rotate(4deg);opacity:.7}.tool-stack span:nth-child(3){top:${18 * scale}px;left:${116 * scale}px;border-color:rgba(255,106,61,.65)}.tool-stack b{position:absolute;left:${175 * scale}px;top:${78 * scale}px;font-size:${30 * scale}px}.hook-contrast>em{color:var(--warning);font-size:${58 * scale}px;font-style:normal}.first-step{padding:${42 * scale}px;border:2px solid var(--secondary);border-radius:${24 * scale}px;background:rgba(85,214,255,.1);text-align:center}.first-step small{display:block;color:var(--muted);font-size:${20 * scale}px}.first-step b{display:block;margin-top:${18 * scale}px;color:var(--secondary);font-size:${42 * scale}px}.memo-card{height:100%;overflow:hidden;border-radius:${24 * scale}px;background:#f4f5f7;color:#172033;box-shadow:0 ${24 * scale}px ${60 * scale}px rgba(0,0,0,.35)}.memo-card header{height:${64 * scale}px;padding:0 ${26 * scale}px;display:flex;align-items:center;gap:${14 * scale}px;background:#e9ebef;border-bottom:1px solid #d6dae1}.memo-card header i{width:${18 * scale}px;height:${18 * scale}px;border-radius:50%;background:#ffd166}.memo-card header b{font-size:${22 * scale}px}.memo-card header span{margin-left:auto;color:#2460e5;font-size:${18 * scale}px}.memo-note{position:relative;height:${228 * scale}px;padding:${32 * scale}px ${42 * scale}px}.memo-note small{color:#6a707d;font-size:${16 * scale}px}.memo-note p{max-width:${830 * scale}px;margin:${18 * scale}px 0 0;font-size:${34 * scale}px;line-height:1.45;font-weight:700}.memo-cursor{display:inline-block;width:${3 * scale}px;height:${38 * scale}px;margin-left:${8 * scale}px;background:#2563eb;vertical-align:middle}.memo-card footer{height:${86 * scale}px;padding:0 ${36 * scale}px;display:flex;align-items:center;gap:${18 * scale}px;background:#fff;border-top:1px solid #e2e5ea}.memo-card footer span{display:grid;place-items:center;width:${36 * scale}px;height:${36 * scale}px;border-radius:50%;background:#15803d;color:#fff;font-weight:900}.memo-card footer b{font-size:${22 * scale}px}.copy-prompt-card{height:100%;padding:${30 * scale}px ${38 * scale}px;border:2px solid rgba(85,214,255,.55);border-radius:${24 * scale}px;background:linear-gradient(145deg,rgba(11,18,30,.98),rgba(17,27,44,.96));box-shadow:0 ${24 * scale}px ${70 * scale}px rgba(0,0,0,.4)}.copy-prompt-card header{display:flex;justify-content:space-between;align-items:center}.copy-prompt-card header span{padding:${8 * scale}px ${15 * scale}px;border-radius:${99 * scale}px;background:rgba(85,214,255,.14);color:var(--secondary);font-size:${17 * scale}px;font-weight:800}.copy-prompt-card header i{color:var(--muted);font-style:normal;font-size:${16 * scale}px}.copy-prompt-card blockquote{margin:${34 * scale}px 0 ${24 * scale}px;font-size:${39 * scale}px;line-height:1.55;font-weight:800;letter-spacing:-${1 * scale}px}.copy-prompt-card mark{padding:0 ${4 * scale}px;background:transparent;color:var(--warning);box-shadow:inset 0 -${7 * scale}px rgba(255,106,61,.35)}.copy-prompt-card footer{color:var(--muted);font-size:${18 * scale}px}
+</style></head><body><div id="root" data-composition-id="main" data-start="0" data-duration="${duration.toFixed(3)}" data-width="${width}" data-height="${height}" data-fps="${fps}"><div class="top-progress"><i id="progress"></i></div>${audioHtml}${sceneHtml}<aside class="speaker-stage" id="speakerStage" data-layout-allow-overflow>${speakerHtml}${showSafeGuides ? `<div class="speaker-safe"></div>` : ""}</aside>${evidenceHtml}${captionHtml}</div>
 <script>window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true,defaults:{ease:"power3.out"}});tl.fromTo("#progress",{scaleX:0},{scaleX:1,duration:${duration.toFixed(3)},ease:"none"},0);tl.from("#speakerStage",{opacity:0,x:${80 * scale},scale:.95,duration:.8,ease:"power4.out"},.18);${animationLines.join("\n")}document.querySelectorAll(".caption").forEach((caption)=>{const start=Number(caption.dataset.start),d=Number(caption.dataset.duration);tl.from(caption,{opacity:0,y:${14 * scale},scale:.97,duration:.18},start);tl.to(caption,{opacity:0,y:-${8 * scale},duration:.14},start+Math.max(.2,d-.14));});window.__timelines.main=tl;</script></body></html>`;
 
   await fsp.writeFile(path.join(projectDir, "index.html"), documentHtml, "utf8");
@@ -600,6 +746,8 @@ export async function buildHyperframesDirectorProject(options) {
     range: { start: rangeStart, end: rangeStart + duration },
     segmentIds: scenes.map((item) => item.segment.id),
     approvedAssetIds: copiedAssets.map((asset) => asset.id),
+    compositedAssetIds,
+    skippedAssetConflicts,
     snapshotTimes,
     generatedAt: new Date().toISOString(),
   }, null, 2)}\n`, "utf8");
@@ -613,6 +761,7 @@ export async function buildHyperframesDirectorProject(options) {
     fps,
     duration,
     snapshotTimes,
-    compositedAssetIds: copiedAssets.map((asset) => asset.id),
+    compositedAssetIds,
+    skippedAssetIds: skippedAssetConflicts.map((item) => item.assetId),
   };
 }

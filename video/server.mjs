@@ -19,6 +19,7 @@ import {
   normalizeKeyframeDirection,
   normalizeMotionDirection,
   normalizeFullDirection,
+  findLockedVisualIntentConflict,
   buildHyperframesDirectorProject,
 } from "./visual_director.mjs";
 import { createMultiAgentApi } from "./multi-agent/api.mjs";
@@ -2656,7 +2657,10 @@ async function runKeyframeStage(job, version, stageConfig, feedback = "") {
 async function ensurePreviewAssetDecisions(job) {
   const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
   const review = assetReviewSummary(job, duration);
-  if (review.reviewComplete && review.renderReady) return review;
+  const keyframeDirection = job.workflow?.stages?.keyframes?.artifacts?.direction;
+  const hasLockedVisualConflict = (job.assets || []).some((asset) => asset.reviewStatus === "approved"
+    && findLockedVisualIntentConflict(asset, job.contentBreakdown, keyframeDirection));
+  if (review.reviewComplete && review.renderReady && !hasLockedVisualConflict) return review;
   const decision = await autoReviewLocalAssetsForPreview(job);
   return decision.review;
 }
@@ -2695,6 +2699,7 @@ async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
     breakdown: job.contentBreakdown,
     styleReport: job.visualStyleReport,
     mode: "sample",
+    keyframeDirection: job.workflow.stages.keyframes?.artifacts?.direction,
     rangeStart: direction.sampleStart,
     rangeEnd: direction.sampleEnd,
     motionDirection: direction,
@@ -2782,6 +2787,7 @@ async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "")
     breakdown: job.contentBreakdown,
     styleReport: job.visualStyleReport,
     mode: "full",
+    keyframeDirection: job.workflow.stages.keyframes?.artifacts?.direction,
     rangeStart: 0,
     rangeEnd: outputDuration,
     fullDirection: direction,
@@ -3416,16 +3422,34 @@ async function renderReviewedAssets(job, reason = "素材审核完成") {
     await saveJob(job);
   } finally { running.delete(job.id); }
 }
+
+function previewAssetAutoReviewDecision(asset, job) {
+  const isLocalRenderable = !EXTERNAL_SOURCE_TYPES.has(asset.sourceType) && !PAID_SOURCE_TYPES.has(asset.sourceType)
+    && ["image", "video"].includes(asset.mediaKind) && asset.path && fs.existsSync(asset.path) && asset.placement;
+  const keyframeDirection = job.workflow?.stages?.keyframes?.artifacts?.direction;
+  const conflict = isLocalRenderable
+    ? findLockedVisualIntentConflict(asset, job.contentBreakdown, keyframeDirection)
+    : null;
+  const approved = isLocalRenderable && !conflict;
+  return {
+    approved,
+    reviewStatus: approved ? "approved" : "rejected",
+    reason: conflict
+      ? `与已批准关键帧 ${conflict.segmentId} 的 ${conflict.kind} 主视觉冲突，保留主视觉并跳过该素材`
+      : approved ? "完整预览模式自动采用可渲染的本地富媒体素材" : "完整预览模式跳过外部、付费、缺文件或缺时间段素材",
+    visualIntentConflict: conflict,
+  };
+}
+
 async function autoReviewLocalAssetsForPreview(job) {
   const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
   const decidedAt = new Date().toISOString();
   const decisions = [];
   for (const asset of job.assets || []) {
-    if (asset.reviewStatus !== "pending") continue;
-    const isLocalRenderable = !EXTERNAL_SOURCE_TYPES.has(asset.sourceType) && !PAID_SOURCE_TYPES.has(asset.sourceType)
-      && ["image", "video"].includes(asset.mediaKind) && asset.path && fs.existsSync(asset.path) && asset.placement;
-    asset.reviewStatus = isLocalRenderable ? "approved" : "rejected";
-    asset.approved = isLocalRenderable;
+    const decision = previewAssetAutoReviewDecision(asset, job);
+    if (asset.reviewStatus !== "pending" && !(asset.reviewStatus === "approved" && decision.visualIntentConflict)) continue;
+    asset.reviewStatus = decision.reviewStatus;
+    asset.approved = decision.approved;
     asset.updatedAt = decidedAt;
     decisions.push({
       assetId: asset.id,
@@ -3433,7 +3457,8 @@ async function autoReviewLocalAssetsForPreview(job) {
       placement: asset.placement || null,
       licenseBasis: asset.licenseBasis || "",
       usagePurpose: asset.usagePurpose || "",
-      reason: isLocalRenderable ? "完整预览模式自动采用可渲染的本地富媒体素材" : "完整预览模式跳过外部、付费、缺文件或缺时间段素材",
+      reason: decision.reason,
+      visualIntentConflict: decision.visualIntentConflict,
       decidedAt
     });
   }
@@ -4155,5 +4180,6 @@ export {
   assetComplianceIssues,
   assetReviewSummary,
   candidatePlacement,
+  previewAssetAutoReviewDecision,
   writeMultiAgentArtifact,
 };

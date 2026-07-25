@@ -10,6 +10,11 @@ const failures = [];
 const assert = (condition, message) => { if (!condition) failures.push(message); };
 const read = relative => fs.readFileSync(path.join(root, relative), "utf8").replace(/^\uFEFF/, "");
 const normalizeSpokenText = value => String(value || "").replace(/[，。！？、；：,.!?;:\s]/g, "");
+const sourceBetween = (source, startMarker, endMarker) => {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  return start >= 0 && end > start ? source.slice(start, end) : "";
+};
 
 for (const file of ["video/server.mjs", "video/visual_director.mjs", "video/ai_bridge.py", "scripts/collect_douyin_references.mjs", "config/reference_creators.json", "config/reference_video_library.json", "config/video_workflow_v4.json", "docs/VISUAL_DIRECTOR_WORKFLOW_V4.md", "video/hyperframes-captions/index.html", "video/hyperframes-overlay/index.html", "web/index.html", "web/app.js", "web/styles.css", "打开AI口播工作台.vbs"]) {
   assert(fs.existsSync(path.join(root, file)), `缺少文件：${file}`);
@@ -67,6 +72,7 @@ const placementA = mediaPolicy.candidatePlacement(0, 4, 8), placementB = mediaPo
 assert(placementA.end <= placementB.start, "自动视觉候选时间段发生不必要重叠");
 
 const serverSource = read("video/server.mjs");
+const visualDirectorSource = read("video/visual_director.mjs");
 const bridgeSource = read("video/ai_bridge.py");
 for (const capability of [
   "validatePlan",
@@ -92,6 +98,23 @@ for (const route of ["/replan", "/rerender", "/cover", "/assets", "/approve"]) {
 }
 for (const route of ["/api/video-workflow/defaults", "/api/video-workflow/drafts", "workflow\\/stages\\/"]) assert(serverSource.includes(route), `Missing visual-director v4 endpoint: ${route}`);
 for (const capability of ["runStyleResearchStage", "runContentBreakdownStage", "runKeyframeStage", "runMotionSampleStage", "runFullRenderStage", "runVisualWorkflowChain", "approveVisualGate"]) assert(serverSource.includes(`function ${capability}`), `Missing visual-director stage implementation: ${capability}`);
+const keyframeSchemaSource = sourceBetween(bridgeSource, "def keyframe_direction", "def motion_sample_direction");
+for (const token of ["presentation", "showInternalLabels", "showSafeGuides", "visualIntent", "factCards", "primaryVisual", "memo-action", "copy-prompt"]) {
+  assert(keyframeSchemaSource.includes(token), `关键帧AI合同缺少字段或类型：${token}`);
+}
+const keyframeNormalizerSource = sourceBetween(visualDirectorSource, "const KEYFRAME_PRIMARY_VISUAL_KINDS", "export function normalizeMotionDirection");
+for (const token of ["presentation", "visualIntent", "factCards"]) {
+  assert(keyframeNormalizerSource.includes(token), `关键帧规范化未传播字段：${token}`);
+}
+assert(keyframeNormalizerSource.includes('showInternalLabels: presentation.showInternalLabels === true') && keyframeNormalizerSource.includes('showSafeGuides: presentation.showSafeGuides === true'), "关键帧规范化没有安全默认关闭内部标签或安全框");
+const keyframeStageSource = sourceBetween(serverSource, "async function runKeyframeStage", "async function ensurePreviewAssetDecisions");
+assert(keyframeStageSource.includes("previous,") && keyframeStageSource.includes("feedback,") && keyframeStageSource.includes("custom_prompt: feedback ? job.workflow.config.stages.keyframe_review.prompt"), "关键帧返修没有把上一版、反馈和返修提示词传给下一版");
+const workflowStageRouteSource = sourceBetween(serverSource, "const workflowStageMatch", "const retryMatch");
+assert(workflowStageRouteSource.includes('requestedStageId === "keyframe_review" && action === "run" ? "keyframes"') && workflowStageRouteSource.includes("runVisualWorkflowChain(job, stageId, feedback)"), "keyframe_review/run 没有携带 feedback 进入关键帧新版本");
+const motionSampleStageSource = sourceBetween(serverSource, "async function runMotionSampleStage", "async function normalizeHyperframesMaster");
+const fullRenderStageSource = sourceBetween(serverSource, "async function runFullRenderStage", "function visualJobStatus");
+assert(motionSampleStageSource.includes("keyframeDirection:"), "动态样片构建没有传播已批准关键帧的 presentation/visualIntent");
+assert(fullRenderStageSource.includes("keyframeDirection:"), "完整视频构建没有传播已批准关键帧的 presentation/visualIntent");
 assert(serverSource.includes('pipeline === VISUAL_WORKFLOW_VERSION') && serverSource.includes('runVisualWorkflowChain(job, "style_research")'), "新任务没有默认进入视觉导演v4流程");
 assert(serverSource.includes('runVisualWorkflowChain(job, "motion_sample")') && serverSource.includes('runVisualWorkflowChain(job, "full_render")'), "关键帧或动态样片审核门没有驱动下一阶段");
 assert(serverSource.includes('masterWidth || 2560') && serverSource.includes('masterHeight || (width === 2560 ? 1440 : 1080)'), "完整视频渲染没有保留2K母版路径");
