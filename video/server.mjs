@@ -53,6 +53,7 @@ const host = "127.0.0.1";
 const port = Number(requestedPort || process.env.KOUBO_PORT || 8787);
 if (fs.existsSync(runtimeFfmpeg)) process.env.PATH = `${runtimeFfmpeg}${path.delimiter}${process.env.PATH || ""}`;
 const running = new Map();
+const jobMutations = new Set();
 const workflowDrafts = new Map();
 const mime = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -97,6 +98,61 @@ async function writeJson(file, data) {
   const temp = `${file}.tmp`;
   await fsp.writeFile(temp, JSON.stringify(data, null, 2), "utf8");
   await fsp.rename(temp, file);
+}
+async function sha256File(file) {
+  const hash = crypto.createHash("sha256");
+  await new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(file);
+    stream.on("data", chunk => hash.update(chunk));
+    stream.on("end", resolve);
+    stream.on("error", reject);
+  });
+  return hash.digest("hex");
+}
+function finalReviewEvidenceHash(review) {
+  const { approvedAt: _approvedAt, evidenceHash: _evidenceHash, recordHash: _recordHash, ...evidence } = review || {};
+  return contentHash(evidence);
+}
+function finalReviewRecordHash(review) {
+  const { recordHash: _recordHash, ...record } = review || {};
+  return contentHash(record);
+}
+async function createOrReadVersionedFinalReview(file, review) {
+  const candidateWithEvidence = { ...review, evidenceHash: finalReviewEvidenceHash(review) };
+  const candidate = { ...candidateWithEvidence, recordHash: finalReviewRecordHash(candidateWithEvidence) };
+  try {
+    await fsp.writeFile(file, JSON.stringify(candidate, null, 2), { encoding: "utf8", flag: "wx" });
+    return { review: candidate, replayed: false };
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    const existing = await readJsonFile(file);
+    const recomputedExistingHash = finalReviewEvidenceHash(existing);
+    if (!existing.evidenceHash || existing.evidenceHash !== recomputedExistingHash) throw Object.assign(new Error("该版本最终审核记录的证据哈希已损坏，拒绝继续"), { statusCode: 409 });
+    const recomputedRecordHash = finalReviewRecordHash(existing);
+    if (!existing.recordHash || existing.recordHash !== recomputedRecordHash) throw Object.assign(new Error("该版本最终审核记录的完整记录哈希已损坏，拒绝继续"), { statusCode: 409 });
+    if (recomputedExistingHash !== candidate.evidenceHash) throw Object.assign(new Error("该版本已有不同证据的最终审核记录，拒绝覆盖"), { statusCode: 409 });
+    return { review: existing, replayed: true };
+  }
+}
+async function withJobMutation(jobId, action) {
+  const id = String(jobId || "");
+  if (running.has(id) || jobMutations.has(id)) throw Object.assign(new Error("任务仍在处理中"), { statusCode: 409 });
+  jobMutations.add(id);
+  try {
+    return await action();
+  } finally {
+    jobMutations.delete(id);
+  }
+}
+async function writePendingFinalReviewAlias(job, outputVersion, previousFinalReview = null) {
+  await writeJson(path.join(confined(jobsRoot, job.id), "final-review.json"), {
+    status: "pending",
+    version: Number(outputVersion),
+    previousApprovedReview: previousFinalReview?.url || null,
+    previousApprovedVersion: Number(previousFinalReview?.version) || null,
+    autoPublish: false,
+    updatedAt: new Date().toISOString(),
+  });
 }
 async function readJsonFile(file) { return JSON.parse((await fsp.readFile(file, "utf8")).replace(/^\uFEFF/, "")); }
 async function readJob(id) { return readJsonFile(path.join(confined(jobsRoot, id), "job.json")); }
@@ -2662,7 +2718,10 @@ async function ensurePreviewAssetDecisions(job) {
   const keyframeDirection = job.workflow?.stages?.keyframes?.artifacts?.direction;
   const hasLockedVisualConflict = (job.assets || []).some((asset) => asset.reviewStatus === "approved"
     && findLockedVisualIntentConflict(asset, job.contentBreakdown, keyframeDirection));
-  if (review.reviewComplete && review.renderReady && !hasLockedVisualConflict) return review;
+  if (review.reviewComplete && review.renderReady && !hasLockedVisualConflict) {
+    job.assetReview = review;
+    return review;
+  }
   const decision = await autoReviewLocalAssetsForPreview(job);
   return decision.review;
 }
@@ -2692,7 +2751,8 @@ async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
   });
   const directionName = `motion-sample-direction-v${version}.json`;
   await writeJson(path.join(jobDir, directionName), direction);
-  await ensurePreviewAssetDecisions(job);
+  const previewReview = await ensurePreviewAssetDecisions(job);
+  if (!previewReview.reviewComplete || !previewReview.renderReady) throw new Error("动态样片所需素材未完成自动审核，不能进入用户审核");
   const clean = await ensureWorkflowCleanSource(job);
   const captions = transcriptCues(job.transcript, job.currentPlan.keepSegments, job.script);
   const approvedAssets = (job.assets || []).filter(asset => asset.reviewStatus === "approved" && !assetComplianceIssues(asset, job, outputDuration).length);
@@ -2834,6 +2894,11 @@ async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "")
   const artifactUrl = name => `/video-jobs/${job.id}/${name}`;
   const output = {
     version: videoVersion,
+    workflowStageVersion: stageVersion,
+    workflowDependencies: {
+      keyframeVersion: Number(job.workflow?.stages?.keyframe_review?.approvedVersion) || null,
+      motionSampleVersion: Number(job.workflow?.stages?.motion_sample?.approvedVersion) || null,
+    },
     path: outputPath,
     url: artifactUrl(`final-v${videoVersion}.mp4`),
     thumbnailUrl: artifactUrl(`thumbnail-v${videoVersion}.jpg`),
@@ -2869,6 +2934,7 @@ async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "")
     createdAt: new Date().toISOString(),
     model: modelResult?.model || null,
   };
+  await writePendingFinalReviewAlias(job, videoVersion, job.output?.finalReview || null);
   job.versions = [...(job.versions || []).filter(item => Number(item.version) !== videoVersion), output];
   job.output = output;
   return { output, direction, directionUrl: artifactUrl(directionName), projectUrl: workflowUrl(job, path.join(projectRelative, "index.html")), manifestUrl: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")), videoVersion };
@@ -2977,6 +3043,7 @@ async function executeVisualStage(job, stageId, feedback = "") {
   stage.status = "running";
   stage.approvedVersion = null;
   delete stage.approvedAt;
+  delete stage.approvedOutputVersion;
   delete stage.rejectedAt;
   delete stage.rejectedVersion;
   delete stage.feedback;
@@ -2986,6 +3053,7 @@ async function executeVisualStage(job, stageId, feedback = "") {
   workflow.updatedAt = new Date().toISOString();
   job.status = visualJobStatus(stageId);
   job.progress = visualStageProgress(stageId);
+  delete job.approvedAt;
   delete job.error;
   delete job.errorDetail;
   delete job.errorStage;
@@ -3117,6 +3185,13 @@ async function approveVisualGate(job, stageId, body = {}) {
     const stage = workflow.stages.motion_sample;
     if (!stage?.artifacts?.url || stage.status === "error") throw Object.assign(new Error("还没有可批准的动态样片"), { statusCode: 409 });
     if (stage.status !== "awaiting_review") throw Object.assign(new Error("当前动态样片不在待审核状态"), { statusCode: 409 });
+    const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+    const review = assetReviewSummary(job, duration);
+    job.assetReview = review;
+    if (!review.reviewComplete || !review.renderReady) {
+      await saveJob(job);
+      throw Object.assign(new Error("样片关联素材状态已变化，请先重做动态样片再生成完整视频"), { statusCode: 409 });
+    }
     stage.status = "approved";
     stage.approvedVersion = stage.currentVersion;
     stage.feedback = String(body.feedback || "");
@@ -3127,6 +3202,32 @@ async function approveVisualGate(job, stageId, body = {}) {
     return;
   }
   throw Object.assign(new Error("该阶段不使用此批准接口"), { statusCode: 400 });
+}
+
+function assertOutputReviewVersion(job, expectedVersion) {
+  const currentVersion = Number(job.output?.version);
+  if (!Number.isInteger(currentVersion) || currentVersion <= 0) throw Object.assign(new Error("还没有可审核的成片"), { statusCode: 409 });
+  const requestedVersion = Number(expectedVersion);
+  if (!Number.isInteger(requestedVersion) || requestedVersion <= 0) throw Object.assign(new Error("缺少有效的成片审核版本，请刷新任务后重试"), { statusCode: 409 });
+  if (requestedVersion !== currentVersion) throw Object.assign(new Error(`页面为 v${requestedVersion}，当前可审核成片为 v${currentVersion}，请刷新后重试`), { statusCode: 409 });
+  return currentVersion;
+}
+
+function fullRenderStageVersionForOutput(job, outputVersion) {
+  const stage = job.workflow?.stages?.full_render;
+  if (!stage) return null;
+  if (!["awaiting_review", "approved", "error"].includes(stage.status)) return null;
+  const run = [...(stage.runs || [])].reverse().find(item => item.status === "completed" && Number(item.artifacts?.output?.version) === Number(outputVersion));
+  const runOutput = run?.artifacts?.output;
+  const dependenciesMatch = output => Number(output?.workflowDependencies?.keyframeVersion) === Number(job.workflow?.stages?.keyframe_review?.approvedVersion)
+    && Number(output?.workflowDependencies?.motionSampleVersion) === Number(job.workflow?.stages?.motion_sample?.approvedVersion);
+  if (Number(run?.version) > 0 && dependenciesMatch(runOutput)) return Number(run.version);
+  const artifactStageVersion = Number(stage.artifacts?.output?.workflowStageVersion);
+  if (["awaiting_review", "approved"].includes(stage.status)
+    && Number(stage.artifacts?.output?.version) === Number(outputVersion)
+    && dependenciesMatch(stage.artifacts?.output)
+    && artifactStageVersion > 0) return artifactStageVersion;
+  return null;
 }
 
 async function rejectVisualGate(job, stageId, body = {}) {
@@ -3287,6 +3388,7 @@ async function renderVersion(job, version) {
     createdAt: new Date().toISOString(),
     model: job.planModel || null
   };
+  await writePendingFinalReviewAlias(job, version, job.output?.finalReview || null);
   job.versions = [...(job.versions || []).filter(x => x.version !== version), versionResult];
   job.output = versionResult;
   job.jobDir = jobDir;
@@ -3340,7 +3442,7 @@ async function processJob(job) {
     job.status = "error"; job.error = error.message; job.errorDetail = String(error.stderr || "").slice(-8000); await saveJob(job);
   } finally { running.delete(job.id); }
 }
-async function reviseJob(job, feedback) {
+async function reviseJob(job, feedback, reviewEvidence = {}) {
   if (running.has(job.id)) return; running.set(job.id, true);
   const dir = confined(jobsRoot, job.id);
   const previous = {
@@ -3355,7 +3457,7 @@ async function reviseJob(job, feedback) {
   };
   try {
     const version = Number(job.currentVersion || 1) + 1;
-    job.status = "revising"; job.progress = 5; job.reviews = [...(job.reviews || []), { version: job.currentVersion, feedback, createdAt: new Date().toISOString() }]; await saveJob(job);
+    job.status = "revising"; job.progress = 5; job.reviews = [...(job.reviews || []), { version: job.output?.version || job.currentVersion, feedback, ...reviewEvidence, createdAt: new Date().toISOString() }]; await saveJob(job);
     const result = await runAi({ operation: "revise_plan", feedback, script: job.script, content_direction: job.contentDirection, source: job.source, transcript: job.transcript, base_plan: job.currentPlan }, dir, `edit-plan-v${version}`);
     const fallback = job.currentPlan.keepSegments;
     job.currentVersion = version; job.planModel = result.model; job.modelUsage = result.usage;
@@ -3447,18 +3549,28 @@ async function renderReviewedAssets(job, reason = "素材审核完成") {
   } finally { running.delete(job.id); }
 }
 
-function previewAssetAutoReviewDecision(asset, job) {
+function previewAssetAutoReviewDecision(rawAsset, job, outputDuration = null) {
+  const asset = normalizeAssetRecord(rawAsset);
   const isLocalRenderable = !EXTERNAL_SOURCE_TYPES.has(asset.sourceType) && !PAID_SOURCE_TYPES.has(asset.sourceType)
     && ["image", "video"].includes(asset.mediaKind) && asset.path && fs.existsSync(asset.path) && asset.placement;
   const keyframeDirection = job.workflow?.stages?.keyframes?.artifacts?.direction;
   const conflict = isLocalRenderable
     ? findLockedVisualIntentConflict(asset, job.contentBreakdown, keyframeDirection)
     : null;
-  const approved = isLocalRenderable && !conflict;
+  const complianceIssues = asset.reviewStatus === "approved" ? assetComplianceIssues(asset, job, outputDuration) : [];
+  const requiresUpdate = asset.reviewStatus === "pending"
+    || (asset.reviewStatus === "approved" && (!!conflict || complianceIssues.length > 0));
+  const approved = requiresUpdate
+    ? asset.reviewStatus === "pending" && isLocalRenderable && !conflict
+    : asset.reviewStatus === "approved";
   return {
     approved,
     reviewStatus: approved ? "approved" : "rejected",
-    reason: conflict
+    requiresUpdate,
+    complianceIssues,
+    reason: complianceIssues.length
+      ? `完整预览模式撤销不可渲染素材：${complianceIssues.join("；")}`
+      : conflict
       ? `与已批准关键帧 ${conflict.segmentId} 的 ${conflict.kind} 主视觉冲突，保留主视觉并跳过该素材`
       : approved ? "完整预览模式自动采用可渲染的本地富媒体素材" : "完整预览模式跳过外部、付费、缺文件或缺时间段素材",
     visualIntentConflict: conflict,
@@ -3470,8 +3582,8 @@ async function autoReviewLocalAssetsForPreview(job) {
   const decidedAt = new Date().toISOString();
   const decisions = [];
   for (const asset of job.assets || []) {
-    const decision = previewAssetAutoReviewDecision(asset, job);
-    if (asset.reviewStatus !== "pending" && !(asset.reviewStatus === "approved" && decision.visualIntentConflict)) continue;
+    const decision = previewAssetAutoReviewDecision(asset, job, duration);
+    if (!decision.requiresUpdate) continue;
     asset.reviewStatus = decision.reviewStatus;
     asset.approved = decision.approved;
     asset.updatedAt = decidedAt;
@@ -3943,242 +4055,327 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && workflowStageMatch) {
       const [, jobId, requestedStageId, action] = workflowStageMatch;
       const body = await readBodyJson(req, 256 * 1024);
-      const job = await readJob(jobId);
-      if (job.pipeline !== VISUAL_WORKFLOW_VERSION && job.workflow?.version !== VISUAL_WORKFLOW_VERSION) return json(res, 409, { error: "该任务不是视觉导演 v4 工作流" });
-      const stageId = requestedStageId === "keyframe_review" && action === "run" ? "keyframes" : requestedStageId;
-      if (!VISUAL_STAGE_ORDER.includes(requestedStageId)) return json(res, 404, { error: "未知工作流阶段" });
-      if (action === "config") {
-        const stage = await updateVisualStageConfig(job, requestedStageId, body);
-        return json(res, 200, { job, stage });
-      }
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      if (["run", "approve", "reject"].includes(action) && ["keyframe_review", "motion_sample"].includes(requestedStageId)) {
-        assertVisualGateVersion(job, requestedStageId, body.expectedVersion);
-      }
-      if (action === "run") {
-        if (stageId === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") return json(res, 409, { error: "请先批准关键帧" });
-        if (stageId === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
-        if (body.settings !== undefined || body.prompt !== undefined) await updateVisualStageConfig(job, requestedStageId, body);
-      }
-      if (action === "approve") {
-        await approveVisualGate(job, requestedStageId, body);
-        return json(res, 202, { job, nextStage: requestedStageId === "keyframe_review" ? "motion_sample" : "full_render" });
-      }
-      if (action === "reject") {
-        const rejection = await rejectVisualGate(job, requestedStageId, body);
-        return json(res, 200, { job, rejection });
-      }
-      const feedback = String(body.feedback || "").trim();
-      runVisualWorkflowChain(job, stageId, feedback);
-      return json(res, 202, { job, stageId });
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (job.pipeline !== VISUAL_WORKFLOW_VERSION && job.workflow?.version !== VISUAL_WORKFLOW_VERSION) return json(res, 409, { error: "该任务不是视觉导演 v4 工作流" });
+        const stageId = requestedStageId === "keyframe_review" && action === "run" ? "keyframes" : requestedStageId;
+        if (!VISUAL_STAGE_ORDER.includes(requestedStageId)) return json(res, 404, { error: "未知工作流阶段" });
+        if (action === "config") {
+          const stage = await updateVisualStageConfig(job, requestedStageId, body);
+          return json(res, 200, { job, stage });
+        }
+        if (["run", "approve", "reject"].includes(action) && ["keyframe_review", "motion_sample"].includes(requestedStageId)) {
+          assertVisualGateVersion(job, requestedStageId, body.expectedVersion);
+        }
+        if (action === "run") {
+          if (stageId === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") return json(res, 409, { error: "请先批准关键帧" });
+          if (stageId === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+          if (body.settings !== undefined || body.prompt !== undefined) await updateVisualStageConfig(job, requestedStageId, body);
+        }
+        if (action === "approve") {
+          await approveVisualGate(job, requestedStageId, body);
+          return json(res, 202, { job, nextStage: requestedStageId === "keyframe_review" ? "motion_sample" : "full_render" });
+        }
+        if (action === "reject") {
+          const rejection = await rejectVisualGate(job, requestedStageId, body);
+          return json(res, 200, { job, rejection });
+        }
+        const feedback = String(body.feedback || "").trim();
+        runVisualWorkflowChain(job, stageId, feedback);
+        return json(res, 202, { job, stageId });
+      });
     }
     const retryMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/retry$/);
     if (req.method === "POST" && retryMatch) {
-      const job = await readJob(retryMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      delete job.error; delete job.errorDetail; delete job.revisionError;
-      if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
-        const failedStage = job.errorStage || job.workflow?.currentStage || "style_research";
-        const retryStage = failedStage === "keyframe_review" ? "keyframes" : failedStage;
-        runVisualWorkflowChain(job, retryStage);
-      } else processJob(job);
-      return json(res, 202, { job });
+      const jobId = retryMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        delete job.error; delete job.errorDetail; delete job.revisionError;
+        if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          const failedStage = job.errorStage || job.workflow?.currentStage || "style_research";
+          const retryStage = failedStage === "keyframe_review" ? "keyframes" : failedStage;
+          runVisualWorkflowChain(job, retryStage);
+        } else processJob(job);
+        return json(res, 202, { job });
+      });
     }
     const reviseMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/revise$/);
     if (req.method === "POST" && reviseMatch) {
       const body = await readBodyJson(req); const feedback = String(body.feedback || "").trim();
       if (!feedback) return json(res, 400, { error: "请填写修改意见" });
-      const job = await readJob(reviseMatch[1]);
-      if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
-        if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-        if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "动态样片尚未批准，不能返修完整视频" });
-        job.reviews = [...(job.reviews || []), { version: job.output?.version || job.currentVersion || null, feedback, createdAt: new Date().toISOString() }];
-        delete job.approvedAt;
-        await saveJob(job);
-        runVisualWorkflowChain(job, "full_render", feedback);
-        return json(res, 202, { job, reusedTranscript: true, reusedDesign: true });
-      }
-      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-      if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行成片返修" });
-      reviseJob(job, feedback); return json(res, 202, { job });
+      const jobId = reviseMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
+        const mediaSha256 = await sha256File(job.output.path);
+        const ordinaryViewerAudit = job.output.ordinaryViewerAudit || null;
+        if (ordinaryViewerAudit?.mediaSha256 && String(ordinaryViewerAudit.mediaSha256).toLowerCase() !== mediaSha256.toLowerCase()) return json(res, 409, { error: "当前成片哈希与普通观众审查记录不一致，不能返修" });
+        const reviewEvidence = {
+          mediaSha256,
+          ordinaryViewerArtifactId: ordinaryViewerAudit?.artifactId || null,
+          transcriptSha256: ordinaryViewerAudit?.transcriptSha256 || null,
+        };
+        if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "动态样片尚未批准，不能返修完整视频" });
+          job.reviews = [...(job.reviews || []), { version: outputVersion, feedback, ...reviewEvidence, createdAt: new Date().toISOString() }];
+          delete job.approvedAt;
+          runVisualWorkflowChain(job, "full_render", feedback);
+          return json(res, 202, { job, reusedTranscript: true, reusedDesign: true });
+        }
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行成片返修" });
+        reviseJob(job, feedback, reviewEvidence); return json(res, 202, { job });
+      });
     }
     const replanMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/replan$/);
     if (req.method === "POST" && replanMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(replanMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) runVisualWorkflowChain(job, "content_breakdown", String(body.feedback || ""));
-      else replanJob(job, String(body.feedback || ""));
-      return json(res, 202, { job, reusedTranscript: true });
+      const jobId = replanMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) runVisualWorkflowChain(job, "content_breakdown", String(body.feedback || ""));
+        else replanJob(job, String(body.feedback || ""));
+        return json(res, 202, { job, reusedTranscript: true });
+      });
     }
     const rerenderMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/rerender$/);
     if (req.method === "POST" && rerenderMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(rerenderMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
-        if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
-        runVisualWorkflowChain(job, "full_render", String(body.reason || "本地重渲染"));
+      const jobId = rerenderMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+          runVisualWorkflowChain(job, "full_render", String(body.reason || "本地重渲染"));
+          return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
+        }
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行本地重渲染" });
+        rerenderJob(job, String(body.reason || ""), body);
         return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
-      }
-      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-      if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行本地重渲染" });
-      rerenderJob(job, String(body.reason || ""), body);
-      return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
+      });
     }
     const coverMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/cover$/);
     if (req.method === "POST" && coverMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(coverMatch[1]);
-      const cover = await regenerateCover(job, body);
-      return json(res, 200, { job, cover, reusedVideo: true, reusedPlan: true });
+      const jobId = coverMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const cover = await regenerateCover(job, body);
+        return json(res, 200, { job, cover, reusedVideo: true, reusedPlan: true });
+      });
     }
     const assetRediscoverMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/rediscover$/);
     if (req.method === "POST" && assetRediscoverMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(assetRediscoverMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
-      job.options = {
-        ...job.options,
-        visualStrategy: "rich-media-first",
-        cloudImageGenerationEnabled: body.cloudImageGenerationEnabled === true || job.options?.cloudImageGenerationEnabled === true,
-        paidImageGenerationConfirmation: body.paidImageGenerationConfirmation === false ? false : job.options?.paidImageGenerationConfirmation !== false,
-        rightsReviewMode: body.rightsReviewMode === "advisory" ? "advisory" : job.options?.rightsReviewMode || "strict"
-      };
-      await prepareAssetCandidates(job, { force: true, reason: String(body.reason || "按富媒体优先策略重新发现素材") });
-      job.status = "awaiting_asset_review";
-      job.progress = 60;
-      await saveJob(job);
-      return json(res, 200, { job, archivedVersions: (job.assetHistory || []).length });
+      const jobId = assetRediscoverMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
+        job.options = {
+          ...job.options,
+          visualStrategy: "rich-media-first",
+          cloudImageGenerationEnabled: body.cloudImageGenerationEnabled === true || job.options?.cloudImageGenerationEnabled === true,
+          paidImageGenerationConfirmation: body.paidImageGenerationConfirmation === false ? false : job.options?.paidImageGenerationConfirmation !== false,
+          rightsReviewMode: body.rightsReviewMode === "advisory" ? "advisory" : job.options?.rightsReviewMode || "strict"
+        };
+        await prepareAssetCandidates(job, { force: true, reason: String(body.reason || "按富媒体优先策略重新发现素材") });
+        job.status = "awaiting_asset_review";
+        job.progress = 60;
+        await saveJob(job);
+        return json(res, 200, { job, archivedVersions: (job.assetHistory || []).length });
+      });
     }
     const autoReviewPreviewMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/auto-review-preview$/);
     if (req.method === "POST" && autoReviewPreviewMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(autoReviewPreviewMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
-      const result = await autoReviewLocalAssetsForPreview(job);
-      if (!result.review.reviewComplete || !result.review.renderReady) return json(res, 409, { error: "自动素材决策后仍未达到预览渲染条件", review: result.review, job });
-      renderReviewedAssets(job, String(body.reason || "自动采用本地富媒体素材并生成完整预览与分段小样"));
-      return json(res, 202, { job, review: result.review, decisions: result.decisions });
+      const jobId = autoReviewPreviewMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
+        const result = await autoReviewLocalAssetsForPreview(job);
+        if (!result.review.reviewComplete || !result.review.renderReady) return json(res, 409, { error: "自动素材决策后仍未达到预览渲染条件", review: result.review, job });
+        renderReviewedAssets(job, String(body.reason || "自动采用本地富媒体素材并生成完整预览与分段小样"));
+        return json(res, 202, { job, review: result.review, decisions: result.decisions });
+      });
     }
     const assetUploadMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets$/);
     if (req.method === "POST" && assetUploadMatch) {
-      const job = await readJob(assetUploadMatch[1]);
-      const assetId = `asset-${crypto.randomBytes(4).toString("hex")}`;
-      const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
-      const assetsDir = path.join(confined(jobsRoot, job.id), "assets"); await fsp.mkdir(assetsDir, { recursive: true });
-      const assetPath = path.join(assetsDir, `${assetId}-${fileName}`);
-      const sizeBytes = await receiveUpload(req, assetPath);
-      const asset = normalizeAssetRecord({ id: assetId, fileName, path: assetPath, url: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, previewUrl: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, sizeBytes, sourceType: "local-upload", sourceLabel: "用户本地上传", mediaKind: mediaKindFor(fileName), ownership: "user-provided", licenseBasis: "pending-confirmation", reviewStatus: "pending", approved: false, placement: null, discoveredAutomatically: false, paymentRequired: false, paymentConfirmed: true, createdAt: new Date().toISOString() });
-      job.assets = [...(job.assets || []), asset];
-      job.status = "awaiting_asset_review";
-      job.assetReview = assetReviewSummary(job);
-      await saveJob(job);
-      return json(res, 201, { job, asset });
+      const jobId = assetUploadMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const assetId = `asset-${crypto.randomBytes(4).toString("hex")}`;
+        const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
+        const assetsDir = path.join(confined(jobsRoot, job.id), "assets"); await fsp.mkdir(assetsDir, { recursive: true });
+        const assetPath = path.join(assetsDir, `${assetId}-${fileName}`);
+        const sizeBytes = await receiveUpload(req, assetPath);
+        const asset = normalizeAssetRecord({ id: assetId, fileName, path: assetPath, url: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, previewUrl: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, sizeBytes, sourceType: "local-upload", sourceLabel: "用户本地上传", mediaKind: mediaKindFor(fileName), ownership: "user-provided", licenseBasis: "pending-confirmation", reviewStatus: "pending", approved: false, placement: null, discoveredAutomatically: false, paymentRequired: false, paymentConfirmed: true, createdAt: new Date().toISOString() });
+        job.assets = [...(job.assets || []), asset];
+        job.status = "awaiting_asset_review";
+        job.assetReview = assetReviewSummary(job);
+        await saveJob(job);
+        return json(res, 201, { job, asset });
+      });
     }
     const assetFileMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/([^/]+)\/file$/);
     if (req.method === "POST" && assetFileMatch) {
-      const job = await readJob(assetFileMatch[1]);
-      const asset = (job.assets || []).find(item => item.id === assetFileMatch[2]);
-      if (!asset) return json(res, 404, { error: "素材不存在" });
-      const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
-      const kind = mediaKindFor(fileName);
-      if (!["image", "video"].includes(kind)) return json(res, 400, { error: "替换文件必须是图片或视频" });
-      const assetsDir = path.join(confined(jobsRoot, job.id), "assets", "replacements");
-      await fsp.mkdir(assetsDir, { recursive: true });
-      const revision = (asset.fileVersions || []).length + 1;
-      const target = path.join(assetsDir, `${asset.id}-r${revision}-${fileName}`);
-      const sizeBytes = await receiveUpload(req, target);
-      asset.fileVersions = [...(asset.fileVersions || []), { path: asset.path || null, url: asset.url || null, fileName: asset.fileName || null, replacedAt: new Date().toISOString() }];
-      asset.path = target;
-      asset.url = `/video-jobs/${job.id}/assets/replacements/${asset.id}-r${revision}-${fileName}`;
-      asset.previewUrl = asset.url;
-      asset.fileName = fileName;
-      asset.mediaKind = kind;
-      asset.sizeBytes = sizeBytes;
-      asset.reviewStatus = "pending";
-      asset.approved = false;
-      asset.updatedAt = new Date().toISOString();
-      job.status = "awaiting_asset_review";
-      job.assetReview = assetReviewSummary(job);
-      await saveJob(job);
-      return json(res, 200, { job, asset });
+      const [jobId, assetId] = assetFileMatch.slice(1);
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const asset = (job.assets || []).find(item => item.id === assetId);
+        if (!asset) return json(res, 404, { error: "素材不存在" });
+        const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
+        const kind = mediaKindFor(fileName);
+        if (!["image", "video"].includes(kind)) return json(res, 400, { error: "替换文件必须是图片或视频" });
+        const assetsDir = path.join(confined(jobsRoot, job.id), "assets", "replacements");
+        await fsp.mkdir(assetsDir, { recursive: true });
+        const revision = (asset.fileVersions || []).length + 1;
+        const target = path.join(assetsDir, `${asset.id}-r${revision}-${fileName}`);
+        const sizeBytes = await receiveUpload(req, target);
+        asset.fileVersions = [...(asset.fileVersions || []), { path: asset.path || null, url: asset.url || null, fileName: asset.fileName || null, replacedAt: new Date().toISOString() }];
+        asset.path = target;
+        asset.url = `/video-jobs/${job.id}/assets/replacements/${asset.id}-r${revision}-${fileName}`;
+        asset.previewUrl = asset.url;
+        asset.fileName = fileName;
+        asset.mediaKind = kind;
+        asset.sizeBytes = sizeBytes;
+        asset.reviewStatus = "pending";
+        asset.approved = false;
+        asset.updatedAt = new Date().toISOString();
+        job.status = "awaiting_asset_review";
+        job.assetReview = assetReviewSummary(job);
+        await saveJob(job);
+        return json(res, 200, { job, asset });
+      });
     }
     const assetApprovalMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/([^/]+)\/approve$/);
     if (req.method === "POST" && assetApprovalMatch) {
-      const body = await readBodyJson(req), job = await readJob(assetApprovalMatch[1]);
-      const asset = (job.assets || []).find(item => item.id === assetApprovalMatch[2]);
-      if (!asset) return json(res, 404, { error: "素材不存在" });
-      const before = JSON.parse(JSON.stringify(asset));
-      const reviewStatus = body.reviewStatus === "rejected" || body.approved === false ? "rejected" : body.approved === true ? "approved" : "pending";
-      const nextSourceType = String(body.sourceType || asset.sourceType || "local-upload").slice(0, 80);
-      Object.assign(asset, {
-        reviewStatus,
-        approved: reviewStatus === "approved",
-        ownership: String(body.ownership || asset.ownership || "user-provided").slice(0, 120),
-        sourceType: nextSourceType,
-        creatorName: String(body.creatorName ?? asset.creatorName ?? "").trim().slice(0, 120),
-        workTitle: String(body.workTitle ?? asset.workTitle ?? "").trim().slice(0, 180),
-        sourceUrl: String(body.sourceUrl ?? asset.sourceUrl ?? "").trim().slice(0, 1000),
-        usagePurpose: String(body.usagePurpose ?? asset.usagePurpose ?? "").trim().slice(0, 500),
-        licenseBasis: String(body.licenseBasis || body.license || asset.licenseBasis || "").trim().slice(0, 120),
-        attributionText: String(body.attributionText ?? asset.attributionText ?? "").trim().slice(0, 240),
-        clipStart: Number.isFinite(Number(body.clipStart)) ? Math.max(0, Number(body.clipStart)) : Number(asset.clipStart || 0),
-        clipEnd: Number.isFinite(Number(body.clipEnd)) && Number(body.clipEnd) > 0 ? Number(body.clipEnd) : asset.clipEnd,
-        clipDuration: Number.isFinite(Number(body.clipDuration)) && Number(body.clipDuration) > 0 ? Number(body.clipDuration) : asset.clipDuration,
-        paymentConfirmed: PAID_SOURCE_TYPES.has(nextSourceType) ? body.paymentConfirmed === true : body.paymentConfirmed === undefined ? asset.paymentConfirmed === true : body.paymentConfirmed === true,
-        placement: body.placement ? normalizePlacement(body.placement) : asset.placement,
-        updatedAt: new Date().toISOString()
+      const body = await readBodyJson(req);
+      const [jobId, assetId] = assetApprovalMatch.slice(1);
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const asset = (job.assets || []).find(item => item.id === assetId);
+        if (!asset) return json(res, 404, { error: "素材不存在" });
+        const before = JSON.parse(JSON.stringify(asset));
+        const reviewStatus = body.reviewStatus === "rejected" || body.approved === false ? "rejected" : body.approved === true ? "approved" : "pending";
+        const nextSourceType = String(body.sourceType || asset.sourceType || "local-upload").slice(0, 80);
+        Object.assign(asset, {
+          reviewStatus,
+          approved: reviewStatus === "approved",
+          ownership: String(body.ownership || asset.ownership || "user-provided").slice(0, 120),
+          sourceType: nextSourceType,
+          creatorName: String(body.creatorName ?? asset.creatorName ?? "").trim().slice(0, 120),
+          workTitle: String(body.workTitle ?? asset.workTitle ?? "").trim().slice(0, 180),
+          sourceUrl: String(body.sourceUrl ?? asset.sourceUrl ?? "").trim().slice(0, 1000),
+          usagePurpose: String(body.usagePurpose ?? asset.usagePurpose ?? "").trim().slice(0, 500),
+          licenseBasis: String(body.licenseBasis || body.license || asset.licenseBasis || "").trim().slice(0, 120),
+          attributionText: String(body.attributionText ?? asset.attributionText ?? "").trim().slice(0, 240),
+          clipStart: Number.isFinite(Number(body.clipStart)) ? Math.max(0, Number(body.clipStart)) : Number(asset.clipStart || 0),
+          clipEnd: Number.isFinite(Number(body.clipEnd)) && Number(body.clipEnd) > 0 ? Number(body.clipEnd) : asset.clipEnd,
+          clipDuration: Number.isFinite(Number(body.clipDuration)) && Number(body.clipDuration) > 0 ? Number(body.clipDuration) : asset.clipDuration,
+          paymentConfirmed: PAID_SOURCE_TYPES.has(nextSourceType) ? body.paymentConfirmed === true : body.paymentConfirmed === undefined ? asset.paymentConfirmed === true : body.paymentConfirmed === true,
+          placement: body.placement ? normalizePlacement(body.placement) : asset.placement,
+          updatedAt: new Date().toISOString()
+        });
+        const normalized = normalizeAssetRecord(asset);
+        Object.assign(asset, normalized);
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        const issues = assetComplianceIssues(asset, job, duration);
+        if (reviewStatus === "approved" && issues.length) {
+          Object.keys(asset).forEach(key => delete asset[key]);
+          Object.assign(asset, before);
+          return json(res, 409, { error: issues.join("；"), issues });
+        }
+        job.assetDecisions = [...(job.assetDecisions || []), { assetId: asset.id, reviewStatus, placement: asset.placement, licenseBasis: asset.licenseBasis, usagePurpose: asset.usagePurpose, decidedAt: new Date().toISOString() }];
+        job.assetReview = assetReviewSummary(job, duration);
+        job.status = "awaiting_asset_review";
+        delete job.approvedAt;
+        await writeJson(path.join(confined(jobsRoot, job.id), "asset-decisions.json"), job.assetDecisions);
+        await saveJob(job);
+        return json(res, 200, { job, asset });
       });
-      const normalized = normalizeAssetRecord(asset);
-      Object.assign(asset, normalized);
-      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-      const issues = assetComplianceIssues(asset, job, duration);
-      if (reviewStatus === "approved" && issues.length) {
-        Object.keys(asset).forEach(key => delete asset[key]);
-        Object.assign(asset, before);
-        return json(res, 409, { error: issues.join("；"), issues });
-      }
-      job.assetDecisions = [...(job.assetDecisions || []), { assetId: asset.id, reviewStatus, placement: asset.placement, licenseBasis: asset.licenseBasis, usagePurpose: asset.usagePurpose, decidedAt: new Date().toISOString() }];
-      job.assetReview = assetReviewSummary(job, duration);
-      job.status = "awaiting_asset_review";
-      delete job.approvedAt;
-      await writeJson(path.join(confined(jobsRoot, job.id), "asset-decisions.json"), job.assetDecisions);
-      await saveJob(job);
-      return json(res, 200, { job, asset });
     }
     const assetRenderMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/render$/);
     if (req.method === "POST" && assetRenderMatch) {
-      const job = await readJob(assetRenderMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-      const review = assetReviewSummary(job, duration);
-      if (!review.reviewComplete) return json(res, 409, { error: "仍有素材未批准或拒绝", review });
-      if (!review.renderReady) return json(res, 409, { error: review.complianceIssues.map(item => `${item.assetId}：${item.issue}`).join("；"), review });
-      renderReviewedAssets(job);
-      return json(res, 202, { job, review });
+      const jobId = assetRenderMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        const review = assetReviewSummary(job, duration);
+        if (!review.reviewComplete) return json(res, 409, { error: "仍有素材未批准或拒绝", review });
+        if (!review.renderReady) return json(res, 409, { error: review.complianceIssues.map(item => `${item.assetId}：${item.issue}`).join("；"), review });
+        renderReviewedAssets(job);
+        return json(res, 202, { job, review });
+      });
     }
     const approveMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/approve$/);
     if (req.method === "POST" && approveMatch) {
-      const job = await readJob(approveMatch[1]);
-      if (!job.output) return json(res, 409, { error: "还没有可审核的成片" });
-      if (job.output.qaPass !== true) return json(res, 409, { error: "当前成片QA未通过，不能最终审核" });
-      const manifest = await readJsonFile(path.join(confined(jobsRoot, job.id), `media-manifest-v${job.output.version}.json`));
-      if (manifest.review?.reviewComplete !== true || manifest.assets.some(asset => asset.approved && asset.composited !== true)) return json(res, 409, { error: "素材审核或实际合成状态不完整，不能最终审核" });
-      job.status = "approved"; job.approvedAt = new Date().toISOString();
-      if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
-        const stage = job.workflow.stages.full_render;
-        stage.status = "approved";
-        stage.approvedVersion = stage.currentVersion;
-        stage.approvedAt = job.approvedAt;
-        job.workflow.audit ||= [];
-        job.workflow.audit.push({ type: "stage-approved", stageId: "full_render", version: stage.currentVersion, at: job.approvedAt });
-      }
-      await saveJob(job);
-      await writeJson(path.join(confined(jobsRoot, job.id), "final-review.json"), { status: "approved", version: job.currentVersion, qaPass: true, mediaReview: manifest.review, renderedAssetIds: manifest.renderedAssetIds || [], approvedAt: job.approvedAt, autoPublish: false });
-      return json(res, 200, { job });
+      const body = await readBodyJson(req);
+      const jobId = approveMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
+        if (job.output.qaPass !== true) return json(res, 409, { error: "当前成片QA未通过，不能最终审核" });
+        const jobDir = confined(jobsRoot, job.id);
+        const manifestPath = path.join(jobDir, `media-manifest-v${outputVersion}.json`);
+        const reviewBundlePath = path.join(jobDir, `review-bundle-v${outputVersion}.json`);
+        const manifest = await readJsonFile(manifestPath);
+        if (manifest.review?.reviewComplete !== true || manifest.assets.some(asset => asset.approved && asset.composited !== true)) return json(res, 409, { error: "素材审核或实际合成状态不完整，不能最终审核" });
+        if (Number(manifest.version) !== outputVersion) return json(res, 409, { error: "素材清单版本与当前成片不一致，不能最终审核" });
+        const reviewBundle = await readJsonFile(reviewBundlePath);
+        if (Number(reviewBundle.version) !== outputVersion) return json(res, 409, { error: "审核预览包版本与当前成片不一致，不能最终审核" });
+        let workflowStageVersion = null;
+        if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          workflowStageVersion = fullRenderStageVersionForOutput(job, outputVersion);
+          if (!workflowStageVersion) return json(res, 409, { error: "当前成片与完整渲染记录不匹配，不能最终审核" });
+        }
+        const mediaSha256 = await sha256File(job.output.path);
+        const ordinaryViewerAudit = job.output.ordinaryViewerAudit || null;
+        if (ordinaryViewerAudit?.outputVersion && Number(ordinaryViewerAudit.outputVersion) !== outputVersion) return json(res, 409, { error: "普通观众审查版本与当前成片不一致，不能最终审核" });
+        if (ordinaryViewerAudit?.mediaSha256 && String(ordinaryViewerAudit.mediaSha256).toLowerCase() !== mediaSha256.toLowerCase()) return json(res, 409, { error: "当前成片哈希与普通观众审查记录不一致，不能最终审核" });
+        const reviewBundleSha256 = await sha256File(reviewBundlePath);
+        const mediaManifestSha256 = await sha256File(manifestPath);
+        const reviewPreviewPath = reviewBundle.preview?.path ? confined(jobDir, reviewBundle.preview.path) : null;
+        if (!reviewPreviewPath || !fs.existsSync(reviewPreviewPath)) return json(res, 409, { error: "当前成片缺少真实审核预览，不能最终审核" });
+        const reviewPreviewSha256 = await sha256File(reviewPreviewPath);
+        const finalReviewName = `final-review-v${outputVersion}.json`;
+        const finalReviewUrl = `/video-jobs/${job.id}/${finalReviewName}`;
+        const proposedFinalReview = {
+          status: "approved",
+          version: outputVersion,
+          workflowStageVersion,
+          mediaSha256,
+          reviewBundle: { url: job.output.artifacts?.reviewBundle || `/video-jobs/${job.id}/review-bundle-v${outputVersion}.json`, sha256: reviewBundleSha256, previewUrl: reviewBundle.preview?.url || null, previewSha256: reviewPreviewSha256 },
+          mediaManifest: { url: job.output.artifacts?.mediaManifest || `/video-jobs/${job.id}/media-manifest-v${outputVersion}.json`, sha256: mediaManifestSha256 },
+          ordinaryViewerAudit: ordinaryViewerAudit ? { artifactId: ordinaryViewerAudit.artifactId || null, outputVersion: ordinaryViewerAudit.outputVersion || null, mediaSha256: ordinaryViewerAudit.mediaSha256 || null, transcriptSha256: ordinaryViewerAudit.transcriptSha256 || null, inspectionMode: ordinaryViewerAudit.inspectionMode || null } : null,
+          qaPass: true,
+          mediaReview: manifest.review,
+          renderedAssetIds: manifest.renderedAssetIds || [],
+          approvedAt: new Date().toISOString(),
+          autoPublish: false,
+        };
+        const persisted = await createOrReadVersionedFinalReview(path.join(jobDir, finalReviewName), proposedFinalReview);
+        if (persisted.replayed && job.status === "approved") return json(res, 200, { job, finalReview: persisted.review, replayed: true });
+        const finalReview = persisted.review;
+        job.status = "approved";
+        job.approvedAt = finalReview.approvedAt;
+        if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          const stage = job.workflow.stages.full_render;
+          stage.status = "approved";
+          stage.approvedVersion = workflowStageVersion;
+          stage.approvedOutputVersion = outputVersion;
+          stage.approvedAt = job.approvedAt;
+          job.workflow.audit ||= [];
+          if (!job.workflow.audit.some(item => item.type === "stage-approved" && item.stageId === "full_render" && Number(item.outputVersion) === outputVersion)) {
+            job.workflow.audit.push({ type: "stage-approved", stageId: "full_render", version: workflowStageVersion, outputVersion, at: job.approvedAt });
+          }
+        }
+        await writeJson(path.join(jobDir, "final-review.json"), finalReview);
+        job.output = { ...job.output, mediaSha256, finalReview: { status: "approved", version: outputVersion, url: finalReviewUrl, mediaSha256, approvedAt: job.approvedAt, evidenceHash: finalReview.evidenceHash, recordHash: finalReview.recordHash }, artifacts: { ...(job.output.artifacts || {}), finalReview: finalReviewUrl } };
+        job.versions = (job.versions || []).map(item => Number(item.version) === outputVersion ? job.output : item);
+        await saveJob(job);
+        return json(res, 200, { job, finalReview, replayed: persisted.replayed });
+      });
     }
     if (pathname.startsWith("/video-jobs/")) return await serveFile(req, res, confined(jobsRoot, pathname.slice("/video-jobs/".length)));
     if (pathname.startsWith("/content-items/")) return await serveFile(req, res, confined(contentRoot, pathname.slice("/content-items/".length)));
@@ -4209,10 +4406,17 @@ export async function closeServerResourcesForTests() {
 }
 
 export {
+  server as httpServerForTests,
   normalizeAssetRecord,
   assetComplianceIssues,
   assetReviewSummary,
   candidatePlacement,
   previewAssetAutoReviewDecision,
+  assertOutputReviewVersion,
+  fullRenderStageVersionForOutput,
+  finalReviewEvidenceHash,
+  finalReviewRecordHash,
+  createOrReadVersionedFinalReview,
+  withJobMutation,
   writeMultiAgentArtifact,
 };

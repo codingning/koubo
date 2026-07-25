@@ -124,7 +124,7 @@ export function visualGateVersion(job, stageId) {
 
 export function assertVisualGateVersion(job, stageId, expectedVersion) {
   const expected = Number(expectedVersion);
-  if (!Number.isInteger(expected) || expected <= 0) throw visualReviewError("缺少有效的审核版本", 400);
+  if (!Number.isInteger(expected) || expected <= 0) throw visualReviewError("缺少有效的审核版本");
   const actual = visualGateVersion(job, stageId);
   if (actual !== expected) throw visualReviewError(`审核版本已更新：页面为 v${expected}，当前为 v${actual}`);
   return actual;
@@ -196,6 +196,7 @@ export function invalidateVisualStages(workflow, afterStageId, reason = "上游�
     stage.invalidatedAt = new Date().toISOString();
     stage.invalidatedReason = reason;
     delete stage.approvedAt;
+    delete stage.approvedOutputVersion;
     delete stage.rejectedAt;
     delete stage.rejectedVersion;
     delete stage.feedback;

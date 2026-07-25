@@ -225,6 +225,7 @@ const keyframeStageSource = sourceBetween(serverSource, "async function runKeyfr
 assert(keyframeStageSource.includes("previous,") && keyframeStageSource.includes("feedback,") && keyframeStageSource.includes("custom_prompt: feedback ? job.workflow.config.stages.keyframe_review.prompt"), "关键帧返修没有把上一版、反馈和返修提示词传给下一版");
 const executeVisualStageSource = sourceBetween(serverSource, "async function executeVisualStage", "async function runVisualWorkflowChain");
 for (const token of ["delete stage.approvedAt", "delete stage.rejectedAt", "delete stage.rejectedVersion", "delete stage.feedback"]) assert(executeVisualStageSource.includes(token), `视觉阶段重做未清理旧审核状态：${token}`);
+assert(executeVisualStageSource.includes("delete stage.approvedOutputVersion") && executeVisualStageSource.includes("delete job.approvedAt"), "视觉阶段重做仍会残留旧全片批准版本或批准时间");
 const workflowStageRouteSource = sourceBetween(serverSource, "const workflowStageMatch", "const retryMatch");
 assert(workflowStageRouteSource.includes('requestedStageId === "keyframe_review" && action === "run" ? "keyframes"') && workflowStageRouteSource.includes("runVisualWorkflowChain(job, stageId, feedback)"), "keyframe_review/run 没有携带 feedback 进入关键帧新版本");
 assert(workflowStageRouteSource.includes("config|run|approve|reject") && workflowStageRouteSource.includes('action === "reject"'), "视觉审核路由缺少整版拒绝动作");
@@ -236,7 +237,9 @@ const motionSampleStageSource = sourceBetween(serverSource, "async function runM
 const fullRenderStageSource = sourceBetween(serverSource, "async function runFullRenderStage", "function visualJobStatus");
 assert(motionSampleStageSource.includes("keyframeDirection:"), "动态样片构建没有传播已批准关键帧的 presentation/visualIntent");
 assert(motionSampleStageSource.includes("motionDirection: direction"), "动态样片构建没有把规范化 choreography 传给 HyperFrames builder");
+assert(motionSampleStageSource.includes("previewReview.reviewComplete") && motionSampleStageSource.includes("previewReview.renderReady"), "动态样片没有在交给用户前确认素材自动审核已经可进入全片");
 assert(fullRenderStageSource.includes("keyframeDirection:"), "完整视频构建没有传播已批准关键帧的 presentation/visualIntent");
+assert(fullRenderStageSource.includes("workflowDependencies") && serverSource.includes("dependenciesMatch"), "完整视频批准没有绑定当前关键帧与动态样片版本");
 assert(serverSource.includes('pipeline === VISUAL_WORKFLOW_VERSION') && serverSource.includes('runVisualWorkflowChain(job, "style_research")'), "新任务没有默认进入视觉导演v4流程");
 assert(serverSource.includes('runVisualWorkflowChain(job, "motion_sample")') && serverSource.includes('runVisualWorkflowChain(job, "full_render")'), "关键帧或动态样片审核门没有驱动下一阶段");
 assert(serverSource.includes('masterWidth || 2560') && serverSource.includes('masterHeight || (width === 2560 ? 1440 : 1080)'), "完整视频渲染没有保留2K母版路径");
@@ -419,6 +422,16 @@ assert(app.includes("review.sharpConclusion") && app.includes("review.minimalFix
 assert(!app.includes("新口播已生成，可以直接拍摄"), "网页仍在隐藏普通观众点评并直接提示可以拍摄");
 assert(app.includes("/revise`"), "网页未接入自然语言返修接口");
 assert(app.includes("/approve`"), "网页未接入最终审核接口");
+assert(app.includes("selectedVideoOutputVersion") && app.includes("历史版本不可审核"), "网页没有区分当前可审核成片与只读历史版本");
+assert(app.includes("JSON.stringify({ feedback, expectedVersion })") && app.includes("JSON.stringify({ expectedVersion })"), "最终返修或批准请求没有绑定用户当前所见成片版本");
+assert(serverSource.includes("assertOutputReviewVersion(job, body.expectedVersion)"), "服务端最终返修或批准没有校验成片 expectedVersion");
+assert(serverSource.includes("approvedOutputVersion") && serverSource.includes("mediaSha256"), "最终批准记录没有绑定输出版本与媒体哈希");
+assert(serverSource.includes("final-review-v${outputVersion}.json") && serverSource.includes("reviewBundleSha256") && serverSource.includes("reviewPreviewSha256"), "最终批准没有保留版本化审核记录或绑定审核预览包");
+assert(serverSource.includes("createOrReadVersionedFinalReview") && serverSource.includes("该版本已有不同证据的最终审核记录") && serverSource.includes("finalReviewRecordHash"), "同一版本的最终批准记录仍可能被覆盖或完整记录未防篡改");
+const jobMutationRouteCount = (serverSource.match(/return await withJobMutation\(jobId/g) || []).length;
+assert(serverSource.includes("async function withJobMutation") && serverSource.includes("running.has(id) || jobMutations.has(id)") && jobMutationRouteCount >= 13, "既有任务写接口没有统一经过原子互斥门");
+assert(serverSource.includes("writePendingFinalReviewAlias") && serverSource.includes('status: "pending"'), "新成片生成后 final-review 当前别名仍可能冒充旧批准");
+assert(serverSource.includes("ordinaryViewerArtifactId") && serverSource.includes("transcriptSha256"), "自然语言返修记录没有绑定基础媒体和普通观众审查证据");
 assert(ids.has("edit-caption-style") && ids.has("edit-information-panels"), "网页缺少动态字幕或分屏信息板控制项");
 assert(html.includes('<option value="landscape-tech">16:9 视觉导演横版</option>'), "网页未把 16:9 视觉导演横版设为首选");
 assert(ids.has("director-workflow-panel") && ids.has("director-stage-cards") && ids.has("director-workflow-version"), "网页缺少六阶段配置与审核面板");
@@ -441,6 +454,7 @@ assert(app.includes("整版不接受，先停在这里") && app.includes("已记
 assert(app.includes('body: JSON.stringify({ feedback, expectedVersion })') && app.includes('action === "run" && !feedback'), "演示审核没有使用版本绑定的最小请求体或空反馈返修门禁");
 assert(app.includes("demoJobId") && app.includes("currentVideoJob?.id !== jobId"), "演示审核按钮没有绑定当前任务，存在跨任务误操作风险");
 assert(app.includes("demoExpectedVersion") && app.includes("directorExpectedVersion"), "两种审核界面没有绑定当前关键帧或样片版本");
+assert(app.includes("approveDisabled: !assetsReady") && app.includes("样片关联素材状态异常"), "演示模式没有在素材状态异常时阻止样片进入全片");
 assert(app.includes('editExperienceMode !== "demo" && !rejected') && app.includes("renderReplanAvailability"), "演示模式或已拒绝任务仍可能显示整链重新规划入口");
 assert(app.includes("videoJobContextToken") && app.includes("contextToken !== videoJobContextToken"), "任务切换没有隔离旧轮询响应");
 assert(app.includes('if (attachCurrentContent) uploadHeaders["X-Content-Id"]') && app.includes('script: attachCurrentContent ? editedScript || shortText(currentItem) : ""'), "演示模式仍可能静默绑定隐藏的内容稿");

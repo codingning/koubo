@@ -59,6 +59,7 @@ test("preview auto review rejects a local asset that overlaps locked visual inte
 
   assert.equal(decision.approved, false);
   assert.equal(decision.reviewStatus, "rejected");
+  assert.equal(decision.requiresUpdate, true);
   assert.equal(decision.visualIntentConflict?.segmentId, "S04");
   assert.equal(decision.visualIntentConflict?.kind, "memo-action");
   assert.match(decision.reason, /保留主视觉并跳过该素材/);
@@ -75,5 +76,41 @@ test("preview auto review still approves a non-conflicting local asset", () => {
 
   assert.equal(decision.approved, true);
   assert.equal(decision.reviewStatus, "approved");
+  assert.equal(decision.requiresUpdate, true);
   assert.equal(decision.visualIntentConflict, null);
+});
+
+test("preview auto review revokes an approved asset whose local file disappeared", () => {
+  const decision = previewAssetAutoReviewDecision({
+    id: "asset-stale-approved",
+    sourceType: "local-derived",
+    mediaKind: "video",
+    path: path.join(dataRoot, "missing.mp4"),
+    placement: { start: 0.2, end: 2.4, mode: "broll" },
+    reviewStatus: "approved",
+    approved: true,
+  }, job, 8);
+
+  assert.equal(decision.requiresUpdate, true);
+  assert.equal(decision.approved, false);
+  assert.equal(decision.reviewStatus, "rejected");
+  assert.deepEqual(decision.complianceIssues, ["缺少可渲染的本地素材文件"]);
+  assert.match(decision.reason, /撤销不可渲染素材/);
+});
+
+test("preview auto review leaves a still-valid approved local asset unchanged", () => {
+  const decision = previewAssetAutoReviewDecision({
+    id: "asset-still-valid",
+    sourceType: "local-derived",
+    mediaKind: "video",
+    path: assetPath,
+    placement: { start: 0.2, end: 2.4, mode: "broll" },
+    reviewStatus: "approved",
+    approved: true,
+  }, job, 8);
+
+  assert.equal(decision.requiresUpdate, false);
+  assert.equal(decision.approved, true);
+  assert.equal(decision.reviewStatus, "approved");
+  assert.deepEqual(decision.complianceIssues, []);
 });

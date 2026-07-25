@@ -78,7 +78,7 @@ test("review actions are bound to the exact keyframe or sample version shown to 
   assert.equal(visualGateVersion(job, "keyframe_review"), 3);
   assert.equal(assertVisualGateVersion(job, "keyframe_review", 3), 3);
   assert.throws(() => assertVisualGateVersion(job, "keyframe_review", 2), /页面为 v2，当前为 v3/);
-  assert.throws(() => assertVisualGateVersion(job, "keyframe_review", undefined), /缺少有效的审核版本/);
+  assert.throws(() => assertVisualGateVersion(job, "keyframe_review", undefined), error => error.statusCode === 409 && /缺少有效的审核版本/.test(error.message));
 
   job.workflow.stages.motion_sample = stage({
     status: "awaiting_review",
@@ -120,6 +120,13 @@ test("re-running an upstream stage clears stale review metadata but keeps audit 
   const job = reviewJob();
   rejectVisualGateState(job, "keyframe_review", "整版不接受", "2026-07-25T10:02:00.000Z");
   const auditLength = job.workflow.audit.length;
+  job.workflow.stages.full_render = stage({
+    status: "approved",
+    currentVersion: 2,
+    approvedVersion: 2,
+    approvedOutputVersion: 5,
+    artifacts: { output: { version: 5 } },
+  });
 
   invalidateVisualStages(job.workflow, "keyframes", "生成关键帧 v4");
 
@@ -130,6 +137,7 @@ test("re-running an upstream stage clears stale review metadata but keeps audit 
   assert.equal("rejectedAt" in gate, false);
   assert.equal("rejectedVersion" in gate, false);
   assert.equal("feedback" in gate, false);
+  assert.equal("approvedOutputVersion" in job.workflow.stages.full_render, false);
   assert.ok(job.workflow.audit.length > auditLength);
   assert.equal(job.workflow.audit.some(item => item.type === "stage-rejected"), true);
 });
