@@ -10,6 +10,7 @@ import {
   normalizeContentBreakdown,
   normalizeFullDirection,
   normalizeKeyframeDirection,
+  normalizeMotionDirection,
 } from "../video/visual_director.mjs";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -200,22 +201,35 @@ function createProjectRoot(t) {
 
 async function renderFixtureProject(t, mode, keyframeDirection, options = {}) {
   const root = createProjectRoot(t);
+  const fixtureBreakdown = options.breakdown || breakdown;
   return buildHyperframesDirectorProject({
     projectDir: path.join(root, mode),
     sourceVideo: sourceVideoFixture,
     sourceAudio: null,
-    breakdown,
+    breakdown: fixtureBreakdown,
     styleReport,
     mode,
-    rangeStart: 0,
-    rangeEnd: 9,
+    rangeStart: options.rangeStart ?? 0,
+    rangeEnd: options.rangeEnd ?? 9,
     keyframeDirection,
+    motionDirection: options.motionDirection || null,
     fullDirection: options.fullDirection || null,
     captions: [],
     approvedAssets: options.approvedAssets || [],
     renderSpec: { width: 1920, height: 1080, fps: 30 },
     promptSnapshot: { stage: mode, feedback: "回归测试" },
   });
+}
+
+function timelineFromCalls(documentHtml, selector) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`tl\\.from\\("${escapedSelector}",\\s*(\\{[^}]*\\}),\\s*([0-9.]+)\\);`, "g");
+  return [...documentHtml.matchAll(pattern)].map(match => ({ vars: match[1], at: Number(match[2]) }));
+}
+
+function assertTimelineVar(vars, key, expected) {
+  const escaped = String(expected).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  assert.match(vars, new RegExp(`(?:${key}|"${key}")\\s*:\\s*(?:"${escaped}"|${escaped})(?:[,}])`));
 }
 
 function assertNoInternalLabels(documentHtml) {
@@ -386,4 +400,444 @@ test("full direction and HTML preserve one, two, and zero fact timings", async t
   assert.match(documentHtml, /tl\.from\("#scene-S04 \.fact-1",[^;]+, 3\.610\);/);
   assert.match(documentHtml, /tl\.from\("#scene-S04 \.fact-2",[^;]+, 3\.970\);/);
   assert.equal(documentHtml.includes("NaN"), false);
+});
+
+test("sample HTML applies custom choreography timing, action preset, and easing", async t => {
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    durationSeconds: 9,
+    strongestSegmentId: "S01",
+    choreography: [{
+      order: 1,
+      segmentId: "S01",
+      target: "title",
+      element: "主标题",
+      at: 0.731,
+      action: "从右侧滑入",
+      actionPreset: "slide-right",
+      easing: "sine.inOut",
+      purpose: "验证样片动作合同",
+    }],
+  }, breakdown, { outputDuration: 9 });
+
+  assert.equal(motionDirection.choreography[0].at, 0.731);
+  assert.equal(motionDirection.choreography[0].actionPreset, "slide-right");
+  assert.equal(motionDirection.choreography[0].easing, "sine.inOut");
+
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, { motionDirection });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const calls = timelineFromCalls(documentHtml, "#scene-S01 h1");
+
+  assert.equal(calls.length, 1, "custom title choreography must replace the sample fallback call");
+  assert.equal(calls[0].at, 0.731);
+  assertTimelineVar(calls[0].vars, "x", 60);
+  assertTimelineVar(calls[0].vars, "ease", "sine.inOut");
+});
+
+test("invalid choreography action and easing never enter sample HTML", async t => {
+  const invalidActionPreset = 'spin");window.__BAD_ACTION__=1;//';
+  const invalidAction = '");window.__BAD_ACTION_TEXT__=1;//';
+  const invalidEasing = 'power4.out");window.__BAD_EASE__=1;//';
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    durationSeconds: 9,
+    strongestSegmentId: "S01",
+    choreography: [{
+      order: 1,
+      segmentId: "S01",
+      target: "title",
+      element: "主标题",
+      at: 0.919,
+      action: invalidAction,
+      actionPreset: invalidActionPreset,
+      easing: invalidEasing,
+      purpose: "验证非法动作不会进入输出",
+    }],
+  }, breakdown, { outputDuration: 9 });
+
+  assert.equal(motionDirection.choreography[0].actionPreset, "fade-up");
+  assert.equal(motionDirection.choreography[0].easing, "power3.out");
+
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, { motionDirection });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  for (const unsafe of [invalidActionPreset, invalidAction, invalidEasing, "__BAD_ACTION__", "__BAD_ACTION_TEXT__", "__BAD_EASE__"]) {
+    assert.equal(documentHtml.includes(unsafe), false, `unsafe choreography text leaked into HTML: ${unsafe}`);
+  }
+  const calls = timelineFromCalls(documentHtml, "#scene-S01 h1");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].at, 0.919);
+  assertTimelineVar(calls[0].vars, "y", 30);
+  assertTimelineVar(calls[0].vars, "ease", "power3.out");
+});
+
+test("keyframes and full HTML ignore sample choreography", async t => {
+  const direction = normalizeKeyframeDirection(rawDirection, breakdown, 3);
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    durationSeconds: 9,
+    strongestSegmentId: "S01",
+    choreography: [{
+      order: 1,
+      segmentId: "S01",
+      target: "title",
+      element: "主标题",
+      at: 0.731,
+      action: "从右侧滑入",
+      actionPreset: "slide-right",
+      easing: "sine.inOut",
+      purpose: "只允许影响动态样片",
+    }],
+  }, breakdown, { outputDuration: 9 });
+
+  for (const mode of ["keyframes", "full"]) {
+    const baseline = await renderFixtureProject(t, mode, direction);
+    const withChoreography = await renderFixtureProject(t, mode, direction, { motionDirection });
+    assert.equal(
+      fs.readFileSync(withChoreography.indexPath, "utf8"),
+      fs.readFileSync(baseline.indexPath, "utf8"),
+      `${mode} HTML must not change when sample choreography is supplied`,
+    );
+    const baselineManifest = JSON.parse(fs.readFileSync(baseline.manifestPath, "utf8"));
+    const choreographyManifest = JSON.parse(fs.readFileSync(withChoreography.manifestPath, "utf8"));
+    for (const manifest of [baselineManifest, choreographyManifest]) {
+      assert.equal(manifest.motionDirectionConsumed, false);
+      assert.deepEqual(manifest.appliedChoreography, []);
+      assert.deepEqual(manifest.unappliedChoreography, []);
+    }
+  }
+});
+
+test("zero through three approved fact cards render without placeholder backfill", async t => {
+  const factCounts = [0, 1, 2, 3];
+  const factBreakdown = normalizeContentBreakdown({
+    summary: "事实卡数量合同",
+    segments: factCounts.map((count, index) => ({
+      id: `F0${index + 1}`,
+      sourceTime: { start: index * 3, end: index * 3 + 3 },
+      editedTime: { start: index * 3, end: index * 3 + 3 },
+      upperLeftTitle: `${count} 张事实卡`,
+      subtitleOrKeyLine: `只保留 ${count} 张`,
+      oneSentenceSummary: `本段批准数量是 ${count}`,
+      factCards: [0, 1, 2].map(itemIndex => ({
+        label: `底层标签-${index + 1}-${itemIndex + 1}`,
+        value: `底层占位-${index + 1}-${itemIndex + 1}`,
+      })),
+      rightVisual: { type: "信息卡", description: "按批准数量展示信息卡" },
+    })),
+  }, {
+    sourceDuration: 12,
+    outputDuration: 12,
+    minimumSegments: 4,
+    maximumSegments: 4,
+  });
+  const direction = normalizeKeyframeDirection({
+    presentation,
+    selectedSegmentIds: factBreakdown.segments.map(segment => segment.id),
+    frames: factBreakdown.segments.map((segment, index) => ({
+      segmentId: segment.id,
+      sourceTime: index * 3 + 1.5,
+      visualIntent: {
+        title: `${factCounts[index]} 张事实卡`,
+        keyLine: `只保留 ${factCounts[index]} 张`,
+        summary: "",
+        factCards: Array.from({ length: factCounts[index] }, (_, factIndex) => ({
+          label: `批准标签-${index + 1}-${factIndex + 1}`,
+          value: `批准事实-${index + 1}-${factIndex + 1}`,
+        })),
+        primaryVisual: { kind: "inherit", lines: [], text: "", highlights: [] },
+      },
+    })),
+  }, factBreakdown, 4);
+
+  const project = await renderFixtureProject(t, "full", direction, {
+    breakdown: factBreakdown,
+    rangeEnd: 12,
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+
+  factCounts.forEach((count, index) => {
+    const segmentId = `F0${index + 1}`;
+    const nextSegmentId = index < factCounts.length - 1 ? `F0${index + 2}` : null;
+    const scene = sceneHtml(documentHtml, segmentId, nextSegmentId);
+    const panel = visualPanelHtml(scene);
+    assert.equal((scene.match(/<article class="fact fact-/g) || []).length, count, `${segmentId} fact section count`);
+    assert.equal((panel.match(/<article class="v-step">/g) || []).length, count, `${segmentId} visual card count`);
+    assert.equal(scene.includes(`底层占位-${index + 1}-1`), false, `${segmentId} must not backfill source placeholders`);
+    for (let factIndex = 0; factIndex < count; factIndex++) {
+      assert.ok(scene.includes(`批准标签-${index + 1}-${factIndex + 1}`));
+      assert.ok(scene.includes(`批准事实-${index + 1}-${factIndex + 1}`));
+    }
+  });
+  assert.doesNotMatch(documentHtml, />重点<|>方法<|>结果</);
+});
+
+test("unselected prompt and comparison scenes stay audience-facing in sample and full", async t => {
+  const inheritBreakdown = normalizeContentBreakdown({
+    summary: "未选中关键帧继承合同",
+    segments: [
+      {
+        id: "U01",
+        sourceTime: { start: 0, end: 3 },
+        editedTime: { start: 0, end: 3 },
+        upperLeftTitle: "普通信息段",
+        subtitleOrKeyLine: "不启用特殊主视觉",
+        oneSentenceSummary: "这一段只展示原始事实。",
+        factCards: [
+          { label: "事实一", value: "保留原文一" },
+          { label: "事实二", value: "保留原文二" },
+          { label: "事实三", value: "保留原文三" },
+        ],
+        rightVisual: { type: "二维信息动效", description: "展示三项原始事实" },
+      },
+      {
+        id: "U02",
+        sourceTime: { start: 3, end: 6 },
+        editedTime: { start: 3, end: 6 },
+        upperLeftTitle: "真实输入",
+        subtitleOrKeyLine: "只展示说过的内容",
+        oneSentenceSummary: "输入框只承载真实口播。",
+        factCards: [
+          { label: "目标", value: "拍完自动处理" },
+          { label: "限制", value: "不懂剪辑" },
+          { label: "审核", value: "自己确认结果" },
+        ],
+        rightVisual: { type: "AI输入框二维动效", description: "展示真实输入与三个限制" },
+      },
+      {
+        id: "U03",
+        sourceTime: { start: 6, end: 9 },
+        editedTime: { start: 6, end: 9 },
+        upperLeftTitle: "处理方式对比",
+        subtitleOrKeyLine: "对比必须沿用原始事实",
+        oneSentenceSummary: "比较两种已经明确说明的处理方式。",
+        factCards: [
+          { label: "旧方式", value: "手工添加字幕" },
+          { label: "共同目标", value: "完成口播视频" },
+          { label: "新方式", value: "工作台生成字幕" },
+        ],
+        rightVisual: { type: "前后状态对照动效", description: "按事实卡做处理方式对比" },
+      },
+    ],
+  }, {
+    sourceDuration: 9,
+    outputDuration: 9,
+    minimumSegments: 3,
+    maximumSegments: 3,
+  });
+  const direction = normalizeKeyframeDirection({
+    presentation,
+    selectedSegmentIds: ["U01"],
+    frames: [{
+      segmentId: "U01",
+      sourceTime: 1.5,
+      visualIntent: {
+        factCards: inheritBreakdown.segments[0].factCards,
+        primaryVisual: { kind: "inherit", lines: [], text: "", highlights: [] },
+      },
+    }],
+  }, inheritBreakdown, 3);
+
+  for (const mode of ["sample", "full"]) {
+    const project = await renderFixtureProject(t, mode, direction, { breakdown: inheritBreakdown });
+    const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+    assertNoInternalLabels(documentHtml);
+    for (const forbidden of ["第一版", "返修版", "AI 工具", "现在只做", "迈出第一步"]) {
+      assert.equal(documentHtml.includes(forbidden), false, `${mode} leaked hard-coded semantic copy: ${forbidden}`);
+    }
+
+    const promptScene = sceneHtml(documentHtml, "U02", "U03");
+    const promptText = visibleText(visualPanelHtml(promptScene));
+    assert.match(promptScene, /class="scene clip[^\"]*audience-facing[^\"]*primary-inherit/);
+    assert.ok(promptText.includes("输入内容"));
+    assert.ok(promptText.includes("拍完自动处理"));
+    assert.ok(promptText.includes("自己确认结果"));
+
+    const comparisonScene = sceneHtml(documentHtml, "U03");
+    const comparisonText = visibleText(visualPanelHtml(comparisonScene));
+    assert.match(comparisonScene, /class="scene clip[^\"]*audience-facing[^\"]*primary-inherit/);
+    assert.ok(comparisonText.includes("旧方式"));
+    assert.ok(comparisonText.includes("手工添加字幕"));
+    assert.ok(comparisonText.includes("新方式"));
+    assert.ok(comparisonText.includes("工作台生成字幕"));
+  }
+});
+
+test("generic comparison wording does not infer the AI tools to first-step visual", () => {
+  const comparisonBreakdown = normalizeContentBreakdown({
+    segments: [
+      {
+        id: "C01",
+        sourceTime: { start: 0, end: 3 },
+        editedTime: { start: 0, end: 3 },
+        upperLeftTitle: "画幅选择",
+        factCards: [
+          { label: "横屏", value: "展示工作台" },
+          { label: "竖屏", value: "适配抖音" },
+          { label: "原则", value: "按内容决定" },
+        ],
+        rightVisual: { type: "画幅卡片", description: "横屏和竖屏并列展示" },
+      },
+      { id: "C02", sourceTime: { start: 3, end: 6 }, editedTime: { start: 3, end: 6 } },
+      { id: "C03", sourceTime: { start: 6, end: 9 }, editedTime: { start: 6, end: 9 } },
+    ],
+  }, {
+    sourceDuration: 9,
+    outputDuration: 9,
+    minimumSegments: 3,
+    maximumSegments: 3,
+  });
+  const direction = normalizeKeyframeDirection({
+    selectedSegmentIds: ["C01"],
+    frames: [{ segmentId: "C01", sourceTime: 1.5, composition: "展示横屏与竖屏对比" }],
+  }, comparisonBreakdown, 3);
+
+  assert.equal(direction.frames[0].visualIntent.primaryVisual.kind, "inherit");
+});
+
+test("motion choreography infers segments from nonzero sample-relative time", () => {
+  const offsetBreakdown = normalizeContentBreakdown({
+    segments: [
+      { id: "O01", sourceTime: { start: 0, end: 10 }, editedTime: { start: 0, end: 10 } },
+      { id: "O02", sourceTime: { start: 10, end: 20 }, editedTime: { start: 10, end: 20 } },
+      { id: "O03", sourceTime: { start: 20, end: 30 }, editedTime: { start: 20, end: 30 } },
+    ],
+  }, { sourceDuration: 30, outputDuration: 30, minimumSegments: 3, maximumSegments: 3 });
+  const direction = normalizeMotionDirection({
+    sampleStart: 10,
+    sampleDuration: 15,
+    strongestSegmentId: "O01",
+    choreography: [
+      { order: 1, at: 2.5, target: "title", actionPreset: "fade-up" },
+      { order: 2, at: 12, target: "summary", actionPreset: "slide-left" },
+      { order: 3, at: 15, target: "visual", actionPreset: "push-in" },
+    ],
+  }, offsetBreakdown, { outputDuration: 30, durationSeconds: 15 });
+
+  assert.equal(direction.sampleStart, 10);
+  assert.equal(direction.strongestSegmentId, "O02", "strongest fallback must stay inside the sample");
+  assert.equal(direction.choreography[0].segmentId, "O02");
+  assert.equal(direction.choreography[0].at, 2.5, "at must stay relative to sampleStart");
+  assert.equal(direction.choreography[1].segmentId, "O03");
+  assert.equal(direction.choreography[2].segmentId, "O03", "sampleEnd must bind to the last overlapping segment");
+});
+
+test("fallback choreography omits fact beats that do not exist in approved keyframes", () => {
+  const sparseBreakdown = normalizeContentBreakdown({
+    segments: [
+      { id: "Z01", sourceTime: { start: 0, end: 7 }, editedTime: { start: 0, end: 7 }, factCards: [{ label: "一", value: "1" }, { label: "二", value: "2" }, { label: "三", value: "3" }] },
+      { id: "Z02", sourceTime: { start: 7, end: 14 }, editedTime: { start: 7, end: 14 }, factCards: [{ label: "一", value: "1" }] },
+      { id: "Z03", sourceTime: { start: 14, end: 20 }, editedTime: { start: 14, end: 20 }, factCards: [] },
+    ],
+  }, { sourceDuration: 20, outputDuration: 20, minimumSegments: 3, maximumSegments: 3 });
+  const keyframeDirection = normalizeKeyframeDirection({
+    selectedSegmentIds: ["Z01", "Z02", "Z03"],
+    frames: [
+      { segmentId: "Z01", visualIntent: { factCards: [{ label: "批准", value: "只留一张" }], primaryVisual: { kind: "inherit" } } },
+      { segmentId: "Z02", visualIntent: { factCards: [], primaryVisual: { kind: "inherit" } } },
+      { segmentId: "Z03", visualIntent: { factCards: [], primaryVisual: { kind: "inherit" } } },
+    ],
+  }, sparseBreakdown, 3);
+  const direction = normalizeMotionDirection({}, sparseBreakdown, { outputDuration: 20, durationSeconds: 20, keyframeDirection });
+
+  assert.deepEqual(direction.choreography.filter(item => item.segmentId === "Z01" && /^fact-/.test(item.target)).map(item => item.target), ["fact-1"]);
+});
+
+test("specific fact beats supersede a generic facts beat in the same segment", () => {
+  const direction = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    choreography: [
+      { order: 1, at: 1.2, segmentId: "S01", target: "facts", actionPreset: "pop" },
+      { order: 2, at: 1.7, segmentId: "S01", target: "fact-2", factIndex: 2, actionPreset: "slide-left" },
+    ],
+  }, breakdown, { outputDuration: 9 });
+
+  assert.equal(direction.choreography.some(item => item.target === "facts"), false);
+  assert.equal(direction.choreography.some(item => item.target === "fact-2"), true);
+});
+
+test("duplicate targets and speaker beats normalize deterministically", () => {
+  const direction = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    choreography: [
+      { order: 7, at: 0.9, segmentId: "S01", target: "title", actionPreset: "slide-right" },
+      { order: 2, at: 0.4, segmentId: "S01", target: "title", actionPreset: "slide-left" },
+      { order: 2, at: 1.4, segmentId: "S01", target: "summary", actionPreset: "fade-up" },
+      { order: 9, at: 3, target: "speaker", actionPreset: "fade" },
+      { order: 1, at: 1, target: "speaker", actionPreset: "pop" },
+    ],
+  }, breakdown, { outputDuration: 9 });
+
+  assert.deepEqual(direction.choreography.map(item => item.order), [1, 2, 3]);
+  assert.equal(direction.choreography.filter(item => item.target === "title").length, 1);
+  assert.equal(direction.choreography.find(item => item.target === "title")?.actionPreset, "slide-left");
+  assert.equal(direction.choreography.filter(item => item.target === "speaker").length, 1);
+  assert.equal(direction.choreography.find(item => item.target === "speaker")?.actionPreset, "pop");
+});
+
+test("late speaker fade is normalized to a truthful visible push-in", () => {
+  const direction = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    choreography: [{ order: 1, at: 2, target: "speaker", actionPreset: "fade" }],
+  }, breakdown, { outputDuration: 9 });
+
+  assert.equal(direction.choreography[0].actionPreset, "push-in");
+});
+
+test("late speaker choreography keeps the default visible entrance and uses a non-opacity camera beat", async t => {
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    choreography: [{
+      order: 1,
+      at: 2,
+      target: "speaker",
+      actionPreset: "slide-right",
+      easing: "power2.out",
+    }],
+  }, breakdown, { outputDuration: 9 });
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, { motionDirection });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+  const lateBeat = documentHtml.match(/tl\.fromTo\("#speakerStage",(\{[^}]*\}),\{[^}]*"immediateRender":false[^}]*\}, 2\.000\);/);
+
+  assert.match(documentHtml, /tl\.from\("#speakerStage",\{[^}]*"opacity":0[^}]*\}, 0\.180\);/);
+  assert.ok(lateBeat, "late speaker beat must be a seek-safe fromTo camera motion");
+  assert.equal(lateBeat[1].includes("opacity"), false, "late speaker beat must not hide the person before its timestamp");
+  assert.equal(manifest.appliedChoreography.find(item => item.target === "speaker")?.at, 2);
+});
+
+test("evidence choreography records its actual placement-constrained start", async t => {
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    choreography: [{
+      order: 1,
+      at: 4.5,
+      segmentId: "S01",
+      target: "visual",
+      actionPreset: "push-in",
+      easing: "power2.out",
+    }],
+  }, breakdown, { outputDuration: 9 });
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, {
+    motionDirection,
+    approvedAssets: [{
+      id: "placement-constrained-evidence",
+      sourceType: "local-derived",
+      mediaKind: "image",
+      path: sourceVideoFixture,
+      placement: { start: 0, end: 1.2, mode: "broll" },
+    }],
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+  const applied = manifest.appliedChoreography.find(item => item.selector === "#evidence-1");
+
+  assert.equal(applied?.at, 0.4);
+  assert.equal(applied?.actionPreset, "push-in");
+  assert.equal(applied?.easing, "power2.out");
+  assert.match(documentHtml, /tl\.from\("#evidence-1",\{[^}]*"ease":"power2\.out"[^}]*\}, 0\.400\);/);
 });

@@ -2683,7 +2683,11 @@ async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
     job.degraded = [...(job.degraded || []), `动态样片导演方案失败，使用默认有序动效：${error.message}`];
   }
   const outputDuration = job.currentPlan.keepSegments.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0);
-  const direction = normalizeMotionDirection(modelResult?.data || {}, job.contentBreakdown, { ...stageConfig.settings, outputDuration });
+  const direction = normalizeMotionDirection(modelResult?.data || {}, job.contentBreakdown, {
+    ...stageConfig.settings,
+    outputDuration,
+    keyframeDirection: job.workflow.stages.keyframes?.artifacts?.direction,
+  });
   const directionName = `motion-sample-direction-v${version}.json`;
   await writeJson(path.join(jobDir, directionName), direction);
   await ensurePreviewAssetDecisions(job);

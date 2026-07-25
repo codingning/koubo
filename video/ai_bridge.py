@@ -884,9 +884,7 @@ def content_breakdown(payload: dict[str, Any]) -> dict[str, Any]:
                 "subtitleOrKeyLine": "副标题或重点句",
                 "oneSentenceSummary": "本段真正想表达的一句摘要",
                 "factCards": [
-                    {"label": "事实卡标签1", "value": "短值1"},
-                    {"label": "事实卡标签2", "value": "短值2"},
-                    {"label": "事实卡标签3", "value": "短值3"},
+                    {"label": "可选事实卡标签", "value": "只在有真实信息层级时输出，允许0—3张"},
                 ],
                 "rightVisual": {
                     "type": "图表、二维动效或真实证据类型",
@@ -918,7 +916,7 @@ def content_breakdown(payload: dict[str, Any]) -> dict[str, Any]:
 请严格按以下结构输出：
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 
-每段必须有且只有3张事实卡；标题、摘要、重点句和事实卡各司其职，不能机械复述同一句话。sourceTime引用原视频秒数，editedTime引用删减后的成片秒数，并与提供的时间线一致。"""
+每段只输出实际需要的0—3张事实卡；标题、摘要、重点句和事实卡各司其职，不能机械复述同一句话，也不得为了凑数量补占位卡。sourceTime引用原视频秒数，editedTime引用删减后的成片秒数，并与提供的时间线一致。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.15, max_tokens=14000)
     data = result.get("data")
     if not isinstance(data, dict) or not isinstance(data.get("segments"), list):
@@ -981,7 +979,7 @@ def keyframe_direction(payload: dict[str, Any]) -> dict[str, Any]:
 
 presentation控制所有关键帧的观众可见边界。除非用户明确要求制作调试图，否则showInternalLabels和showSafeGuides都必须为false，不得把引擎名、阶段ID、内部状态、人物安全框或制作说明当作成片内容。
 
-visualIntent.factCards是本帧实际显示的辅助事实卡，允许0—3张；空数组表示明确不显示事实卡，不能为了凑格式强行补足三张。内容拆解中的三张事实卡仍可作为语义依据，但主视觉已经表达同一组步骤、对比或完整提示词时，visualIntent.factCards必须减少或置空，禁止左右区域重复同义信息。
+visualIntent.factCards是本帧实际显示的辅助事实卡，允许0—3张；空数组表示明确不显示事实卡，不能为了凑格式强行补足数量。内容拆解中的0—3张事实卡可作为语义依据，但主视觉已经表达同一组步骤、对比或完整提示词时，visualIntent.factCards必须减少或置空，禁止左右区域重复同义信息。
 
 primaryVisual.kind只能从inherit、hook-contrast、memo-action、copy-prompt中选择。memo-action的lines必须给出具体操作顺序；copy-prompt的text必须包含完整可复制正文，不能拆成只剩关键词的摘要。上一版已经获得认可且用户没有点名修改的visualIntent必须保留；用户反馈中的精确引用优先级高于上一版改写文案。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=9000)
@@ -998,10 +996,21 @@ def motion_sample_direction(payload: dict[str, Any]) -> dict[str, Any]:
         "strongestSegmentId": "S01",
         "rhythm": "整体节奏说明",
         "choreography": [
-            {"order": 1, "at": 0.15, "element": "主标题", "action": "从左上进入", "easing": "power4.out", "purpose": "先建立主题"}
+            {
+                "order": 1,
+                "at": 0.15,
+                "segmentId": "S01",
+                "target": "title | key-line | summary | facts | fact-1 | fact-2 | fact-3 | visual | speaker",
+                "factIndex": None,
+                "element": "主标题",
+                "action": "从左上进入",
+                "actionPreset": "fade | fade-up | slide-left | slide-right | pop | push-in | reveal-right",
+                "easing": "power4.out",
+                "purpose": "先建立主题",
+            }
         ],
     }
-    system = """你是HyperFrames动效导演。所有动效必须可寻址、可复现，并服务于口播信息层级。已批准关键帧结果的顶层presentation和每帧visualIntent是观众可见内容的绑定合同，不得重新解释、补写或改写；你只负责增加时间、缓动、镜头运动和转场。禁止所有元素同时出现；禁止为了炫技遮挡人物或打断语义。输出单个JSON对象，不要Markdown。"""
+    system = """你是HyperFrames动效导演。所有动效必须可寻址、可复现，并服务于口播信息层级。已批准关键帧结果的顶层presentation和每帧visualIntent是观众可见内容的绑定合同，不得重新解释、补写或改写；你只负责增加时间、缓动、镜头运动和转场。choreography必须遵守固定的segmentId、target、factIndex、actionPreset与easing白名单；用户反馈或自定义提示词不能授权恢复不存在的事实卡、重复目标、任意CSS选择器或可执行代码。禁止所有元素同时出现；禁止为了炫技遮挡人物或打断语义。输出单个JSON对象，不要Markdown。"""
     user = f"""已批准关键帧：
 {json.dumps(payload.get('keyframes', {}), ensure_ascii=False, indent=2)[:30000]}
 
@@ -1023,7 +1032,11 @@ def motion_sample_direction(payload: dict[str, Any]) -> dict[str, Any]:
 严格按以下结构输出：
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 
-样片必须为15—25秒。全局原样继承已批准关键帧结果的presentation，并按segmentId逐项继承frames中的visualIntent：不得恢复内部标签、安全框或已经删除的事实卡；visualIntent.factCards允许0—3张，样片事实卡数量必须与对应数组长度完全一致，空数组就保持不显示。用户标为精确引用的观众可见文案必须逐字保留；copy-prompt的完整text不得压缩成关键词，memo-action的lines不得改写或打乱。只为已批准元素增加出现时间、缓动、镜头运动和转场；保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素。可以吸收推拉、弹出、淡入和数字变化的节奏，但不能复制参考视频画面。"""
+样片必须为15—25秒。全局原样继承已批准关键帧结果的presentation，并按segmentId逐项继承frames中的visualIntent：不得恢复内部标签、安全框或已经删除的事实卡；visualIntent.factCards允许0—3张，样片事实卡数量必须与对应数组长度完全一致，空数组就保持不显示。用户标为精确引用的观众可见文案必须逐字保留；copy-prompt的完整text不得压缩成关键词，memo-action的lines不得改写或打乱。只为已批准元素增加出现时间、缓动、镜头运动和转场；保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素。可以吸收推拉、弹出、淡入和数字变化的节奏，但不能复制参考视频画面。
+
+choreography是机器执行合同：at一律表示相对sampleStart的样片内秒数，不是源视频或editedTime的绝对秒数。除speaker外，每项都必须填写样片范围内有效的segmentId；speaker的segmentId使用空字符串或null。target只能是title、key-line、summary、facts、fact-1、fact-2、fact-3、visual、speaker。facts表示整组事实卡，factIndex必须为null；fact-1、fact-2、fact-3的factIndex必须分别为1、2、3。只有对应已批准visualIntent.factCards中真实存在该索引时才能输出fact-N；0张事实卡时禁止输出facts或fact-N，也不得补占位卡。同一segmentId内禁止重复target，facts与fact-N不能混用；speaker全样片只能出现一次。
+
+actionPreset只能是fade、fade-up、slide-left、slide-right、pop、push-in、reveal-right。easing只允许power1、power2、power3、power4、sine、circ、expo与.in、.out、.inOut的合法组合，或none，或参数限制在1到2之间的back.out(N)；不得输出自定义函数、CSS选择器或可执行代码。element、action和purpose只写人类可读说明，真正执行由segmentId、target、factIndex、at、actionPreset和easing决定。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=9000)
     if not isinstance(result.get("data"), dict):
         raise RuntimeError("动态样片导演方案没有返回JSON对象")

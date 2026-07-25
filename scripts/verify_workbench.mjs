@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
 import { spawnSync } from "node:child_process";
@@ -29,7 +30,9 @@ process.env.KOUBO_NO_LISTEN = "1";
 const mediaPolicy = await import(`${new URL("../video/server.mjs", import.meta.url).href}?policy-test=${Date.now()}`);
 const visualDirector = await import(`${new URL("../video/visual_director.mjs", import.meta.url).href}?director-test=${Date.now()}`);
 const visualDefaults = JSON.parse(read("config/video_workflow_v4.json"));
-const visualConfig = visualDirector.normalizeVisualWorkflowConfig(visualDefaults, { stages: { keyframes: { settings: { count: 9 } }, motion_sample: { settings: { durationSeconds: 8 } }, full_render: { settings: { masterWidth: 2560, fps: 30 } } } });
+const visualConfig = visualDirector.normalizeVisualWorkflowConfig(visualDefaults, { stages: { content_breakdown: { settings: { factCardsPerSegment: 3 } }, keyframes: { settings: { count: 9 } }, motion_sample: { settings: { durationSeconds: 8 } }, full_render: { settings: { masterWidth: 2560, fps: 30 } } } });
+assert(!Object.hasOwn(visualConfig.stages.content_breakdown.settings, "factCardsPerSegment"), "旧版固定三张事实卡配置没有被迁移");
+assert(visualConfig.stages.content_breakdown.settings.minimumFactCardsPerSegment === 0 && visualConfig.stages.content_breakdown.settings.maximumFactCardsPerSegment === 3, "内容拆解事实卡范围不是0—3张");
 assert(visualConfig.stages.keyframes.settings.count === 5, "关键帧数量未限制在3—5张");
 assert(visualConfig.stages.motion_sample.settings.durationSeconds === 15, "动态样片未限制在15—25秒");
 assert(visualConfig.stages.full_render.settings.masterWidth === 2560 && visualConfig.stages.full_render.settings.masterHeight === 1440, "最终母版默认尺寸不是2560×1440");
@@ -70,6 +73,114 @@ assert(!advisoryIssues.some(issue => issue.includes("授权") || issue.includes(
 assert(mediaPolicy.assetComplianceIssues({ ...externalFixture, creatorName: "", attributionText: "" }, { script: "", options: { rightsReviewMode: "advisory" } }, 8).some(issue => issue.includes("创作者") || issue.includes("署名")), "advisory 模式不应跳过来源和画面署名字段");
 const placementA = mediaPolicy.candidatePlacement(0, 4, 8), placementB = mediaPolicy.candidatePlacement(1, 4, 8);
 assert(placementA.end <= placementB.start, "自动视觉候选时间段发生不必要重叠");
+
+const choreographyBreakdown = visualDirector.normalizeContentBreakdown({
+  summary: "动态样片 choreography 落地验证",
+  segments: [
+    {
+      id: "C01",
+      sourceTime: { start: 0, end: 6 },
+      editedTime: { start: 0, end: 6 },
+      upperLeftTitle: "第一段标题",
+      subtitleOrKeyLine: "先看标题动作",
+      oneSentenceSummary: "标题必须使用导演指定动作。",
+      factCards: [{ label: "事实", value: "标题已映射" }],
+      rightVisual: { type: "二维信息动效", description: "标题与信息卡" },
+    },
+    {
+      id: "C02",
+      sourceTime: { start: 6, end: 12 },
+      editedTime: { start: 6, end: 12 },
+      upperLeftTitle: "第二段标题",
+      subtitleOrKeyLine: "再看主视觉动作",
+      oneSentenceSummary: "主视觉必须使用指定推近动作。",
+      factCards: [{ label: "事实", value: "主视觉已映射" }],
+      rightVisual: { type: "二维信息动效", description: "主视觉窗口" },
+    },
+    {
+      id: "C03",
+      sourceTime: { start: 12, end: 20 },
+      editedTime: { start: 12, end: 20 },
+      upperLeftTitle: "第三段标题",
+      subtitleOrKeyLine: "不存在的事实卡应留痕",
+      oneSentenceSummary: "本段明确不显示事实卡。",
+      factCards: [{ label: "旧事实", value: "不得恢复" }],
+      rightVisual: { type: "二维信息动效", description: "无事实卡主视觉" },
+    },
+  ],
+}, { sourceDuration: 20, outputDuration: 20, minimumSegments: 3, maximumSegments: 3 });
+const choreographyKeyframes = visualDirector.normalizeKeyframeDirection({
+  selectedSegmentIds: ["C01", "C02", "C03"],
+  frames: [
+    { segmentId: "C01", visualIntent: { primaryVisual: { kind: "inherit" } } },
+    { segmentId: "C02", visualIntent: { primaryVisual: { kind: "inherit" } } },
+    { segmentId: "C03", visualIntent: { factCards: [], primaryVisual: { kind: "inherit" } } },
+  ],
+}, choreographyBreakdown, 3);
+const normalizedMotionDirection = visualDirector.normalizeMotionDirection({
+  sampleStart: 0,
+  sampleDuration: 20,
+  strongestSegmentId: "C01",
+  choreography: [
+    { order: 2, at: 0.45, segmentId: "C01", element: "主标题", action: "从左侧滑入", easing: "not-an-ease", purpose: "验证标题动作真正落地" },
+    { order: 1, at: 7.25, segmentId: "C02", target: "visual", element: "主视觉窗口", action: "轻微推近", actionPreset: "push-in", easing: "power2.inOut", purpose: "验证主视觉动作真正落地" },
+    { order: 3, at: 13.1, segmentId: "C03", target: "fact-3", element: "事实卡3", action: "弹出", easing: "back.out(1.6)", purpose: "验证不存在目标的未应用留痕" },
+    { order: 4, at: 5, target: "speaker", element: "真人口播人物", action: "轻微横向镜头运动", actionPreset: "slide-right", easing: "power2.out", purpose: "验证人物持续可见的晚段镜头动作" },
+  ],
+}, choreographyBreakdown, { outputDuration: 20, durationSeconds: 20 });
+assert(normalizedMotionDirection.choreography.map(item => item.order).join(",") === "1,2,3,4", "动态样片 choreography 未按 order 规范化排序");
+const normalizedTitleBeat = normalizedMotionDirection.choreography.find(item => item.order === 2);
+assert(normalizedTitleBeat?.target === "title" && normalizedTitleBeat.actionPreset === "slide-left" && normalizedTitleBeat.easing === "power3.out", "动态样片 choreography 未规范化目标、动作或缓动");
+
+const choreographyProjectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "koubo-workbench-choreography-"));
+try {
+  const choreographyProject = await visualDirector.buildHyperframesDirectorProject({
+    projectDir: choreographyProjectRoot,
+    sourceVideo: existingFixture,
+    sourceAudio: null,
+    breakdown: choreographyBreakdown,
+    styleReport: { palette: {} },
+    mode: "sample",
+    rangeStart: normalizedMotionDirection.sampleStart,
+    rangeEnd: normalizedMotionDirection.sampleEnd,
+    keyframeDirection: choreographyKeyframes,
+    motionDirection: normalizedMotionDirection,
+    captions: [],
+    approvedAssets: [],
+    renderSpec: { width: 1920, height: 1080, fps: 30 },
+    promptSnapshot: { stage: "verify-workbench-choreography" },
+  });
+  const choreographyManifest = JSON.parse(fs.readFileSync(choreographyProject.manifestPath, "utf8"));
+  const choreographyHtml = fs.readFileSync(choreographyProject.indexPath, "utf8");
+  const applied = Array.isArray(choreographyManifest.appliedChoreography) ? choreographyManifest.appliedChoreography : [];
+  const unapplied = Array.isArray(choreographyManifest.unappliedChoreography) ? choreographyManifest.unappliedChoreography : [];
+  assert(choreographyManifest.motionDirectionConsumed === true, "sample manifest 未声明已消费 motionDirection");
+  const appliedOrders = new Set(applied.map(item => item.order));
+  const unappliedOrders = new Set(unapplied.map(item => item.order));
+  assert(appliedOrders.has(1) && appliedOrders.has(2) && appliedOrders.has(4), "sample manifest 未记录已应用的标题、主视觉和人物 choreography");
+  assert(unappliedOrders.has(3), "sample manifest 未记录目标不存在的 unapplied choreography");
+  for (const beat of normalizedMotionDirection.choreography) {
+    assert(appliedOrders.has(beat.order) || unappliedOrders.has(beat.order), `choreography order ${beat.order} 没有 applied/unapplied 审计结果`);
+  }
+  for (const mapping of applied) {
+    const normalized = normalizedMotionDirection.choreography.find(item => item.order === mapping.order);
+    assert(Boolean(normalized), `appliedChoreography 出现未知 order：${mapping.order}`);
+    assert(mapping.segmentId === normalized?.segmentId && mapping.target && mapping.selector, `appliedChoreography ${mapping.order} 缺少规范化目标或真实 selector`);
+    assert(mapping.actionPreset === normalized?.actionPreset && mapping.easing === normalized?.easing, `appliedChoreography ${mapping.order} 没有保留规范化动作或缓动`);
+    assert(Number.isFinite(Number(mapping.at)), `appliedChoreography ${mapping.order} 缺少实际应用时间`);
+    const escapedSelector = mapping.selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const timelineCalls = choreographyHtml.match(new RegExp(`tl\\.from(?:To)?\\("${escapedSelector}",[\\s\\S]*?\\);`, "g")) || [];
+    const appliedAt = Number(mapping.at).toFixed(3);
+    assert(timelineCalls.some(call => call.includes(`,${appliedAt})`) || call.includes(`, ${appliedAt})`)), `appliedChoreography ${mapping.order} 没有以记录时间进入对应 sample HTML selector`);
+  }
+  const stableUnappliedReasons = new Set(["missing-dom-target", "unknown-target", "segment-not-rendered", "superseded-by-specific-target"]);
+  for (const mapping of unapplied) {
+    assert(stableUnappliedReasons.has(mapping.reason), `unappliedChoreography ${mapping.order} 缺少稳定原因枚举`);
+    assert(mapping.target && mapping.actionPreset, `unappliedChoreography ${mapping.order} 缺少目标或规范化动作审计字段`);
+  }
+} finally {
+  fs.rmSync(choreographyProjectRoot, { recursive: true, force: true });
+}
 
 const serverSource = read("video/server.mjs");
 const visualDirectorSource = read("video/visual_director.mjs");
@@ -114,6 +225,7 @@ assert(workflowStageRouteSource.includes('requestedStageId === "keyframe_review"
 const motionSampleStageSource = sourceBetween(serverSource, "async function runMotionSampleStage", "async function normalizeHyperframesMaster");
 const fullRenderStageSource = sourceBetween(serverSource, "async function runFullRenderStage", "function visualJobStatus");
 assert(motionSampleStageSource.includes("keyframeDirection:"), "动态样片构建没有传播已批准关键帧的 presentation/visualIntent");
+assert(motionSampleStageSource.includes("motionDirection: direction"), "动态样片构建没有把规范化 choreography 传给 HyperFrames builder");
 assert(fullRenderStageSource.includes("keyframeDirection:"), "完整视频构建没有传播已批准关键帧的 presentation/visualIntent");
 assert(serverSource.includes('pipeline === VISUAL_WORKFLOW_VERSION') && serverSource.includes('runVisualWorkflowChain(job, "style_research")'), "新任务没有默认进入视觉导演v4流程");
 assert(serverSource.includes('runVisualWorkflowChain(job, "motion_sample")') && serverSource.includes('runVisualWorkflowChain(job, "full_render")'), "关键帧或动态样片审核门没有驱动下一阶段");

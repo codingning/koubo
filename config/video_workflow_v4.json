@@ -64,7 +64,7 @@
     "motionOrder": [
       "左上主标题最先出现",
       "摘要条随后滑入",
-      "三张事实卡依次弹出",
+      "已批准且实际存在的0—3张事实卡按原顺序依次进入",
       "右侧二维动效或真实证据最后展开",
       "人物缩放和推拉只服务于信息层级"
     ]
@@ -108,7 +108,8 @@
         "pauseKeep": 0.12,
         "minimumSegments": 5,
         "maximumSegments": 12,
-        "factCardsPerSegment": 3,
+        "minimumFactCardsPerSegment": 0,
+        "maximumFactCardsPerSegment": 3,
         "preserveSpokenMeaning": true
       },
       "uiFields": [
@@ -118,7 +119,7 @@
         { "key": "minimumSegments", "label": "最少信息段", "type": "number", "min": 3, "max": 12, "step": 1 },
         { "key": "maximumSegments", "label": "最多信息段", "type": "number", "min": 5, "max": 16, "step": 1 }
       ],
-      "prompt": "你是一名口播内容导演和剪辑导演。先根据带时间戳的逐字稿识别假启动、错句、重复、口头禅和自然停顿，只做保守删减，不得改变原意或补写没有说过的话。再按语义把成片拆成5—12个信息段。每段必须输出：1.这一段口播的大意；2.左上大标题；3.副标题或重点句；4.一句摘要；5.三张事实卡；6.适合放在右侧的图表、二维动效或真实证据；7.应参考风格报告中的哪种包装方式；8.源视频与成片时间段。必须区分字幕和信息卡：字幕只呈现说了什么，信息卡提炼这段真正想表达什么。标题、摘要和事实卡不能机械复述同一句话；事实卡要形成可扫读的信息层级。"
+      "prompt": "你是一名口播内容导演和剪辑导演。先根据带时间戳的逐字稿识别假启动、错句、重复、口头禅和自然停顿，只做保守删减，不得改变原意或补写没有说过的话。再按语义把成片拆成5—12个信息段。每段必须输出：1.这一段口播的大意；2.左上大标题；3.副标题或重点句；4.一句摘要；5.实际需要的0—3张事实卡；6.适合放在右侧的图表、二维动效或真实证据；7.应参考风格报告中的哪种包装方式；8.源视频与成片时间段。必须区分字幕和信息卡：字幕只呈现说了什么，信息卡提炼这段真正想表达什么。标题、摘要和事实卡不能机械复述同一句话；只有存在真实、可扫读的信息层级时才输出事实卡，不得为了凑数量补占位卡。"
     },
     "keyframes": {
       "number": 3,
@@ -179,7 +180,7 @@
         { "key": "usePushPull", "label": "吸收参考视频的推拉节奏", "type": "checkbox" },
         { "key": "useNumberCount", "label": "数字或进度变化", "type": "checkbox" }
       ],
-      "prompt": "把已批准关键帧渲染成15—25秒HyperFrames动态样片。已批准关键帧结果的顶层presentation和每帧visualIntent是观众可见内容的绑定合同；全局原样继承presentation，并按segmentId原样继承对应frame的visualIntent，只增加出现时间、缓动、镜头运动和转场。不得恢复内部标签、安全框或已经删除的事实卡；visualIntent.factCards允许0—3张，样片事实卡数量必须与对应数组长度完全一致，空数组就保持不显示。用户标为精确引用的文案必须逐字保留；copy-prompt的完整正文不得压缩成关键词，memo-action的操作顺序不得改写或打乱。保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素；整体节奏必须有序推进，不能所有元素同时出现。可以吸收参考视频里优秀的推拉、弹出、淡入、数字变化和窗口切换节奏，但不能简单复制画面。人物始终保持可见且脸部中轴安全；每个动效都要服务于当前口播含义。输出逐秒动效表、缓动方式、镜头缩放和样片起止时间。"
+      "prompt": "把已批准关键帧渲染成15—25秒HyperFrames动态样片。已批准关键帧结果的顶层presentation和每帧visualIntent是观众可见内容的绑定合同；全局原样继承presentation，并按segmentId原样继承对应frame的visualIntent，只增加出现时间、缓动、镜头运动和转场。不得恢复内部标签、安全框或已经删除的事实卡；只编排已批准且实际存在的0—3张visualIntent.factCards，数量必须与对应数组长度完全一致，空数组就保持不显示，禁止补占位卡。用户标为精确引用的文案必须逐字保留；copy-prompt的完整正文不得压缩成关键词，memo-action的操作顺序不得改写或打乱。保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素；整体节奏必须有序推进，不能所有元素同时出现。choreography.at必须使用相对sampleStart的样片内秒数；除speaker外每项必须绑定有效segmentId。target只能使用title、key-line、summary、facts、fact-1、fact-2、fact-3、visual、speaker；factIndex在facts时为null，在fact-1、fact-2、fact-3时分别为1、2、3。0张事实卡时禁止输出facts或fact-N；同一segmentId内禁止重复target或混用facts与fact-N，speaker全样片最多一项。actionPreset只能使用fade、fade-up、slide-left、slide-right、pop、push-in、reveal-right。easing只允许power1至power4、sine、circ、expo的.in、.out、.inOut组合，或none，或参数1至2的back.out(N)，禁止自定义函数、CSS选择器或可执行代码。可以吸收参考视频里优秀的推拉、弹出、淡入、数字变化和窗口切换节奏，但不能简单复制画面。人物始终保持可见且脸部中轴安全；每个动效都要服务于当前口播含义。输出逐秒动效表、缓动方式、镜头缩放和样片起止时间。"
     },
     "full_render": {
       "number": 6,

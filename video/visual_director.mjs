@@ -61,6 +61,10 @@ export function normalizeVisualWorkflowConfig(defaults, overrides = {}) {
   }
   const keyframes = merged.stages.keyframes.settings;
   keyframes.count = Math.round(clampNumber(keyframes.count, 4, 3, 5));
+  const content = merged.stages.content_breakdown.settings;
+  delete content.factCardsPerSegment;
+  content.minimumFactCardsPerSegment = Math.round(clampNumber(content.minimumFactCardsPerSegment, 0, 0, 3));
+  content.maximumFactCardsPerSegment = Math.round(clampNumber(content.maximumFactCardsPerSegment, 3, content.minimumFactCardsPerSegment, 3));
   const sample = merged.stages.motion_sample.settings;
   sample.durationSeconds = clampNumber(sample.durationSeconds, 20, 15, 25);
   const final = merged.stages.full_render.settings;
@@ -185,7 +189,7 @@ export function normalizeVisualStyleReport(raw, references = [], defaults = {}) 
       layout: cleanText(rules.layout || visual.layout || "speaker-right-information-left", 120),
       title: cleanText(rules.title || "左上主标题先出现，控制在两行内。", 400),
       summary: cleanText(rules.summary || "左中摘要条随后滑入，只写本段真正想表达的结论。", 400),
-      facts: cleanText(rules.facts || "左下三张事实卡依次弹出，形成可扫读层级。", 400),
+      facts: cleanText(rules.facts || "左下只呈现已批准且实际存在的0—3张事实卡，并按内容需要依次进入。", 400),
       rightVisual: cleanText(rules.rightVisual || "右侧保留真人；展开证据或二维动效时，人物缩为画中画。", 500),
       captions: cleanText(rules.captions || "字幕只呈现说了什么，位于底部安全区，不充当信息卡。", 400),
       motion: array(rules.motion).map((item) => cleanText(item, 220)).filter(Boolean).slice(0, 10).length ? array(rules.motion).map((item) => cleanText(item, 220)).filter(Boolean).slice(0, 10) : clone(visual.motionOrder || []),
@@ -240,11 +244,18 @@ export function normalizeContentBreakdown(raw, options = {}) {
     const title = cleanText(item?.upperLeftTitle || item?.title || `信息段 ${index + 1}`, 36);
     const keyLine = cleanText(item?.subtitleOrKeyLine || item?.keyLine || item?.subtitle || gist, 54);
     const summary = cleanText(item?.oneSentenceSummary || item?.summary || gist, 160);
-    const requestedFacts = array(item?.factCards || item?.facts);
-    const facts = [0, 1, 2].map((factIndex) => ({
-      label: cleanText(requestedFacts[factIndex]?.label || ["重点", "方法", "结果"][factIndex], 12),
-      value: cleanText(requestedFacts[factIndex]?.value || requestedFacts[factIndex]?.text || [keyLine, summary, gist][factIndex], 38),
-    }));
+    const hasRequestedFacts = Object.prototype.hasOwnProperty.call(item || {}, "factCards")
+      || Object.prototype.hasOwnProperty.call(item || {}, "facts");
+    const requestedFacts = array(Object.prototype.hasOwnProperty.call(item || {}, "factCards") ? item.factCards : item?.facts);
+    const facts = hasRequestedFacts
+      ? requestedFacts.slice(0, 3).map((fact, factIndex) => ({
+        label: cleanText(fact?.label || ["重点", "方法", "结果"][factIndex], 12),
+        value: cleanText(fact?.value || fact?.text, 38),
+      })).filter((fact) => fact.label || fact.value)
+      : [0, 1, 2].map((factIndex) => ({
+        label: ["重点", "方法", "结果"][factIndex],
+        value: cleanText([keyLine, summary, gist][factIndex], 38),
+      }));
     const visual = isObject(item?.rightVisual) ? item.rightVisual : isObject(item?.visual) ? item.visual : {};
     const reference = isObject(item?.referencePackaging) ? item.referencePackaging : {};
     return {
@@ -293,7 +304,7 @@ function inferKeyframePrimaryVisualKind(frame, segment) {
   const text = `${frame?.composition || ""} ${segment?.rightVisual?.type || ""} ${segment?.rightVisual?.description || ""}`;
   if (/(备忘录|便签|记录动作|笔记)/.test(text)) return "memo-action";
   if (/(可复制|复制.*指令|指令卡|提示词)/.test(text)) return "copy-prompt";
-  if (/(工具.*第一步|第一步.*工具|工具.*行动|行动.*工具|对比)/.test(text)) return "hook-contrast";
+  if (/(工具.*第一步|第一步.*工具|工具.*行动|行动.*工具)/.test(text)) return "hook-contrast";
   return "inherit";
 }
 
@@ -367,6 +378,110 @@ export function normalizeKeyframeDirection(raw, breakdown, count = 4) {
   };
 }
 
+const CHOREOGRAPHY_TARGETS = new Set([
+  "title",
+  "key-line",
+  "summary",
+  "facts",
+  "fact-1",
+  "fact-2",
+  "fact-3",
+  "visual",
+  "speaker",
+]);
+
+const CHOREOGRAPHY_ACTIONS = new Set([
+  "fade",
+  "fade-up",
+  "slide-left",
+  "slide-right",
+  "pop",
+  "push-in",
+  "reveal-right",
+]);
+
+function inferChoreographyTarget(element) {
+  const text = cleanText(element, 120);
+  const factNumber = text.match(/(?:事实卡|信息卡|卡片)\s*([123一二三])/)
+    || text.match(/第\s*([123一二三])\s*张(?:事实卡|信息卡|卡片)?/);
+  if (factNumber) {
+    const index = { "一": 1, "二": 2, "三": 3 }[factNumber[1]] || Number(factNumber[1]);
+    return `fact-${index}`;
+  }
+  if (/(全部|整组|依次|逐张).*(事实卡|信息卡|卡片)|(事实卡|信息卡|卡片).*(全部|整组|依次|逐张)/.test(text)) return "facts";
+  if (/(副标题|关键句|副句|黄字)/.test(text)) return "key-line";
+  if (/(摘要|结论条|摘要条|核心结论)/.test(text)) return "summary";
+  if (/(主标题|大标题|标题)/.test(text)) return "title";
+  if (/(人物|真人|镜头|人像|推近|回拉|景别)/.test(text)) return "speaker";
+  if (/(主视觉|二维|动效|证据|窗口|备忘录|提示词|对比|流程|图表|右侧|视觉元素)/.test(text)) return "visual";
+  return null;
+}
+
+function normalizeChoreographyTarget(target, element) {
+  const requested = cleanText(target, 40);
+  const aliases = {
+    "primary-visual": "visual",
+    "fact-card": "facts",
+    "fact-cards": "facts",
+  };
+  const canonical = aliases[requested] || requested;
+  return CHOREOGRAPHY_TARGETS.has(canonical) ? canonical : inferChoreographyTarget(element);
+}
+
+function normalizeChoreographyAction(actionPreset, action, target) {
+  const requested = cleanText(actionPreset, 40);
+  if (CHOREOGRAPHY_ACTIONS.has(requested)) return requested;
+  const text = cleanText(action, 240);
+  if (/弹出/.test(text)) return "pop";
+  if (/推近|放大/.test(text)) return "push-in";
+  if (/右.*(?:滑入|进入)|从右/.test(text)) return "slide-right";
+  if (/左.*(?:滑入|进入)|从左/.test(text)) return "slide-left";
+  if (/展开|右侧/.test(text)) return "reveal-right";
+  if (/上.*(?:淡入|进入)|向上/.test(text)) return "fade-up";
+  if (/淡入|出现/.test(text)) return "fade";
+  if (target === "visual") return "reveal-right";
+  if (target === "summary") return "slide-left";
+  if (target?.startsWith("fact") || target === "facts") return "pop";
+  return "fade-up";
+}
+
+function safeChoreographyEase(value, fallback = "power3.out") {
+  const ease = cleanText(value, 40);
+  if (/^(?:power[1-4]|sine|circ|expo)\.(?:in|out|inOut)$/.test(ease) || ease === "none") return ease;
+  const back = ease.match(/^back\.out\((\d+(?:\.\d+)?)\)$/);
+  if (back && Number(back[1]) >= 1 && Number(back[1]) <= 2) return ease;
+  return fallback;
+}
+
+function choreographyEntranceVars(target, actionPreset, easing, distanceScale = 1) {
+  const vars = {
+    opacity: 0,
+    duration: target === "visual" ? 0.66 : target.startsWith("fact") || target === "facts" ? 0.5 : target === "title" ? 0.62 : 0.48,
+    ease: safeChoreographyEase(easing, target === "title" || target === "visual" ? "power4.out" : "power3.out"),
+  };
+  if (actionPreset === "slide-left") vars.x = -60 * distanceScale;
+  if (actionPreset === "slide-right") vars.x = 60 * distanceScale;
+  if (actionPreset === "reveal-right") vars.x = 60 * distanceScale;
+  if (actionPreset === "fade-up") {
+    vars.y = 30 * distanceScale;
+    vars.scale = 0.97;
+  }
+  if (actionPreset === "pop") {
+    vars.y = 28 * distanceScale;
+    vars.scale = 0.88;
+  }
+  if (actionPreset === "push-in") vars.scale = 0.9;
+  if (actionPreset === "reveal-right") vars.scale = 0.94;
+  return vars;
+}
+
+function choreographyCompletionSeconds(target, actionPreset, easing) {
+  const entrance = choreographyEntranceVars(target, actionPreset, easing).duration;
+  if (target === "title") return Math.max(entrance, 0.96);
+  if (target === "visual") return Math.max(entrance, 1.5);
+  return entrance;
+}
+
 export function normalizeMotionDirection(raw, breakdown, options = {}) {
   const value = isObject(raw) ? raw : {};
   const outputDuration = Math.max(1, Number(options.outputDuration || 1));
@@ -379,29 +494,112 @@ export function normalizeMotionDirection(raw, breakdown, options = {}) {
   }
   start = Math.max(0, Math.min(Math.max(0, outputDuration - duration), start));
   const end = Math.min(outputDuration, start + duration);
-  const choreography = array(value.choreography).map((item, index) => ({
-    order: Number(item?.order || index + 1),
-    at: clampNumber(item?.at, [0.15, 0.85, 1.7, 2.05, 2.4, 4.2][index] || index * 0.5, 0, end - start),
-    element: cleanText(item?.element || "视觉元素", 120),
-    action: cleanText(item?.action || "淡入", 240),
-    easing: cleanText(item?.easing || "power3.out", 80),
-    purpose: cleanText(item?.purpose || "服务当前口播信息层级", 300),
-  })).slice(0, 14);
+  const titleAt = clampNumber(options.titleLeadSeconds, 0.15, 0, end - start);
+  const summaryAt = clampNumber(options.summaryDelaySeconds, 0.85, 0, end - start);
+  const factStagger = clampNumber(options.factStaggerSeconds, 0.32, 0.08, 1.2);
+  const firstFactAt = Math.min(end - start, Math.max(summaryAt + 0.6, 1.7));
+  const choreography = array(value.choreography).map((item, index) => {
+    let target = normalizeChoreographyTarget(item?.target, item?.element);
+    const factIndex = Math.round(clampNumber(item?.factIndex, 0, 0, 3));
+    if (target === "facts" && factIndex >= 1 && factIndex <= 3) target = `fact-${factIndex}`;
+    const actionPreset = normalizeChoreographyAction(item?.actionPreset, item?.action, target);
+    return {
+      order: Math.max(1, Math.round(clampNumber(item?.order, index + 1, 1, 99))),
+      at: clampNumber(item?.at, [0.15, 0.85, 1.7, 2.05, 2.4, 4.2][index] || index * 0.5, 0, end - start),
+      segmentId: cleanText(item?.segmentId, 20) || null,
+      target,
+      factIndex: target?.startsWith("fact-") ? Number(target.slice(-1)) : null,
+      element: cleanText(item?.element || "视觉元素", 120),
+      action: cleanText(item?.action || "淡入", 240),
+      actionPreset,
+      easing: safeChoreographyEase(item?.easing || "power3.out"),
+      purpose: cleanText(item?.purpose || "服务当前口播信息层级", 300),
+    };
+  }).filter((item) => item.target).sort((left, right) => left.order - right.order || left.at - right.at).slice(0, 14);
+  const fallbackChoreography = [
+    { order: 1, at: titleAt, target: "title", element: "主标题", action: "从左上淡入并轻微推近", actionPreset: "fade-up", easing: "power4.out", purpose: "先建立本段主题" },
+    { order: 2, at: summaryAt, target: "summary", element: "摘要条", action: "从左侧滑入", actionPreset: "slide-left", easing: "power3.out", purpose: "给出本段真正结论" },
+    { order: 3, at: firstFactAt, target: "fact-1", element: "事实卡1", action: "淡入并落稳", actionPreset: "pop", easing: "power3.out", purpose: "建立第一层事实" },
+    { order: 4, at: Math.min(end - start, firstFactAt + factStagger), target: "fact-2", element: "事实卡2", action: "淡入并落稳", actionPreset: "pop", easing: "power3.out", purpose: "补充方法或对照" },
+    { order: 5, at: Math.min(end - start, firstFactAt + factStagger * 2), target: "fact-3", element: "事实卡3", action: "淡入并落稳", actionPreset: "pop", easing: "power3.out", purpose: "落到结果或边界" },
+    { order: 6, at: Math.min(end - start, Math.max(4.2, firstFactAt + factStagger * 3 + 0.5)), target: "visual", element: "右侧二维动效", action: "展开并带一次轻推拉", actionPreset: "reveal-right", easing: "power3.inOut", purpose: "把抽象信息变成可见证据" },
+  ];
+  const segments = array(breakdown?.segments);
+  const segmentById = new Map(segments.map((segment) => [segment.id, segment]));
+  const sampleSegments = segments.filter((segment) => Number(segment.editedTime?.end) > start && Number(segment.editedTime?.start) < end);
+  const approvedFactCountBySegment = new Map(array(options.keyframeDirection?.frames).map((frame) => {
+    const segment = segmentById.get(frame?.segmentId);
+    const intent = segment ? normalizeKeyframeVisualIntent(frame?.visualIntent, segment, frame || {}) : null;
+    const count = intent?.factCards === null ? array(segment?.factCards).length : array(intent?.factCards).length;
+    return [frame?.segmentId, count];
+  }));
+  const actualFactCount = (segmentId) => approvedFactCountBySegment.has(segmentId)
+    ? approvedFactCountBySegment.get(segmentId)
+    : array(segmentById.get(segmentId)?.factCards).length;
+  const requestedStrongest = segmentById.get(cleanText(value.strongestSegmentId, 20));
+  const strongest = requestedStrongest && sampleSegments.includes(requestedStrongest)
+    ? requestedStrongest
+    : sampleSegments[0] || null;
+  const bindSegment = (item) => {
+    if (item.target === "speaker") {
+      const latest = Math.max(0, end - start - choreographyCompletionSeconds(item.target, item.actionPreset, item.easing));
+      const at = Number(Math.min(latest, Math.max(0, item.at)).toFixed(3));
+      return {
+        ...item,
+        segmentId: null,
+        at,
+        actionPreset: at > 0.35 && item.actionPreset === "fade" ? "push-in" : item.actionPreset,
+      };
+    }
+    const requested = segmentById.get(item.segmentId);
+    const sampleRelativeAt = Math.min(Math.max(0, end - start - 0.001), Math.max(0, Number(item.at || 0)));
+    const absoluteAt = start + sampleRelativeAt;
+    const segment = requested && Number(requested.editedTime?.end) > start && Number(requested.editedTime?.start) < end
+      ? requested
+      : sampleSegments.find((candidate) => absoluteAt >= Number(candidate.editedTime?.start) && absoluteAt < Number(candidate.editedTime?.end)) || strongest;
+    if (!segment) return { ...item, segmentId: null };
+    const sceneStart = Math.max(start, Number(segment.editedTime?.start)) - start;
+    const sceneEnd = Math.min(end, Number(segment.editedTime?.end)) - start;
+    const completion = choreographyCompletionSeconds(item.target, item.actionPreset, item.easing);
+    const latest = Math.max(sceneStart, sceneEnd - Math.min(completion, Math.max(0.12, sceneEnd - sceneStart)));
+    return {
+      ...item,
+      segmentId: segment.id,
+      at: Number(Math.min(latest, Math.max(sceneStart, sampleRelativeAt)).toFixed(3)),
+    };
+  };
+  const usingFallbackChoreography = choreography.length === 0;
+  const boundCandidates = (usingFallbackChoreography ? fallbackChoreography : choreography)
+    .map(bindSegment)
+    .filter((item) => !usingFallbackChoreography
+      || !/^fact-[123]$/.test(item.target || "")
+      || Number(item.target.slice(-1)) <= actualFactCount(item.segmentId));
+  const segmentsWithSpecificFacts = new Set(boundCandidates
+    .filter((item) => /^fact-[123]$/.test(item.target || ""))
+    .map((item) => item.segmentId)
+    .filter(Boolean));
+  const seenTargets = new Set();
+  const boundChoreography = [];
+  for (const item of boundCandidates) {
+    if (item.target === "facts" && segmentsWithSpecificFacts.has(item.segmentId)) continue;
+    const key = item.target === "speaker" ? "speaker" : `${item.segmentId || "missing"}:${item.target}`;
+    if (seenTargets.has(key)) continue;
+    seenTargets.add(key);
+    boundChoreography.push({ ...item, order: boundChoreography.length + 1 });
+  }
   return {
     schemaVersion: 1,
     sampleStart: Number(start.toFixed(3)),
     sampleEnd: Number(end.toFixed(3)),
     durationSeconds: Number((end - start).toFixed(3)),
-    strongestSegmentId: cleanText(value.strongestSegmentId || breakdown?.segments?.[0]?.id, 20),
+    strongestSegmentId: strongest?.id || null,
     rhythm: cleanText(value.rhythm || "标题先行，摘要滑入，事实卡依次弹出，最后展开证据或二维动效。", 800),
-    choreography: choreography.length ? choreography : [
-      { order: 1, at: 0.15, element: "主标题", action: "从左上淡入并轻微推近", easing: "power4.out", purpose: "先建立本段主题" },
-      { order: 2, at: 0.85, element: "摘要条", action: "从左侧滑入", easing: "power3.out", purpose: "给出本段真正结论" },
-      { order: 3, at: 1.7, element: "事实卡1", action: "弹出", easing: "back.out(1.6)", purpose: "建立第一层事实" },
-      { order: 4, at: 2.05, element: "事实卡2", action: "弹出", easing: "back.out(1.6)", purpose: "补充方法或对照" },
-      { order: 5, at: 2.4, element: "事实卡3", action: "弹出", easing: "back.out(1.6)", purpose: "落到结果或边界" },
-      { order: 6, at: 4.2, element: "右侧二维动效", action: "展开并带一次轻推拉", easing: "power3.inOut", purpose: "把抽象信息变成可见证据" },
-    ],
+    timing: {
+      titleLeadSeconds: Number(titleAt.toFixed(3)),
+      summaryDelaySeconds: Number(summaryAt.toFixed(3)),
+      factStaggerSeconds: Number(factStagger.toFixed(3)),
+    },
+    choreography: boundChoreography,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -474,9 +672,15 @@ function visualKind(segment) {
 
 function visualMarkup(segment) {
   const kind = visualKind(segment);
-  if (kind === "comparison") return `<div class="compare"><article class="v-step"><small>BEFORE</small><b>${html(segment.factCards?.[0]?.value || "第一版")}</b><i></i></article><em class="v-step">→</em><article class="after v-step"><small>AFTER</small><b>${html(segment.factCards?.[2]?.value || "返修版")}</b><i></i></article></div><div class="scan v-step"></div>`;
-  if (kind === "workflow") return `<div class="flow">${segment.factCards.map((fact, index) => `<article class="v-step"><span>0${index + 1}</span><b>${html(fact.label)}</b><small>${html(fact.value)}</small></article>${index < 2 ? `<i class="v-step">→</i>` : ""}`).join("")}</div>`;
-  if (kind === "prompt") return `<div class="browser v-step"><div class="browser-bar"><i></i><i></i><i></i><span>AI INPUT</span></div><p>${html(segment.oneSentenceSummary)}</p>${segment.factCards.map((fact) => `<div class="prompt-line v-step"><b>${html(fact.label)}</b><span>${html(fact.value)}</span></div>`).join("")}</div>`;
+  if (kind === "comparison") {
+    const facts = array(segment.factCards);
+    if (facts.length < 2) return `<div class="visual-cards">${facts.map((fact, index) => `<article class="v-step"><span>0${index + 1}</span><b>${html(fact.label)}</b><small>${html(fact.value)}</small></article>`).join("")}</div>`;
+    const before = facts[0];
+    const after = facts.at(-1);
+    return `<div class="compare"><article class="v-step"><small>${html(before.label)}</small><b>${html(before.value)}</b><i></i></article><em class="v-step">→</em><article class="after v-step"><small>${html(after.label)}</small><b>${html(after.value)}</b><i></i></article></div><div class="scan v-step"></div>`;
+  }
+  if (kind === "workflow") return `<div class="flow">${segment.factCards.map((fact, index) => `<article class="v-step"><span>0${index + 1}</span><b>${html(fact.label)}</b><small>${html(fact.value)}</small></article>${index < segment.factCards.length - 1 ? `<i class="v-step">→</i>` : ""}`).join("")}</div>`;
+  if (kind === "prompt") return `<div class="browser v-step"><div class="browser-bar"><i></i><i></i><i></i><span>输入内容</span></div><p>${html(segment.oneSentenceSummary)}</p>${segment.factCards.map((fact) => `<div class="prompt-line v-step"><b>${html(fact.label)}</b><span>${html(fact.value)}</span></div>`).join("")}</div>`;
   if (kind === "qa") return `<div class="qa-board v-step"><div class="qa-scan"></div>${segment.factCards.map((fact, index) => `<div class="qa-row v-step"><span>0${index + 1}</span><b>${html(fact.label)}</b><small>${html(fact.value)}</small><i>✓</i></div>`).join("")}</div>`;
   if (kind === "chart") return `<div class="chart v-step">${segment.factCards.map((fact, index) => `<article><i style="--height:${46 + index * 18}%"></i><b>${html(fact.label)}</b><small>${html(fact.value)}</small></article>`).join("")}</div>`;
   return `<div class="visual-cards">${segment.factCards.map((fact, index) => `<article class="v-step"><span>0${index + 1}</span><b>${html(fact.label)}</b><small>${html(fact.value)}</small></article>`).join("")}</div>`;
@@ -492,7 +696,9 @@ function highlightedHtml(text, highlights = []) {
 }
 
 function resolveScenePresentation(segment, frame) {
-  const intent = normalizeKeyframeVisualIntent(frame?.visualIntent, segment, frame || {});
+  const intent = frame
+    ? normalizeKeyframeVisualIntent(frame.visualIntent, segment, frame)
+    : normalizeKeyframeVisualIntent({ primaryVisual: { kind: "inherit" } }, segment, null);
   const kind = intent.primaryVisual.kind;
   const inheritedFacts = array(segment?.factCards);
   const factCards = intent.factCards === null
@@ -536,6 +742,14 @@ function sceneWindow(segment, rangeStart, rangeEnd) {
   const end = Math.min(rangeEnd, Number(segment.editedTime.end));
   if (end - start < 0.2) return null;
   return { start: start - rangeStart, end: end - rangeStart, duration: end - start };
+}
+
+function gsapFromLine(selector, vars, at) {
+  return `tl.from(${JSON.stringify(selector)},${JSON.stringify(vars)}, ${Number(at).toFixed(3)});`;
+}
+
+function gsapFromToLine(selector, fromVars, toVars, at) {
+  return `tl.fromTo(${JSON.stringify(selector)},${JSON.stringify(fromVars)},${JSON.stringify(toVars)}, ${Number(at).toFixed(3)});`;
 }
 
 export async function buildHyperframesDirectorProject(options) {
@@ -596,6 +810,43 @@ export async function buildHyperframesDirectorProject(options) {
   }
   scenes = scenes.map((scene) => ({ ...scene, presentation: resolveScenePresentation(scene.segment, scene.frame) }));
 
+  const sampleChoreography = mode === "sample" ? array(motionDirection?.choreography) : [];
+  const appliedChoreography = [];
+  const appliedChoreographyEvents = new Set();
+  const appliedChoreographyKeys = new Set();
+  const sampleBeatForScene = (scene, target, factIndex = null) => {
+    if (mode !== "sample") return null;
+    const exactTarget = target;
+    const exact = sampleChoreography.find((item) => item?.segmentId === scene.segment.id && item?.target === exactTarget);
+    const generic = factIndex === null ? null : sampleChoreography.find((item) => item?.segmentId === scene.segment.id && item?.target === "facts");
+    const beat = exact || generic;
+    if (!beat) return null;
+    const genericOffset = exact ? 0 : factIndex * Number(motionDirection?.timing?.factStaggerSeconds || 0.32);
+    const completion = choreographyCompletionSeconds(exactTarget, beat.actionPreset, beat.easing);
+    const latest = Math.max(scene.window.start, scene.window.end - Math.min(completion, scene.window.duration));
+    const at = Math.min(latest, Math.max(scene.window.start, Number(beat.at || 0) + genericOffset));
+    return { beat, at: Number(at.toFixed(3)), target: exactTarget };
+  };
+  const markChoreographyApplied = (scene, resolved, selector) => {
+    if (!resolved?.beat) return;
+    const key = `${resolved.beat.order}|${resolved.target || resolved.beat.target}|${selector}`;
+    if (appliedChoreographyKeys.has(key)) return;
+    appliedChoreographyKeys.add(key);
+    appliedChoreographyEvents.add(resolved.beat);
+    appliedChoreography.push({
+      order: resolved.beat.order,
+      segmentId: scene?.segment?.id || null,
+      target: resolved.target || resolved.beat.target,
+      sourceTarget: resolved.beat.target,
+      factIndex: resolved.target?.startsWith("fact-") ? Number(resolved.target.slice(-1)) : null,
+      selector,
+      at: Number(Number(resolved.at).toFixed(3)),
+      actionPreset: resolved.beat.actionPreset,
+      easing: safeChoreographyEase(resolved.beat.easing),
+      purpose: resolved.beat.purpose,
+    });
+  };
+
   const copiedAssets = [];
   const skippedAssetConflicts = [];
   for (const asset of approvedAssets.filter((item) => item?.path && fs.existsSync(item.path) && item.placement)) {
@@ -611,10 +862,13 @@ export async function buildHyperframesDirectorProject(options) {
   }
 
   const motionById = new Map(array(fullDirection?.segmentMotion).map((item) => [item.segmentId, item]));
-  const visualRevealAt = ({ segment, window }) => {
+  const visualRevealAt = (scene) => {
+    const { segment, window } = scene;
+    const sampleVisual = sampleBeatForScene(scene, "visual");
+    if (sampleVisual) return sampleVisual.at;
     const motion = motionById.get(segment.id) || {};
     return window.start + Math.min(
-      Math.max(0, window.duration - 0.2),
+      Math.max(0, window.duration - (mode === "sample" ? 1.5 : 0.2)),
       Number(motion.visualAt ?? (mode === "keyframes" ? 0.66 : Math.min(4.2, Math.max(2.7, window.duration * 0.42)))),
     );
   };
@@ -624,10 +878,11 @@ export async function buildHyperframesDirectorProject(options) {
     const ownerScene = scenes
       .map((scene) => ({ scene, overlap: Math.max(0, Math.min(end, scene.window.end) - Math.max(rawStart, scene.window.start)) }))
       .sort((left, right) => right.overlap - left.overlap)[0];
-    const revealAt = ownerScene?.overlap > 0 ? visualRevealAt(ownerScene.scene) : rawStart;
+    const matchedScene = ownerScene?.overlap > 0 ? ownerScene.scene : null;
+    const revealAt = matchedScene ? visualRevealAt(matchedScene) : rawStart;
     const latestUsefulStart = Math.max(rawStart, end - 0.8);
     const start = Math.min(Math.max(rawStart, revealAt), latestUsefulStart);
-    return { asset, index, rawStart, start, end, ownerScene: ownerScene?.scene || null };
+    return { asset, index, rawStart, start, end, ownerScene: matchedScene };
   }).filter((entry) => entry.end - entry.start >= 0.2);
   const compositedAssetIds = evidenceEntries.map((entry) => entry.asset.id);
   const sceneUsesEvidence = (window) => evidenceEntries.some((entry) => entry.end > window.start && entry.start < window.end);
@@ -675,11 +930,17 @@ export async function buildHyperframesDirectorProject(options) {
 
   const scale = width / 1920;
   const animationLines = [];
-  scenes.forEach(({ segment, presentation, window }) => {
+  scenes.forEach((scene) => {
+    const { segment, presentation, window } = scene;
     const id = `#scene-${segment.id}`;
     const motion = motionById.get(segment.id) || {};
-    const titleAt = window.start + Number(motion.titleAt ?? 0.08);
-    const summaryAt = window.start + Number(motion.summaryAt ?? (mode === "keyframes" ? 0.22 : 0.85));
+    const titleBeat = sampleBeatForScene(scene, "title");
+    const keyLineBeat = sampleBeatForScene(scene, "key-line");
+    const summaryBeat = sampleBeatForScene(scene, "summary");
+    const visualBeat = sampleBeatForScene(scene, "visual");
+    const titleAt = titleBeat?.at ?? window.start + Number(motion.titleAt ?? 0.08);
+    const keyLineAt = keyLineBeat?.at ?? titleAt + 0.58;
+    const summaryAt = summaryBeat?.at ?? window.start + Number(motion.summaryAt ?? (mode === "keyframes" ? 0.22 : 0.85));
     const configuredFactsAt = mode === "keyframes"
       ? [0.34, 0.44, 0.54]
       : Array.isArray(motion.factsAt) ? motion.factsAt.slice(0, 3) : [1.65, 1.97, 2.29];
@@ -689,15 +950,43 @@ export async function buildHyperframesDirectorProject(options) {
       0,
       6,
     ));
-    const visualAt = visualRevealAt({ segment, window });
+    const resolvedFacts = presentation.factCards.map((_, index) => sampleBeatForScene(scene, `fact-${index + 1}`, index));
+    const renderedFactStarts = resolvedFacts.map((resolved, index) => resolved?.at ?? window.start + Number(factsAt[index] ?? factsAt.at(-1) ?? 0));
+    const visualAt = visualBeat?.at ?? visualRevealAt(scene);
+    if (presentation.title && titleBeat) markChoreographyApplied(scene, titleBeat, `${id} h1`);
+    if (presentation.keyLine && keyLineBeat) markChoreographyApplied(scene, keyLineBeat, `${id} .title-block p`);
+    if (presentation.summary && summaryBeat) markChoreographyApplied(scene, summaryBeat, `${id} .summary`);
+    resolvedFacts.forEach((resolved, index) => {
+      if (resolved) markChoreographyApplied(scene, resolved, `${id} .fact-${index + 1}`);
+    });
+    if (!sceneUsesEvidence(window) && visualBeat) markChoreographyApplied(scene, visualBeat, `${id} .visual-panel`);
+    const visualEntrance = visualBeat
+      ? choreographyEntranceVars("visual", visualBeat.beat.actionPreset, visualBeat.beat.easing, scale)
+      : { opacity: 0, x: 70 * scale, scale: 0.94, duration: 0.66, ease: "power4.out" };
     const visualMotion = sceneUsesEvidence(window) ? "" : `
-      tl.from("${id} .visual-panel", {opacity:0,x:70,scale:.94,duration:.66,ease:"power4.out"}, ${visualAt.toFixed(3)});
+      ${gsapFromLine(`${id} .visual-panel`, visualEntrance, visualAt)}
       tl.from("${id} .v-step", {opacity:0,y:20,scale:.95,duration:.42,stagger:.16,ease:"power3.out"}, ${(visualAt + 0.18).toFixed(3)});`;
     const internalMotion = showInternalLabels ? `tl.from("${id} .eyebrow", {opacity:0,x:-28,duration:.38}, ${titleAt.toFixed(3)});` : "";
-    const titleMotion = presentation.title ? `tl.from("${id} h1", {opacity:0,y:34,scale:.97,filter:"blur(8px)",duration:.62,ease:"power4.out"}, ${titleAt.toFixed(3)});tl.from("${id} .title-rule", {scaleX:0,duration:.48,ease:"power3.out"}, ${(titleAt + 0.48).toFixed(3)});` : "";
-    const keyLineMotion = presentation.keyLine ? `tl.from("${id} .title-block p", {opacity:0,x:-20,duration:.38}, ${(titleAt + 0.58).toFixed(3)});` : "";
-    const summaryMotion = presentation.summary ? `tl.from("${id} .summary", {opacity:0,x:-90,duration:.58,ease:"power4.out"}, ${summaryAt.toFixed(3)});tl.from("${id} .summary i", {opacity:0,scale:.3,rotate:-90,duration:.36,ease:"back.out(1.8)"}, ${(summaryAt + 0.12).toFixed(3)});` : "";
-    const factsMotion = presentation.factCards.length ? `${showInternalLabels ? `tl.from("${id} .information-label", {opacity:0,x:-18,duration:.34}, ${(window.start + factsAt[0] - 0.22).toFixed(3)});` : ""}${presentation.factCards.map((_, index) => `tl.from("${id} .fact-${index + 1}", {opacity:0,y:38,scale:.86,duration:.5,ease:"back.out(1.65)"}, ${(window.start + Number(factsAt[index] ?? factsAt.at(-1))).toFixed(3)});`).join("")}` : "";
+    const titleEntrance = titleBeat
+      ? choreographyEntranceVars("title", titleBeat.beat.actionPreset, titleBeat.beat.easing, scale)
+      : { opacity: 0, y: 34 * scale, scale: 0.97, filter: "blur(8px)", duration: 0.62, ease: "power4.out" };
+    const keyLineEntrance = keyLineBeat
+      ? choreographyEntranceVars("key-line", keyLineBeat.beat.actionPreset, keyLineBeat.beat.easing, scale)
+      : { opacity: 0, x: -20 * scale, duration: 0.38 };
+    const summaryEntrance = summaryBeat
+      ? choreographyEntranceVars("summary", summaryBeat.beat.actionPreset, summaryBeat.beat.easing, scale)
+      : { opacity: 0, x: -90 * scale, duration: 0.58, ease: "power4.out" };
+    const titleMotion = presentation.title ? `${gsapFromLine(`${id} h1`, titleEntrance, titleAt)}tl.from("${id} .title-rule", {scaleX:0,duration:.48,ease:"power3.out"}, ${(titleAt + 0.48).toFixed(3)});` : "";
+    const keyLineMotion = presentation.keyLine ? gsapFromLine(`${id} .title-block p`, keyLineEntrance, keyLineAt) : "";
+    const summaryMotion = presentation.summary ? `${gsapFromLine(`${id} .summary`, summaryEntrance, summaryAt)}tl.from("${id} .summary i", {opacity:0,scale:.3,rotate:-90,duration:.36,ease:"back.out(1.8)"}, ${(summaryAt + 0.12).toFixed(3)});` : "";
+    const factsMotion = presentation.factCards.length ? `${showInternalLabels ? `tl.from("${id} .information-label", {opacity:0,x:-18,duration:.34}, ${Math.max(window.start, renderedFactStarts[0] - 0.22).toFixed(3)});` : ""}${presentation.factCards.map((_, index) => {
+      const resolved = resolvedFacts[index];
+      const entrance = resolved
+        ? choreographyEntranceVars(`fact-${index + 1}`, resolved.beat.actionPreset, resolved.beat.easing, scale)
+        : { opacity: 0, y: 38 * scale, scale: 0.86, duration: 0.5, ease: "back.out(1.65)" };
+      return gsapFromLine(`${id} .fact-${index + 1}`, entrance, renderedFactStarts[index]);
+    }).join("")}` : "";
+    const exitMotion = mode === "sample" ? "" : `tl.to("${id}", {opacity:.04,duration:.34,ease:"power2.in"}, ${(window.end - 0.34).toFixed(3)});`;
     animationLines.push(`
       ${internalMotion}
       ${titleMotion}
@@ -705,11 +994,57 @@ export async function buildHyperframesDirectorProject(options) {
       ${summaryMotion}
       ${factsMotion}
       ${visualMotion}
-      tl.to("${id}", {opacity:.04,duration:.34,ease:"power2.in"}, ${(window.end - 0.34).toFixed(3)});`);
+      ${exitMotion}`);
   });
-  evidenceEntries.forEach(({ index, start, end }) => {
-    animationLines.push(`tl.from("#evidence-${index + 1}",{opacity:0,scale:.94,x:44,duration:.52,ease:"power3.out"},${start.toFixed(3)});tl.to("#speakerStage",{scale:.52,duration:.52,ease:"power3.inOut"},${start.toFixed(3)});tl.to("#evidence-${index + 1}",{opacity:0,duration:.25},${Math.max(start, end - 0.25).toFixed(3)});tl.to("#speakerStage",{scale:1,duration:.32,ease:"power3.out"},${Math.max(start, end - 0.3).toFixed(3)});`);
+  evidenceEntries.forEach(({ index, start, end, ownerScene }) => {
+    const resolved = ownerScene ? sampleBeatForScene(ownerScene, "visual") : null;
+    if (resolved) markChoreographyApplied(ownerScene, { ...resolved, at: start }, `#evidence-${index + 1}`);
+    const entrance = resolved
+      ? choreographyEntranceVars("visual", resolved.beat.actionPreset, resolved.beat.easing, scale)
+      : { opacity: 0, scale: 0.94, x: 44 * scale, duration: 0.52, ease: "power3.out" };
+    animationLines.push(`${gsapFromLine(`#evidence-${index + 1}`, entrance, start)}tl.to("#speakerStage",{scale:.52,duration:.52,ease:"power3.inOut"},${start.toFixed(3)});tl.to("#evidence-${index + 1}",{opacity:0,duration:.25},${Math.max(start, end - 0.25).toFixed(3)});tl.to("#speakerStage",{scale:1,duration:.32,ease:"power3.out"},${Math.max(start, end - 0.3).toFixed(3)});`);
   });
+  const speakerBeatRaw = mode === "sample" ? sampleChoreography.find((item) => item?.target === "speaker") : null;
+  const speakerBeat = speakerBeatRaw ? {
+    beat: speakerBeatRaw,
+    target: "speaker",
+    at: Number(Math.min(Math.max(0, duration - choreographyCompletionSeconds("speaker", speakerBeatRaw.actionPreset, speakerBeatRaw.easing)), Math.max(0, Number(speakerBeatRaw.at || 0))).toFixed(3)),
+  } : null;
+  if (speakerBeat) markChoreographyApplied(null, speakerBeat, "#speakerStage");
+  const defaultSpeakerEntrance = { opacity: 0, x: 80 * scale, scale: 0.95, duration: 0.8, ease: "power4.out" };
+  let speakerTimeline = gsapFromLine("#speakerStage", defaultSpeakerEntrance, 0.18);
+  if (speakerBeat) {
+    const customEntrance = choreographyEntranceVars("speaker", speakerBeat.beat.actionPreset, speakerBeat.beat.easing, scale);
+    if (speakerBeat.at <= 0.35) {
+      speakerTimeline = gsapFromLine("#speakerStage", customEntrance, speakerBeat.at);
+    } else {
+      const { duration: speakerDuration, ease: speakerEase, opacity: _ignoredOpacity, ...speakerPose } = customEntrance;
+      if (!Object.keys(speakerPose).length) speakerPose.scale = 0.985;
+      speakerTimeline += gsapFromToLine(
+        "#speakerStage",
+        speakerPose,
+        { x: 0, y: 0, scale: 1, duration: speakerDuration, ease: speakerEase, immediateRender: false },
+        speakerBeat.at,
+      );
+    }
+  }
+  const unappliedChoreography = sampleChoreography.filter((item) => !appliedChoreographyEvents.has(item)).map((item) => {
+    const scene = scenes.find((candidate) => candidate.segment.id === item?.segmentId);
+    let reason = "missing-dom-target";
+    if (!item?.target) reason = "unknown-target";
+    else if (item.target !== "speaker" && !scene) reason = "segment-not-rendered";
+    else if (item.target === "facts" && scene?.presentation?.factCards?.length) reason = "superseded-by-specific-target";
+    return {
+      order: item?.order ?? null,
+      segmentId: item?.segmentId || null,
+      target: item?.target || null,
+      actionPreset: item?.actionPreset || null,
+      easing: safeChoreographyEase(item?.easing),
+      purpose: item?.purpose || "",
+      reason,
+    };
+  });
+  appliedChoreography.sort((left, right) => Number(left.order) - Number(right.order) || left.selector.localeCompare(right.selector));
   const speakerLabelCss = showInternalLabels ? `.speaker-stage:before{content:"REAL TALKING HEAD";position:absolute;z-index:4;left:${24 * scale}px;top:${22 * scale}px;padding:${9 * scale}px ${14 * scale}px;border-radius:${99 * scale}px;background:rgba(7,9,15,.8);color:var(--warning);font:700 ${14 * scale}px/1 monospace;letter-spacing:${1.4 * scale}px}` : "";
   const safeGuideCss = showSafeGuides ? `.speaker-safe{position:absolute;z-index:4;inset:${20 * scale}px;border:1px dashed rgba(85,214,255,.25);border-radius:${25 * scale}px;pointer-events:none}` : "";
 
@@ -726,7 +1061,7 @@ export async function buildHyperframesDirectorProject(options) {
 .speaker-stage{z-index:60;transform-origin:right bottom}.evidence{left:${860 * scale}px;top:${180 * scale}px;width:${990 * scale}px;height:${700 * scale}px}.visual-panel{left:${860 * scale}px;top:${300 * scale}px;width:${390 * scale}px;height:${360 * scale}px;padding:${54 * scale}px ${18 * scale}px ${18 * scale}px}.visual-head{left:${18 * scale}px;right:${18 * scale}px}.flow,.visual-cards{align-items:stretch;flex-direction:column;gap:${9 * scale}px}.flow article,.visual-cards article{width:100%;min-height:0;flex:1;padding:${12 * scale}px ${14 * scale}px}.flow article span,.visual-cards span{font-size:${14 * scale}px}.flow b,.visual-cards b{display:inline-block;margin:${8 * scale}px ${8 * scale}px 4px 0;font-size:${17 * scale}px}.flow small,.visual-cards small{font-size:${13 * scale}px}.flow>i{display:none}.browser{padding:${55 * scale}px ${15 * scale}px ${12 * scale}px}.browser p{font-size:${14 * scale}px}.prompt-line{gap:${8 * scale}px;padding:${7 * scale}px ${8 * scale}px}.prompt-line b{min-width:${70 * scale}px}.qa-row{grid-template-columns:${34 * scale}px ${70 * scale}px 1fr ${20 * scale}px;padding:${9 * scale}px}.chart b{font-size:${14 * scale}px}.chart small{font-size:${11 * scale}px}.compare{gap:${8 * scale}px}.compare article{padding:${12 * scale}px}.compare b{font-size:${17 * scale}px;margin-top:${18 * scale}px}
 .scene.audience-facing .title-block{margin-top:${8 * scale}px}.scene.audience-facing.primary-hook-contrast .visual-panel,.scene.audience-facing.primary-memo-action .visual-panel,.scene.audience-facing.primary-copy-prompt .visual-panel{left:${70 * scale}px;top:${430 * scale}px;width:${1050 * scale}px;height:${430 * scale}px;padding:${24 * scale}px ${28 * scale}px}.visual-panel.audience-facing{padding-top:${24 * scale}px}.hook-contrast{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:${42 * scale}px;height:100%}.tool-stack{position:relative;height:${260 * scale}px}.tool-stack span{position:absolute;left:${40 * scale}px;width:${300 * scale}px;height:${150 * scale}px;border:1px solid rgba(255,255,255,.15);border-radius:${18 * scale}px;background:linear-gradient(145deg,rgba(255,255,255,.11),rgba(255,255,255,.04));box-shadow:0 ${16 * scale}px ${36 * scale}px rgba(0,0,0,.25)}.tool-stack span:nth-child(1){top:${78 * scale}px;transform:rotate(-8deg);opacity:.45}.tool-stack span:nth-child(2){top:${46 * scale}px;left:${78 * scale}px;transform:rotate(4deg);opacity:.7}.tool-stack span:nth-child(3){top:${18 * scale}px;left:${116 * scale}px;border-color:rgba(255,106,61,.65)}.tool-stack b{position:absolute;left:${175 * scale}px;top:${78 * scale}px;font-size:${30 * scale}px}.hook-contrast>em{color:var(--warning);font-size:${58 * scale}px;font-style:normal}.first-step{padding:${42 * scale}px;border:2px solid var(--secondary);border-radius:${24 * scale}px;background:rgba(85,214,255,.1);text-align:center}.first-step small{display:block;color:var(--muted);font-size:${20 * scale}px}.first-step b{display:block;margin-top:${18 * scale}px;color:var(--secondary);font-size:${42 * scale}px}.memo-card{height:100%;overflow:hidden;border-radius:${24 * scale}px;background:#f4f5f7;color:#172033;box-shadow:0 ${24 * scale}px ${60 * scale}px rgba(0,0,0,.35)}.memo-card header{height:${64 * scale}px;padding:0 ${26 * scale}px;display:flex;align-items:center;gap:${14 * scale}px;background:#e9ebef;border-bottom:1px solid #d6dae1}.memo-card header i{width:${18 * scale}px;height:${18 * scale}px;border-radius:50%;background:#ffd166}.memo-card header b{font-size:${22 * scale}px}.memo-card header span{margin-left:auto;color:#2460e5;font-size:${18 * scale}px}.memo-note{position:relative;height:${228 * scale}px;padding:${32 * scale}px ${42 * scale}px}.memo-note small{color:#6a707d;font-size:${16 * scale}px}.memo-note p{max-width:${830 * scale}px;margin:${18 * scale}px 0 0;font-size:${34 * scale}px;line-height:1.45;font-weight:700}.memo-cursor{display:inline-block;width:${3 * scale}px;height:${38 * scale}px;margin-left:${8 * scale}px;background:#2563eb;vertical-align:middle}.memo-card footer{height:${86 * scale}px;padding:0 ${36 * scale}px;display:flex;align-items:center;gap:${18 * scale}px;background:#fff;border-top:1px solid #e2e5ea}.memo-card footer span{display:grid;place-items:center;width:${36 * scale}px;height:${36 * scale}px;border-radius:50%;background:#15803d;color:#fff;font-weight:900}.memo-card footer b{font-size:${22 * scale}px}.copy-prompt-card{height:100%;padding:${30 * scale}px ${38 * scale}px;border:2px solid rgba(85,214,255,.55);border-radius:${24 * scale}px;background:linear-gradient(145deg,rgba(11,18,30,.98),rgba(17,27,44,.96));box-shadow:0 ${24 * scale}px ${70 * scale}px rgba(0,0,0,.4)}.copy-prompt-card header{display:flex;justify-content:space-between;align-items:center}.copy-prompt-card header span{padding:${8 * scale}px ${15 * scale}px;border-radius:${99 * scale}px;background:rgba(85,214,255,.14);color:var(--secondary);font-size:${17 * scale}px;font-weight:800}.copy-prompt-card header i{color:var(--muted);font-style:normal;font-size:${16 * scale}px}.copy-prompt-card blockquote{margin:${34 * scale}px 0 ${24 * scale}px;font-size:${39 * scale}px;line-height:1.55;font-weight:800;letter-spacing:-${1 * scale}px}.copy-prompt-card mark{padding:0 ${4 * scale}px;background:transparent;color:var(--warning);box-shadow:inset 0 -${7 * scale}px rgba(255,106,61,.35)}.copy-prompt-card footer{color:var(--muted);font-size:${18 * scale}px}
 </style></head><body><div id="root" data-composition-id="main" data-start="0" data-duration="${duration.toFixed(3)}" data-width="${width}" data-height="${height}" data-fps="${fps}"><div class="top-progress"><i id="progress"></i></div>${audioHtml}${sceneHtml}<aside class="speaker-stage" id="speakerStage" data-layout-allow-overflow>${speakerHtml}${showSafeGuides ? `<div class="speaker-safe"></div>` : ""}</aside>${evidenceHtml}${captionHtml}</div>
-<script>window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true,defaults:{ease:"power3.out"}});tl.fromTo("#progress",{scaleX:0},{scaleX:1,duration:${duration.toFixed(3)},ease:"none"},0);tl.from("#speakerStage",{opacity:0,x:${80 * scale},scale:.95,duration:.8,ease:"power4.out"},.18);${animationLines.join("\n")}document.querySelectorAll(".caption").forEach((caption)=>{const start=Number(caption.dataset.start),d=Number(caption.dataset.duration);tl.from(caption,{opacity:0,y:${14 * scale},scale:.97,duration:.18},start);tl.to(caption,{opacity:0,y:-${8 * scale},duration:.14},start+Math.max(.2,d-.14));});window.__timelines.main=tl;</script></body></html>`;
+<script>window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true,defaults:{ease:"power3.out"}});tl.fromTo("#progress",{scaleX:0},{scaleX:1,duration:${duration.toFixed(3)},ease:"none"},0);${speakerTimeline}${animationLines.join("\n")}document.querySelectorAll(".caption").forEach((caption)=>{const start=Number(caption.dataset.start),d=Number(caption.dataset.duration);tl.from(caption,{opacity:0,y:${14 * scale},scale:.97,duration:.18},start);tl.to(caption,{opacity:0,y:-${8 * scale},duration:.14},start+Math.max(.2,d-.14));});window.__timelines.main=tl;</script></body></html>`;
 
   await fsp.writeFile(path.join(projectDir, "index.html"), documentHtml, "utf8");
   await fsp.writeFile(path.join(projectDir, "hyperframes.json"), `${JSON.stringify({
@@ -748,6 +1083,9 @@ export async function buildHyperframesDirectorProject(options) {
     approvedAssetIds: copiedAssets.map((asset) => asset.id),
     compositedAssetIds,
     skippedAssetConflicts,
+    motionDirectionConsumed: mode === "sample" && isObject(motionDirection),
+    appliedChoreography,
+    unappliedChoreography,
     snapshotTimes,
     generatedAt: new Date().toISOString(),
   }, null, 2)}\n`, "utf8");
@@ -761,6 +1099,8 @@ export async function buildHyperframesDirectorProject(options) {
     fps,
     duration,
     snapshotTimes,
+    appliedChoreography,
+    unappliedChoreography,
     compositedAssetIds,
     skippedAssetIds: skippedAssetConflicts.map((item) => item.assetId),
   };
