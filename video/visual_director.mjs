@@ -149,6 +149,36 @@ const cleanText = (value, limit = 300) => String(value || "").replace(/\s+/g, " 
 const array = (value) => Array.isArray(value) ? value : [];
 const unique = (values) => [...new Set(values.filter(Boolean))];
 
+function normalizeFactCards(value, valueLimit) {
+  return array(value).map((fact) => {
+    const factValue = cleanText(fact?.value || fact?.text, valueLimit);
+    if (!factValue) return null;
+    return {
+      label: cleanText(fact?.label, 12),
+      value: factValue,
+    };
+  }).filter(Boolean).slice(0, 3).map((fact, index) => ({
+    ...fact,
+    label: fact.label || ["重点", "方法", "结果"][index],
+  }));
+}
+
+function uniqueSegmentId(value, index, seen) {
+  const fallback = `S${String(index + 1).padStart(2, "0")}`;
+  const normalized = cleanText(value, 80)
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || fallback;
+  let candidate = normalized;
+  let suffix = 2;
+  while (seen.has(candidate)) {
+    const postfix = `-${suffix++}`;
+    candidate = `${normalized.slice(0, Math.max(1, 40 - postfix.length))}${postfix}`;
+  }
+  seen.add(candidate);
+  return candidate;
+}
+
 export function normalizeVisualStyleReport(raw, references = [], defaults = {}) {
   const value = isObject(raw) ? raw : {};
   const visual = defaults.visualDefaults || {};
@@ -231,6 +261,7 @@ export function normalizeContentBreakdown(raw, options = {}) {
   requested = requested.slice(0, maximum);
   const count = Math.max(minimum, requested.length || minimum);
   while (requested.length < count) requested.push({});
+  const seenSegmentIds = new Set();
   const segments = requested.map((item, index) => {
     const fallbackStart = duration * index / count;
     const fallbackEnd = duration * (index + 1) / count;
@@ -244,22 +275,12 @@ export function normalizeContentBreakdown(raw, options = {}) {
     const title = cleanText(item?.upperLeftTitle || item?.title || `信息段 ${index + 1}`, 36);
     const keyLine = cleanText(item?.subtitleOrKeyLine || item?.keyLine || item?.subtitle || gist, 54);
     const summary = cleanText(item?.oneSentenceSummary || item?.summary || gist, 160);
-    const hasRequestedFacts = Object.prototype.hasOwnProperty.call(item || {}, "factCards")
-      || Object.prototype.hasOwnProperty.call(item || {}, "facts");
-    const requestedFacts = array(Object.prototype.hasOwnProperty.call(item || {}, "factCards") ? item.factCards : item?.facts);
-    const facts = hasRequestedFacts
-      ? requestedFacts.slice(0, 3).map((fact, factIndex) => ({
-        label: cleanText(fact?.label || ["重点", "方法", "结果"][factIndex], 12),
-        value: cleanText(fact?.value || fact?.text, 38),
-      })).filter((fact) => fact.label || fact.value)
-      : [0, 1, 2].map((factIndex) => ({
-        label: ["重点", "方法", "结果"][factIndex],
-        value: cleanText([keyLine, summary, gist][factIndex], 38),
-      }));
+    const requestedFacts = Object.prototype.hasOwnProperty.call(item || {}, "factCards") ? item.factCards : item?.facts;
+    const facts = normalizeFactCards(requestedFacts, 38);
     const visual = isObject(item?.rightVisual) ? item.rightVisual : isObject(item?.visual) ? item.visual : {};
     const reference = isObject(item?.referencePackaging) ? item.referencePackaging : {};
     return {
-      id: cleanText(item?.id || `S${String(index + 1).padStart(2, "0")}`, 12),
+      id: uniqueSegmentId(item?.id, index, seenSegmentIds),
       sourceTime: range,
       editedTime: {
         start: Number(Math.max(0, editedStart).toFixed(3)),
@@ -309,10 +330,7 @@ function inferKeyframePrimaryVisualKind(frame, segment) {
 }
 
 function normalizeKeyframeFactCards(value) {
-  return array(value).slice(0, 3).map((fact, index) => ({
-    label: cleanText(fact?.label || ["重点", "方法", "结果"][index], 12),
-    value: cleanText(fact?.value || fact?.text, 48),
-  })).filter((fact) => fact.label || fact.value);
+  return normalizeFactCards(value, 48);
 }
 
 function normalizeKeyframeVisualIntent(raw, segment, frame = {}) {
@@ -672,8 +690,9 @@ function visualKind(segment) {
 
 function visualMarkup(segment) {
   const kind = visualKind(segment);
+  const facts = array(segment.factCards);
+  if (!facts.length && kind !== "prompt") return "";
   if (kind === "comparison") {
-    const facts = array(segment.factCards);
     if (facts.length < 2) return `<div class="visual-cards">${facts.map((fact, index) => `<article class="v-step"><span>0${index + 1}</span><b>${html(fact.label)}</b><small>${html(fact.value)}</small></article>`).join("")}</div>`;
     const before = facts[0];
     const after = facts.at(-1);
@@ -785,6 +804,10 @@ export async function buildHyperframesDirectorProject(options) {
   if (fs.existsSync(gsapSource) && !fs.existsSync(path.join(assetsDir, "gsap.min.js"))) await fsp.copyFile(gsapSource, path.join(assetsDir, "gsap.min.js"));
 
   const allSegments = array(breakdown?.segments);
+  const segmentIds = allSegments.map((segment) => String(segment?.id || "").trim());
+  if (!segmentIds.length || segmentIds.some((id) => !id) || new Set(segmentIds).size !== segmentIds.length) {
+    throw new Error("内容拆解必须提供非空且唯一的 segmentId");
+  }
   const keyframeBySegmentId = new Map(array(keyframeDirection?.frames).map((frame) => [frame.segmentId, frame]));
   const keyframePresentation = isObject(keyframeDirection?.presentation) ? keyframeDirection.presentation : {};
   const showInternalLabels = keyframePresentation.showInternalLabels === true;
@@ -808,7 +831,16 @@ export async function buildHyperframesDirectorProject(options) {
     scenes = allSegments.map((segment) => ({ segment, frame: keyframeBySegmentId.get(segment.id) || null, window: sceneWindow(segment, rangeStart, end) })).filter((item) => item.window);
     snapshotTimes = scenes.slice(0, 5).map((item) => Number((item.window.start + Math.min(3.2, item.window.duration * 0.5)).toFixed(3)));
   }
-  scenes = scenes.map((scene) => ({ ...scene, presentation: resolveScenePresentation(scene.segment, scene.frame) }));
+  const seenDomSegmentIds = new Set();
+  scenes = scenes.map((scene, index) => {
+    const presentation = resolveScenePresentation(scene.segment, scene.frame);
+    return {
+      ...scene,
+      presentation,
+      domId: `scene-${uniqueSegmentId(scene.segment.id, index, seenDomSegmentIds)}`,
+      primaryMarkup: primaryVisualMarkup(presentation, scene.segment),
+    };
+  });
 
   const sampleChoreography = mode === "sample" ? array(motionDirection?.choreography) : [];
   const appliedChoreography = [];
@@ -886,7 +918,7 @@ export async function buildHyperframesDirectorProject(options) {
   }).filter((entry) => entry.end - entry.start >= 0.2);
   const compositedAssetIds = evidenceEntries.map((entry) => entry.asset.id);
   const sceneUsesEvidence = (window) => evidenceEntries.some((entry) => entry.end > window.start && entry.start < window.end);
-  const sceneHtml = scenes.map(({ segment, presentation, window }) => {
+  const sceneHtml = scenes.map(({ segment, presentation, window, domId, primaryMarkup }) => {
     const hasEvidence = sceneUsesEvidence(window);
     const visualKindClass = ` primary-${presentation.primaryVisual.kind}`;
     const titleHtml = presentation.title ? `<h1>${html(presentation.title)}</h1><div class="title-rule"></div>` : "";
@@ -895,7 +927,7 @@ export async function buildHyperframesDirectorProject(options) {
     const factsHtml = presentation.factCards.length ? `<section class="facts">${presentation.factCards.map((fact, index) => `<article class="fact fact-${index + 1}"><span>0${index + 1}</span><small>${html(fact.label)}</small><b>${html(fact.value)}</b></article>`).join("")}</section>` : "";
     const visualHead = showInternalLabels ? `<div class="visual-head"><span>${html(segment.rightVisual.type)}</span><b>${html(segment.id)}</b></div>` : "";
     return `
-    <section id="scene-${html(segment.id)}" class="scene clip${hasEvidence ? " has-evidence" : ""}${showInternalLabels ? " show-internal-labels" : " audience-facing"}${visualKindClass}" data-start="${window.start.toFixed(3)}" data-duration="${window.duration.toFixed(3)}" data-track-index="${10 + allSegments.indexOf(segment)}">
+    <section id="${html(domId)}" data-segment-id="${html(segment.id)}" class="scene clip${hasEvidence ? " has-evidence" : ""}${showInternalLabels ? " show-internal-labels" : " audience-facing"}${visualKindClass}" data-start="${window.start.toFixed(3)}" data-duration="${window.duration.toFixed(3)}" data-track-index="${10 + allSegments.indexOf(segment)}">
       ${showInternalLabels ? `<div class="scene-number">${html(segment.id)} / ${String(allSegments.length).padStart(2, "0")}</div><div class="eyebrow">AI VISUAL DIRECTOR · HYPERFRAMES</div>` : ""}
       <header class="title-block">
         ${titleHtml}
@@ -904,7 +936,7 @@ export async function buildHyperframesDirectorProject(options) {
       ${summaryHtml}
       ${showInternalLabels && presentation.factCards.length ? `<div class="information-label">CORE MESSAGE / 信息卡不是字幕</div>` : ""}
       ${factsHtml}
-      ${hasEvidence ? "" : `<section class="visual-panel${showInternalLabels ? "" : " audience-facing"}">${visualHead}<div class="visual-body">${primaryVisualMarkup(presentation, segment)}</div></section>`}
+      ${hasEvidence || !primaryMarkup ? "" : `<section class="visual-panel${showInternalLabels ? "" : " audience-facing"}">${visualHead}<div class="visual-body">${primaryMarkup}</div></section>`}
     </section>`;
   }).join("");
 
@@ -932,7 +964,8 @@ export async function buildHyperframesDirectorProject(options) {
   const animationLines = [];
   scenes.forEach((scene) => {
     const { segment, presentation, window } = scene;
-    const id = `#scene-${segment.id}`;
+    const id = `#${scene.domId}`;
+    const hasVisualPanel = !sceneUsesEvidence(window) && Boolean(scene.primaryMarkup);
     const motion = motionById.get(segment.id) || {};
     const titleBeat = sampleBeatForScene(scene, "title");
     const keyLineBeat = sampleBeatForScene(scene, "key-line");
@@ -959,13 +992,13 @@ export async function buildHyperframesDirectorProject(options) {
     resolvedFacts.forEach((resolved, index) => {
       if (resolved) markChoreographyApplied(scene, resolved, `${id} .fact-${index + 1}`);
     });
-    if (!sceneUsesEvidence(window) && visualBeat) markChoreographyApplied(scene, visualBeat, `${id} .visual-panel`);
+    if (hasVisualPanel && visualBeat) markChoreographyApplied(scene, visualBeat, `${id} .visual-panel`);
     const visualEntrance = visualBeat
       ? choreographyEntranceVars("visual", visualBeat.beat.actionPreset, visualBeat.beat.easing, scale)
       : { opacity: 0, x: 70 * scale, scale: 0.94, duration: 0.66, ease: "power4.out" };
-    const visualMotion = sceneUsesEvidence(window) ? "" : `
+    const visualMotion = hasVisualPanel ? `
       ${gsapFromLine(`${id} .visual-panel`, visualEntrance, visualAt)}
-      tl.from("${id} .v-step", {opacity:0,y:20,scale:.95,duration:.42,stagger:.16,ease:"power3.out"}, ${(visualAt + 0.18).toFixed(3)});`;
+      tl.from("${id} .v-step", {opacity:0,y:20,scale:.95,duration:.42,stagger:.16,ease:"power3.out"}, ${(visualAt + 0.18).toFixed(3)});` : "";
     const internalMotion = showInternalLabels ? `tl.from("${id} .eyebrow", {opacity:0,x:-28,duration:.38}, ${titleAt.toFixed(3)});` : "";
     const titleEntrance = titleBeat
       ? choreographyEntranceVars("title", titleBeat.beat.actionPreset, titleBeat.beat.easing, scale)
@@ -1059,7 +1092,7 @@ export async function buildHyperframesDirectorProject(options) {
 .scene{position:absolute;inset:0;padding:${70 * scale}px ${690 * scale}px ${120 * scale}px ${70 * scale}px}.scene-number{position:absolute;right:${72 * scale}px;top:${67 * scale}px;color:var(--secondary);font:700 ${18 * scale}px/1 monospace;letter-spacing:${2 * scale}px}.eyebrow{color:var(--secondary);font-size:${20 * scale}px;font-weight:800;letter-spacing:${2.5 * scale}px}.title-block{margin-top:${24 * scale}px;max-width:${780 * scale}px}.title-block h1{font-size:${62 * scale}px;line-height:1.13;margin:0;letter-spacing:-${2 * scale}px;max-width:${760 * scale}px}.title-rule{width:${170 * scale}px;height:${7 * scale}px;margin:${22 * scale}px 0 ${16 * scale}px;background:linear-gradient(90deg,var(--primary),var(--warning));transform-origin:left}.title-block p{margin:0;color:var(--warning);font-size:${27 * scale}px;font-weight:700}.summary{position:absolute;left:${70 * scale}px;top:${300 * scale}px;width:${760 * scale}px;min-height:${86 * scale}px;padding:${20 * scale}px ${28 * scale}px ${20 * scale}px ${64 * scale}px;background:linear-gradient(100deg,rgba(255,106,61,.18),rgba(17,22,33,.92));border-left:${6 * scale}px solid var(--primary);border-radius:0 ${18 * scale}px ${18 * scale}px 0;box-shadow:0 ${18 * scale}px ${48 * scale}px rgba(0,0,0,.2)}.summary i{position:absolute;left:${24 * scale}px;top:${22 * scale}px;color:var(--primary);font-size:${30 * scale}px}.summary span{font-size:${24 * scale}px;line-height:1.55}.summary b{position:absolute;left:0;bottom:0;height:${3 * scale}px;width:100%;background:linear-gradient(90deg,var(--primary),transparent)}.information-label{position:absolute;left:${70 * scale}px;top:${425 * scale}px;color:var(--muted);font:700 ${16 * scale}px/1 monospace;letter-spacing:${1.5 * scale}px}.facts{position:absolute;left:${70 * scale}px;top:${462 * scale}px;width:${760 * scale}px;display:grid;grid-template-columns:repeat(3,1fr);gap:${16 * scale}px}.fact{min-height:${165 * scale}px;padding:${20 * scale}px;background:linear-gradient(145deg,rgba(24,31,45,.98),rgba(10,14,22,.96));border:1px solid rgba(255,255,255,.12);border-radius:${18 * scale}px;box-shadow:0 ${16 * scale}px ${36 * scale}px rgba(0,0,0,.24)}.fact>span{color:var(--primary);font:800 ${19 * scale}px/1 monospace}.fact small{display:block;color:var(--muted);font-size:${17 * scale}px;margin:${18 * scale}px 0 ${10 * scale}px}.fact b{font-size:${22 * scale}px;line-height:1.32}.visual-panel{position:absolute;left:${70 * scale}px;top:${300 * scale}px;width:${785 * scale}px;height:${360 * scale}px;padding:${58 * scale}px ${28 * scale}px ${24 * scale}px;background:rgba(10,14,22,.96);border:${2 * scale}px solid rgba(85,214,255,.45);border-radius:${24 * scale}px;box-shadow:0 ${24 * scale}px ${70 * scale}px rgba(0,0,0,.38);z-index:12}.visual-head{position:absolute;left:${26 * scale}px;right:${26 * scale}px;top:${18 * scale}px;display:flex;justify-content:space-between;color:var(--secondary);font-size:${17 * scale}px;font-weight:800}.visual-body{height:100%}.compare{display:grid;grid-template-columns:1fr auto 1fr;gap:${20 * scale}px;align-items:center;height:100%}.compare article{height:80%;padding:${24 * scale}px;border-radius:${18 * scale}px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}.compare article.after{border-color:var(--secondary);background:rgba(85,214,255,.09)}.compare small,.compare b{display:block}.compare b{font-size:${26 * scale}px;margin-top:${30 * scale}px}.compare article i{display:block;height:${8 * scale}px;margin-top:${38 * scale}px;background:var(--primary)}.compare article.after i{background:var(--secondary)}.compare>em{font-size:${34 * scale}px;color:var(--warning)}.scan{position:absolute;left:${40 * scale}px;right:${40 * scale}px;top:${100 * scale}px;height:${3 * scale}px;background:var(--warning);box-shadow:0 0 ${22 * scale}px var(--warning)}.flow{display:flex;align-items:center;justify-content:space-between;height:100%}.flow article,.visual-cards article{width:30%;min-height:${190 * scale}px;padding:${22 * scale}px;border-radius:${18 * scale}px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}.flow article span,.visual-cards span{color:var(--secondary);font:800 ${18 * scale}px/1 monospace}.flow b,.visual-cards b{display:block;margin:${24 * scale}px 0 ${12 * scale}px;font-size:${25 * scale}px}.flow small,.visual-cards small{color:var(--muted);font-size:${17 * scale}px}.flow>i{color:var(--warning);font-size:${30 * scale}px}.browser{height:100%;padding:${62 * scale}px ${25 * scale}px ${20 * scale}px;border-radius:${16 * scale}px;background:#f1f3f6;color:#111827}.browser-bar{position:absolute;left:${28 * scale}px;right:${28 * scale}px;top:${18 * scale}px;height:${30 * scale}px}.browser-bar i{display:inline-block;width:${10 * scale}px;height:${10 * scale}px;border-radius:50%;background:var(--primary);margin-right:${6 * scale}px}.browser-bar span{float:right;font:700 ${14 * scale}px/1 monospace}.browser p{font-size:${18 * scale}px;margin:0 0 ${16 * scale}px}.prompt-line{display:flex;gap:${18 * scale}px;padding:${12 * scale}px ${16 * scale}px;margin-top:${10 * scale}px;background:#fff;border-left:${5 * scale}px solid var(--secondary)}.prompt-line b{min-width:${110 * scale}px}.qa-board{height:100%;position:relative}.qa-row{display:grid;grid-template-columns:${50 * scale}px ${120 * scale}px 1fr ${35 * scale}px;align-items:center;gap:${12 * scale}px;padding:${14 * scale}px ${18 * scale}px;margin-bottom:${12 * scale}px;border-radius:${14 * scale}px;background:rgba(255,255,255,.06)}.qa-row span{color:var(--secondary);font:700 ${17 * scale}px/1 monospace}.qa-row i{color:#5ee3a1;font-style:normal}.qa-scan{position:absolute;left:0;right:0;top:${30 * scale}px;height:${3 * scale}px;background:var(--warning);box-shadow:0 0 ${18 * scale}px var(--warning)}.chart{display:flex;align-items:flex-end;justify-content:space-around;height:100%;padding-top:${20 * scale}px}.chart article{width:28%;height:100%;display:flex;flex-direction:column;justify-content:flex-end;text-align:center}.chart article i{display:block;height:var(--height);background:linear-gradient(var(--secondary),rgba(85,214,255,.1));border-top:${5 * scale}px solid var(--warning);border-radius:${12 * scale}px ${12 * scale}px 0 0}.chart b{margin-top:${12 * scale}px}.chart small{color:var(--muted);margin-top:${6 * scale}px}.visual-cards{display:flex;align-items:center;justify-content:space-between;height:100%}
 .speaker-stage{position:absolute;z-index:20;right:${70 * scale}px;top:${92 * scale}px;width:${560 * scale}px;height:${880 * scale}px;border:${3 * scale}px solid rgba(255,106,61,.72);border-radius:${34 * scale}px;overflow:hidden;background:#090d14;box-shadow:0 ${35 * scale}px ${90 * scale}px rgba(0,0,0,.46)}${speakerLabelCss}.speaker-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}${safeGuideCss}.caption{position:absolute;z-index:100;left:50%;bottom:${38 * scale}px;transform:translateX(-50%);max-width:${1220 * scale}px;padding:${12 * scale}px ${26 * scale}px;color:#fff;background:rgba(5,8,13,.72);border-radius:${13 * scale}px;font-size:${31 * scale}px;font-weight:800;line-height:1.3;text-align:center;text-shadow:0 ${3 * scale}px ${8 * scale}px #000;border:1px solid rgba(255,255,255,.12)}.evidence{position:absolute;z-index:50;left:${65 * scale}px;top:${180 * scale}px;width:${1120 * scale}px;height:${700 * scale}px;padding:${14 * scale}px;border:${3 * scale}px solid var(--secondary);border-radius:${24 * scale}px;background:#080c12;box-shadow:0 ${32 * scale}px ${90 * scale}px rgba(0,0,0,.55);overflow:hidden}.evidence-media{width:100%;height:100%;object-fit:contain;background:#06090e}.evidence small{position:absolute;left:${24 * scale}px;bottom:${22 * scale}px;padding:${10 * scale}px ${15 * scale}px;background:rgba(0,0,0,.78);border-radius:${8 * scale}px;color:#fff;font-size:${17 * scale}px}
 .speaker-stage{z-index:60;transform-origin:right bottom}.evidence{left:${860 * scale}px;top:${180 * scale}px;width:${990 * scale}px;height:${700 * scale}px}.visual-panel{left:${860 * scale}px;top:${300 * scale}px;width:${390 * scale}px;height:${360 * scale}px;padding:${54 * scale}px ${18 * scale}px ${18 * scale}px}.visual-head{left:${18 * scale}px;right:${18 * scale}px}.flow,.visual-cards{align-items:stretch;flex-direction:column;gap:${9 * scale}px}.flow article,.visual-cards article{width:100%;min-height:0;flex:1;padding:${12 * scale}px ${14 * scale}px}.flow article span,.visual-cards span{font-size:${14 * scale}px}.flow b,.visual-cards b{display:inline-block;margin:${8 * scale}px ${8 * scale}px 4px 0;font-size:${17 * scale}px}.flow small,.visual-cards small{font-size:${13 * scale}px}.flow>i{display:none}.browser{padding:${55 * scale}px ${15 * scale}px ${12 * scale}px}.browser p{font-size:${14 * scale}px}.prompt-line{gap:${8 * scale}px;padding:${7 * scale}px ${8 * scale}px}.prompt-line b{min-width:${70 * scale}px}.qa-row{grid-template-columns:${34 * scale}px ${70 * scale}px 1fr ${20 * scale}px;padding:${9 * scale}px}.chart b{font-size:${14 * scale}px}.chart small{font-size:${11 * scale}px}.compare{gap:${8 * scale}px}.compare article{padding:${12 * scale}px}.compare b{font-size:${17 * scale}px;margin-top:${18 * scale}px}
-.scene.audience-facing .title-block{margin-top:${8 * scale}px}.scene.audience-facing.primary-hook-contrast .visual-panel,.scene.audience-facing.primary-memo-action .visual-panel,.scene.audience-facing.primary-copy-prompt .visual-panel{left:${70 * scale}px;top:${430 * scale}px;width:${1050 * scale}px;height:${430 * scale}px;padding:${24 * scale}px ${28 * scale}px}.visual-panel.audience-facing{padding-top:${24 * scale}px}.hook-contrast{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:${42 * scale}px;height:100%}.tool-stack{position:relative;height:${260 * scale}px}.tool-stack span{position:absolute;left:${40 * scale}px;width:${300 * scale}px;height:${150 * scale}px;border:1px solid rgba(255,255,255,.15);border-radius:${18 * scale}px;background:linear-gradient(145deg,rgba(255,255,255,.11),rgba(255,255,255,.04));box-shadow:0 ${16 * scale}px ${36 * scale}px rgba(0,0,0,.25)}.tool-stack span:nth-child(1){top:${78 * scale}px;transform:rotate(-8deg);opacity:.45}.tool-stack span:nth-child(2){top:${46 * scale}px;left:${78 * scale}px;transform:rotate(4deg);opacity:.7}.tool-stack span:nth-child(3){top:${18 * scale}px;left:${116 * scale}px;border-color:rgba(255,106,61,.65)}.tool-stack b{position:absolute;left:${175 * scale}px;top:${78 * scale}px;font-size:${30 * scale}px}.hook-contrast>em{color:var(--warning);font-size:${58 * scale}px;font-style:normal}.first-step{padding:${42 * scale}px;border:2px solid var(--secondary);border-radius:${24 * scale}px;background:rgba(85,214,255,.1);text-align:center}.first-step small{display:block;color:var(--muted);font-size:${20 * scale}px}.first-step b{display:block;margin-top:${18 * scale}px;color:var(--secondary);font-size:${42 * scale}px}.memo-card{height:100%;overflow:hidden;border-radius:${24 * scale}px;background:#f4f5f7;color:#172033;box-shadow:0 ${24 * scale}px ${60 * scale}px rgba(0,0,0,.35)}.memo-card header{height:${64 * scale}px;padding:0 ${26 * scale}px;display:flex;align-items:center;gap:${14 * scale}px;background:#e9ebef;border-bottom:1px solid #d6dae1}.memo-card header i{width:${18 * scale}px;height:${18 * scale}px;border-radius:50%;background:#ffd166}.memo-card header b{font-size:${22 * scale}px}.memo-card header span{margin-left:auto;color:#2460e5;font-size:${18 * scale}px}.memo-note{position:relative;height:${228 * scale}px;padding:${32 * scale}px ${42 * scale}px}.memo-note small{color:#6a707d;font-size:${16 * scale}px}.memo-note p{max-width:${830 * scale}px;margin:${18 * scale}px 0 0;font-size:${34 * scale}px;line-height:1.45;font-weight:700}.memo-cursor{display:inline-block;width:${3 * scale}px;height:${38 * scale}px;margin-left:${8 * scale}px;background:#2563eb;vertical-align:middle}.memo-card footer{height:${86 * scale}px;padding:0 ${36 * scale}px;display:flex;align-items:center;gap:${18 * scale}px;background:#fff;border-top:1px solid #e2e5ea}.memo-card footer span{display:grid;place-items:center;width:${36 * scale}px;height:${36 * scale}px;border-radius:50%;background:#15803d;color:#fff;font-weight:900}.memo-card footer b{font-size:${22 * scale}px}.copy-prompt-card{height:100%;padding:${30 * scale}px ${38 * scale}px;border:2px solid rgba(85,214,255,.55);border-radius:${24 * scale}px;background:linear-gradient(145deg,rgba(11,18,30,.98),rgba(17,27,44,.96));box-shadow:0 ${24 * scale}px ${70 * scale}px rgba(0,0,0,.4)}.copy-prompt-card header{display:flex;justify-content:space-between;align-items:center}.copy-prompt-card header span{padding:${8 * scale}px ${15 * scale}px;border-radius:${99 * scale}px;background:rgba(85,214,255,.14);color:var(--secondary);font-size:${17 * scale}px;font-weight:800}.copy-prompt-card header i{color:var(--muted);font-style:normal;font-size:${16 * scale}px}.copy-prompt-card blockquote{margin:${34 * scale}px 0 ${24 * scale}px;font-size:${39 * scale}px;line-height:1.55;font-weight:800;letter-spacing:-${1 * scale}px}.copy-prompt-card mark{padding:0 ${4 * scale}px;background:transparent;color:var(--warning);box-shadow:inset 0 -${7 * scale}px rgba(255,106,61,.35)}.copy-prompt-card footer{color:var(--muted);font-size:${18 * scale}px}
+.scene.audience-facing .title-block{margin-top:${8 * scale}px}.scene.audience-facing.primary-hook-contrast .visual-panel,.scene.audience-facing.primary-memo-action .visual-panel,.scene.audience-facing.primary-copy-prompt .visual-panel{left:${70 * scale}px;top:${430 * scale}px;width:${1050 * scale}px;height:${430 * scale}px;padding:${24 * scale}px ${28 * scale}px}.visual-panel.audience-facing{padding-top:${24 * scale}px}.hook-contrast{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:${42 * scale}px;height:100%}.tool-stack{position:relative;height:${260 * scale}px}.tool-stack span{position:absolute;left:${40 * scale}px;width:${300 * scale}px;height:${150 * scale}px;border:1px solid rgba(255,255,255,.15);border-radius:${18 * scale}px;background:linear-gradient(145deg,rgba(255,255,255,.11),rgba(255,255,255,.04));box-shadow:0 ${16 * scale}px ${36 * scale}px rgba(0,0,0,.25)}.tool-stack span:nth-child(1){top:${78 * scale}px;transform:rotate(-8deg);opacity:.45}.tool-stack span:nth-child(2){top:${46 * scale}px;left:${78 * scale}px;transform:rotate(4deg);opacity:.7}.tool-stack span:nth-child(3){top:${18 * scale}px;left:${116 * scale}px;border-color:rgba(255,106,61,.65)}.tool-stack b{position:absolute;left:${175 * scale}px;top:${78 * scale}px;font-size:${30 * scale}px}.hook-contrast>em{color:var(--warning);font-size:${58 * scale}px;font-style:normal}.first-step{padding:${42 * scale}px;border:2px solid var(--secondary);border-radius:${24 * scale}px;background:rgba(85,214,255,.1);text-align:center}.first-step small{display:block;color:var(--muted);font-size:${20 * scale}px}.first-step b{display:block;margin-top:${18 * scale}px;color:var(--secondary);font-size:${42 * scale}px}.memo-card{height:100%;overflow:hidden;border-radius:${24 * scale}px;background:#f4f5f7;color:#172033;box-shadow:0 ${24 * scale}px ${60 * scale}px rgba(0,0,0,.35)}.memo-card header{height:${64 * scale}px;padding:0 ${26 * scale}px;display:flex;align-items:center;gap:${14 * scale}px;background:#e9ebef;border-bottom:1px solid #d6dae1}.memo-card header i{width:${18 * scale}px;height:${18 * scale}px;border-radius:50%;background:#ffd166}.memo-card header b{font-size:${22 * scale}px}.memo-card header span{margin-left:auto;color:#1f53c6;font-size:${18 * scale}px}.memo-note{position:relative;height:${228 * scale}px;padding:${32 * scale}px ${42 * scale}px}.memo-note small{color:#5b616c;font-size:${16 * scale}px}.memo-note p{max-width:${830 * scale}px;margin:${18 * scale}px 0 0;font-size:${34 * scale}px;line-height:1.45;font-weight:700}.memo-cursor{display:inline-block;width:${3 * scale}px;height:${38 * scale}px;margin-left:${8 * scale}px;background:#2563eb;vertical-align:middle}.memo-card footer{height:${86 * scale}px;padding:0 ${36 * scale}px;display:flex;align-items:center;gap:${18 * scale}px;background:#fff;border-top:1px solid #e2e5ea}.memo-card footer span{display:grid;place-items:center;width:${36 * scale}px;height:${36 * scale}px;border-radius:50%;background:#15803d;color:#fff;font-weight:900}.memo-card footer b{font-size:${22 * scale}px}.copy-prompt-card{height:100%;padding:${30 * scale}px ${38 * scale}px;border:2px solid rgba(85,214,255,.55);border-radius:${24 * scale}px;background:linear-gradient(145deg,rgba(11,18,30,.98),rgba(17,27,44,.96));box-shadow:0 ${24 * scale}px ${70 * scale}px rgba(0,0,0,.4)}.copy-prompt-card header{display:flex;justify-content:space-between;align-items:center}.copy-prompt-card header span{padding:${8 * scale}px ${15 * scale}px;border-radius:${99 * scale}px;background:rgba(85,214,255,.14);color:var(--secondary);font-size:${17 * scale}px;font-weight:800}.copy-prompt-card header i{color:var(--muted);font-style:normal;font-size:${16 * scale}px}.copy-prompt-card blockquote{margin:${34 * scale}px 0 ${24 * scale}px;font-size:${39 * scale}px;line-height:1.55;font-weight:800;letter-spacing:-${1 * scale}px}.copy-prompt-card mark{padding:0 ${4 * scale}px;background:transparent;color:var(--warning);box-shadow:inset 0 -${7 * scale}px rgba(255,106,61,.35)}.copy-prompt-card footer{color:var(--muted);font-size:${18 * scale}px}
 </style></head><body><div id="root" data-composition-id="main" data-start="0" data-duration="${duration.toFixed(3)}" data-width="${width}" data-height="${height}" data-fps="${fps}"><div class="top-progress"><i id="progress"></i></div>${audioHtml}${sceneHtml}<aside class="speaker-stage" id="speakerStage" data-layout-allow-overflow>${speakerHtml}${showSafeGuides ? `<div class="speaker-safe"></div>` : ""}</aside>${evidenceHtml}${captionHtml}</div>
 <script>window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true,defaults:{ease:"power3.out"}});tl.fromTo("#progress",{scaleX:0},{scaleX:1,duration:${duration.toFixed(3)},ease:"none"},0);${speakerTimeline}${animationLines.join("\n")}document.querySelectorAll(".caption").forEach((caption)=>{const start=Number(caption.dataset.start),d=Number(caption.dataset.duration);tl.from(caption,{opacity:0,y:${14 * scale},scale:.97,duration:.18},start);tl.to(caption,{opacity:0,y:-${8 * scale},duration:.14},start+Math.max(.2,d-.14));});window.__timelines.main=tl;</script></body></html>`;
 

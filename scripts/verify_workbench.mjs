@@ -43,6 +43,7 @@ visualDirector.invalidateVisualStages(visualState, "content_breakdown", "test");
 assert(visualState.stages.keyframes.status === "pending" && visualState.stages.motion_sample.status === "pending", "上游重做没有作废下游视觉版本");
 const normalizedBreakdown = visualDirector.normalizeContentBreakdown({ segments: [{ sourceTime: { start: 99, end: 120 }, title: "边界测试" }] }, { sourceDuration: 10, outputDuration: 10, minimumSegments: 3, maximumSegments: 5 });
 assert(normalizedBreakdown.segments.every(segment => segment.sourceTime.end <= 10 && segment.sourceTime.end > segment.sourceTime.start), "内容拆解时间段越过源视频边界");
+assert(normalizedBreakdown.segments.every(segment => segment.factCards.length === 0), "内容拆解省略事实卡时仍补出了占位卡");
 const normalizedFrames = visualDirector.normalizeKeyframeDirection({}, normalizedBreakdown, 4);
 assert(normalizedFrames.frames.length >= 3 && normalizedFrames.frames.length <= 5, "关键帧方案数量不符合3—5张门禁");
 const existingFixture = path.join(root, "README.md");

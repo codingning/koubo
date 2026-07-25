@@ -283,6 +283,100 @@ test("normalizeKeyframeDirection preserves presentation, visualIntent, and expli
   assert.deepEqual(direction.frames[2].visualIntent.factCards, []);
 });
 
+test("fact card normalization drops omitted and empty placeholders while preserving real values", () => {
+  const normalized = normalizeContentBreakdown({
+    segments: [
+      {
+        id: "unsafe, segment",
+        sourceTime: { start: 0, end: 3 },
+        editedTime: { start: 0, end: 3 },
+        factCards: [{}, { label: "", value: "" }, { value: "真实事实" }],
+      },
+      {
+        id: "unsafe segment",
+        sourceTime: { start: 3, end: 6 },
+        editedTime: { start: 3, end: 6 },
+      },
+      {
+        id: ":",
+        sourceTime: { start: 6, end: 9 },
+        editedTime: { start: 6, end: 9 },
+        factCards: null,
+      },
+    ],
+  }, {
+    sourceDuration: 9,
+    outputDuration: 9,
+    minimumSegments: 3,
+    maximumSegments: 3,
+  });
+
+  assert.deepEqual(normalized.segments.map(segment => segment.id), ["unsafe-segment", "unsafe-segment-2", "S03"]);
+  assert.deepEqual(normalized.segments[0].factCards, [{ label: "重点", value: "真实事实" }]);
+  assert.deepEqual(normalized.segments[1].factCards, []);
+  assert.deepEqual(normalized.segments[2].factCards, []);
+
+  const direction = normalizeKeyframeDirection({
+    presentation,
+    selectedSegmentIds: normalized.segments.map(segment => segment.id),
+    frames: normalized.segments.map((segment, index) => ({
+      segmentId: segment.id,
+      sourceTime: index * 3 + 1.5,
+      visualIntent: {
+        factCards: index === 0 ? [{}, { label: "仅标签" }, { value: "关键帧真实事实" }] : null,
+        primaryVisual: { kind: "inherit", lines: [], text: "", highlights: [] },
+      },
+    })),
+  }, normalized, 3);
+
+  assert.deepEqual(direction.frames[0].visualIntent.factCards, [{ label: "重点", value: "关键帧真实事实" }]);
+  assert.equal(direction.frames[1].visualIntent.factCards, null);
+  assert.equal(direction.frames[2].visualIntent.factCards, null);
+});
+
+test("legacy unsafe segment ids cannot widen GSAP selectors and duplicate ids fail closed", async t => {
+  const unsafeBreakdown = structuredClone(breakdown);
+  const unsafeIds = ["S01, body", "S04:panel", "S06 space"];
+  unsafeBreakdown.segments.forEach((segment, index) => { segment.id = unsafeIds[index]; });
+  const unsafeDirection = normalizeKeyframeDirection({
+    ...rawDirection,
+    selectedSegmentIds: unsafeIds,
+    frames: rawDirection.frames.map((frame, index) => ({ ...frame, segmentId: unsafeIds[index] })),
+  }, unsafeBreakdown, 3);
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    strongestSegmentId: unsafeIds[0],
+    choreography: [{
+      order: 1,
+      at: 0.4,
+      segmentId: unsafeIds[0],
+      target: "title",
+      actionPreset: "fade-up",
+      easing: "power3.out",
+      purpose: "验证安全选择器",
+    }],
+  }, unsafeBreakdown, { outputDuration: 9, keyframeDirection: unsafeDirection });
+
+  const project = await renderFixtureProject(t, "sample", unsafeDirection, {
+    breakdown: unsafeBreakdown,
+    motionDirection,
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  assert.match(documentHtml, /id="scene-S01-body" data-segment-id="S01, body"/);
+  assert.match(documentHtml, /tl\.from\("#scene-S01-body h1"/);
+  assert.doesNotMatch(documentHtml, /#scene-S01, body/);
+
+  const duplicateBreakdown = structuredClone(breakdown);
+  duplicateBreakdown.segments[1].id = duplicateBreakdown.segments[0].id;
+  await assert.rejects(
+    renderFixtureProject(t, "full", normalizeKeyframeDirection(rawDirection, duplicateBreakdown, 3), {
+      breakdown: duplicateBreakdown,
+    }),
+    /非空且唯一的 segmentId/,
+  );
+});
+
 test("keyframe HTML contains audience-facing memo and prompt without internal labels or repeated cards", async t => {
   const direction = normalizeKeyframeDirection(rawDirection, breakdown, 3);
   const project = await renderFixtureProject(t, "keyframes", direction);
@@ -559,9 +653,13 @@ test("zero through three approved fact cards render without placeholder backfill
     const segmentId = `F0${index + 1}`;
     const nextSegmentId = index < factCounts.length - 1 ? `F0${index + 2}` : null;
     const scene = sceneHtml(documentHtml, segmentId, nextSegmentId);
-    const panel = visualPanelHtml(scene);
     assert.equal((scene.match(/<article class="fact fact-/g) || []).length, count, `${segmentId} fact section count`);
-    assert.equal((panel.match(/<article class="v-step">/g) || []).length, count, `${segmentId} visual card count`);
+    if (count === 0) {
+      assert.equal(scene.includes('<section class="visual-panel'), false, `${segmentId} must not render an empty visual panel`);
+    } else {
+      const panel = visualPanelHtml(scene);
+      assert.equal((panel.match(/<article class="v-step">/g) || []).length, count, `${segmentId} visual card count`);
+    }
     assert.equal(scene.includes(`底层占位-${index + 1}-1`), false, `${segmentId} must not backfill source placeholders`);
     for (let factIndex = 0; factIndex < count; factIndex++) {
       assert.ok(scene.includes(`批准标签-${index + 1}-${factIndex + 1}`));
@@ -569,6 +667,33 @@ test("zero through three approved fact cards render without placeholder backfill
     }
   });
   assert.doesNotMatch(documentHtml, />重点<|>方法<|>结果</);
+
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 12,
+    strongestSegmentId: "F01",
+    choreography: [{
+      order: 1,
+      at: 0.6,
+      segmentId: "F01",
+      target: "visual",
+      actionPreset: "reveal-right",
+      easing: "power3.out",
+      purpose: "零事实卡时不得制造空主视觉",
+    }],
+  }, factBreakdown, { outputDuration: 12, keyframeDirection: direction });
+  const sampleProject = await renderFixtureProject(t, "sample", direction, {
+    breakdown: factBreakdown,
+    rangeEnd: 12,
+    motionDirection,
+  });
+  const sampleHtml = fs.readFileSync(sampleProject.indexPath, "utf8");
+  const zeroFactScene = sceneHtml(sampleHtml, "F01", "F02");
+  assert.equal(zeroFactScene.includes('<section class="visual-panel'), false);
+  assert.equal(sampleHtml.includes('#scene-F01 .visual-panel'), false);
+  const sampleManifest = JSON.parse(fs.readFileSync(sampleProject.manifestPath, "utf8"));
+  assert.equal(sampleManifest.appliedChoreography.some(item => item.segmentId === "F01" && item.target === "visual"), false);
+  assert.ok(sampleManifest.unappliedChoreography.some(item => item.segmentId === "F01" && item.target === "visual" && item.reason === "missing-dom-target"));
 });
 
 test("unselected prompt and comparison scenes stay audience-facing in sample and full", async t => {
