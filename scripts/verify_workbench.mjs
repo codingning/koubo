@@ -423,6 +423,9 @@ assert(!app.includes("新口播已生成，可以直接拍摄"), "网页仍在�
 assert(app.includes("/revise`"), "网页未接入自然语言返修接口");
 assert(app.includes("/approve`"), "网页未接入最终审核接口");
 assert(app.includes("selectedVideoOutputVersion") && app.includes("历史版本不可审核"), "网页没有区分当前可审核成片与只读历史版本");
+assert(!/id="version-list"[^>]*demo-hide/.test(html), "演示模式仍然隐藏历史版本入口");
+assert(app.includes("demoKeyframeReviewCopy") && app.includes("一眼能不能懂、字能不能看清、有没有挡脸"), "关键帧审核仍使用内部编号或技术判断，普通用户无法直接验收");
+assert(app.includes("下载旧版 v${output.version}") && app.includes("每次返修都保留一版"), "演示模式没有把旧版预览和下载翻译成普通用户可理解的入口");
 assert(app.includes("JSON.stringify({ feedback, expectedVersion })") && app.includes("JSON.stringify({ expectedVersion })"), "最终返修或批准请求没有绑定用户当前所见成片版本");
 assert(serverSource.includes("assertOutputReviewVersion(job, body.expectedVersion)"), "服务端最终返修或批准没有校验成片 expectedVersion");
 assert(serverSource.includes("approvedOutputVersion") && serverSource.includes("mediaSha256"), "最终批准记录没有绑定输出版本与媒体哈希");

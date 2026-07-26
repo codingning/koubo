@@ -377,7 +377,10 @@ a { color: inherit; }
 .demo-keyframe-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
 .demo-keyframe-grid a { min-width: 0; display: block; overflow: hidden; border: 1px solid #bce5df; border-radius: 12px; color: var(--text); background: #fff; text-decoration: none; box-shadow: var(--shadow-sm); }
 .demo-keyframe-grid img { width: 100%; aspect-ratio: 16/9; display: block; object-fit: cover; background: #08141c; }
-.demo-keyframe-grid span { min-height: 58px; padding: 9px 10px; display: block; color: #31586e; font-size: 11px; font-weight: 800; line-height: 1.5; }
+.demo-keyframe-grid span { min-height: 72px; padding: 9px 10px; display: block; color: #31586e; line-height: 1.5; }
+.demo-keyframe-grid span strong, .demo-keyframe-grid span small { display: block; }
+.demo-keyframe-grid span strong { color: var(--navy); font-size: 12px; }
+.demo-keyframe-grid span small { margin-top: 4px; color: var(--muted); font-size: 10px; font-weight: 750; }
 .demo-stage-review-actions { margin-top: 15px; padding: 14px; border: 1px solid #bce5df; border-radius: 12px; background: #f6fcfb; }
 .demo-stage-review-actions label, .demo-stage-review-actions label strong, .demo-stage-review-actions label small { display: block; }
 .demo-stage-review-actions label small { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.55; }
@@ -589,6 +592,11 @@ body.is-demo-mode.is-edit-view .top-actions { display: none; }
 .version-list { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 7px; }
 .version-chip { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #fff; font-size: 11px; font-weight: 800; }
 .version-chip.is-active { color: #075e57; border-color: #65cfc5; background: var(--accent-soft); }
+.version-history-panel { margin: 12px 0; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface-soft); }
+.version-history-head strong, .version-history-head small { display: block; }
+.version-history-head strong { color: var(--navy); font-size: 12px; }
+.version-history-head small { margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.55; }
+.version-history-panel .version-list { margin-bottom: 0; }
 .review-box { margin-top: 14px; padding: 14px; border: 1px solid #bddbd8; border-radius: 13px; background: #fbfffe; }
 .review-box label strong, .review-box label small { display: block; }
 .review-box label strong { color: var(--navy); font-size: 13px; }

@@ -525,6 +525,14 @@
     }).format(date).replaceAll("/", "-");
   }
 
+  function demoKeyframeReviewCopy(frame, index) {
+    const purpose = String(frame?.purpose || "");
+    if (/开场|对比/u.test(purpose)) return { title: `画面 ${index + 1} · 开头对比`, question: "一眼能看懂“别急着学工具，要先迈出第一步”吗？" };
+    if (/备忘录/u.test(purpose)) return { title: `画面 ${index + 1} · 具体动作`, question: "备忘录里的唯一动作够清楚吗？" };
+    if (/提示词|复制/u.test(purpose)) return { title: `画面 ${index + 1} · 完整提示词`, question: "整句提示词够大、能完整读完吗？" };
+    return { title: `画面 ${index + 1}`, question: "这张图一眼能看懂，文字也能看清吗？" };
+  }
+
   function jobResultLabel(job) {
     if (jobHasStandardOutput(job)) return job?.status === "approved" ? "已通过，可预览和下载" : "可预览、返修和下载";
     const keyframeReview = jobKeyframeReview(job);
@@ -601,13 +609,14 @@
     }
     panel.classList.remove("is-hidden");
 
-    const configureReviewActions = ({ stageId, version, rejected, approveDisabled = false, reviseText, approveText, feedbackTitle, feedbackHelp, boundary, initialFeedback = "" }) => {
+    const configureReviewActions = ({ stageId, version, rejected, approveDisabled = false, reviseText, approveText, feedbackTitle, feedbackHelp, feedbackPlaceholder, boundary, initialFeedback = "" }) => {
       const context = `${job.id}:${stageId}:${version}`;
       if (actions.dataset.context !== context) feedback.value = initialFeedback;
       actions.dataset.context = context;
       actions.classList.remove("is-hidden");
       byId("demo-stage-feedback-title").textContent = feedbackTitle;
       byId("demo-stage-feedback-help").textContent = feedbackHelp;
+      feedback.placeholder = feedbackPlaceholder || "直接说哪一处不满意，以及希望怎样改。";
       byId("demo-stage-boundary").textContent = boundary;
       for (const button of [revise, reject, approve]) {
         button.dataset.demoJobId = job.id;
@@ -632,18 +641,22 @@
       byId("demo-preview-title").textContent = rejected ? "这版关键帧已拒绝，任务已暂停" : `先看这 ${keyframeReview.frames.length} 张关键帧`;
       byId("demo-preview-message").textContent = rejected
         ? "旧图会保留，不会继续生成样片。如需继续，请写清问题后重做关键帧。"
-        : `只判断构图、文字和信息层级。通过后只生成约 ${sampleDuration} 秒动态样片，不会直接生成全片或发布。`;
+        : `按顺序看三张图，只看三件事：一眼能不能懂、字能不能看清、有没有挡脸。通过后只生成约 ${sampleDuration} 秒动态样片。`;
       byId("demo-preview-badge").textContent = rejected ? "已拒绝 · 零后续生成" : "第1道人工审核";
-      keyframes.innerHTML = keyframeReview.frames.map((frame, index) => `<a href="${videoApiBase}${htmlEscape(frame.url)}" target="_blank" rel="noreferrer" title="打开原图"><img src="${videoApiBase}${htmlEscape(frame.url)}?v=${keyframeReview.version}" alt="关键帧 ${index + 1}"><span>${htmlEscape(frame.id || `关键帧 ${index + 1}`)} · ${htmlEscape(frame.purpose || "检查构图和信息层级")}</span></a>`).join("");
+      keyframes.innerHTML = keyframeReview.frames.map((frame, index) => {
+        const copy = demoKeyframeReviewCopy(frame, index);
+        return `<a href="${videoApiBase}${htmlEscape(frame.url)}" target="_blank" rel="noreferrer" title="打开原图"><img src="${videoApiBase}${htmlEscape(frame.url)}?v=${keyframeReview.version}" alt="${htmlEscape(copy.title)}"><span><strong>${htmlEscape(copy.title)}</strong><small>${htmlEscape(copy.question)}</small></span></a>`;
+      }).join("");
       keyframes.classList.remove("is-hidden");
       configureReviewActions({
         stageId: "keyframe_review",
         version: keyframeReview.version,
         rejected,
-        reviseText: "按意见重做关键帧",
+        reviseText: "按我说的重做这三张",
         approveText: `通过并生成约${sampleDuration}秒样片`,
-        feedbackTitle: "关键帧哪里需要修改",
-        feedbackHelp: "返修时必须写清具体哪一张、什么问题、希望怎样改。",
+        feedbackTitle: "哪张图需要改",
+        feedbackHelp: "哪张看不懂、字太小或挡脸，直接说出来。",
+        feedbackPlaceholder: "例如：第2张备忘录里的字太小；第3张提示词没有完整显示。",
         boundary: rejected ? "当前不会生成任何后续视频；只有你主动重做，工作流才会继续。" : "整版拒绝只记录决定并停在这里；不会自动重做，也不会生成样片。",
         initialFeedback: rejected ? String(keyframeReview.gate.feedback || "") : "",
       });
@@ -670,6 +683,7 @@
         approveText: "通过并生成完整视频",
         feedbackTitle: "样片哪里需要修改",
         feedbackHelp: "返修时写清时间点、具体问题和目标效果。",
+        feedbackPlaceholder: "例如：第8秒字幕太快；说到“声音”时提示音不清楚。",
         boundary: rejected
           ? "当前不会生成完整视频；只有你主动重做，工作流才会继续。"
           : assetsReady
@@ -1987,9 +2001,12 @@
     const landscapePreview = Number(previewMetadata.width || 0) > Number(previewMetadata.height || 0);
     const previewUrl = reviewBundle?.preview?.url ? `${videoApiBase}${reviewBundle.preview.url}?t=${Date.now()}` : finalUrl;
     byId("final-video").src = previewUrl;
-    byId("download-final").href = finalUrl;
-    byId("download-final").download = `${currentItem.day || "koubo"}-AI剪辑-v${output.version}.mp4`;
-    byId("result-version").textContent = `版本 ${output.version}`;
+    const download = byId("download-final");
+    download.href = finalUrl;
+    download.download = `${currentItem.day || "koubo"}-AI剪辑-v${output.version}.mp4`;
+    download.textContent = isLatest ? "下载当前成片" : `下载旧版 v${output.version}`;
+    byId("result-version").textContent = isLatest ? `当前版本 v${output.version}` : `历史版本 v${output.version}`;
+    byId("version-history-title").textContent = editExperienceMode === "demo" ? "每次返修都保留一版" : "历史版本";
     byId("review-preview-note").textContent = !isLatest
       ? `你正在查看历史版本 v${output.version}；可以预览和下载，但返修与最终批准只对当前最新版 v${currentVideoJob.output?.version} 开放。`
       : editExperienceMode === "demo"
@@ -2047,8 +2064,16 @@
     const output = job.output;
     const degraded = (job.degraded || []).map(item => `<li>${htmlEscape(item)}</li>`).join("");
     byId("edit-summary").innerHTML = `<strong>AI剪辑说明：</strong> ${htmlEscape(job.currentPlan?.editSummary || "自动剪辑完成")}${degraded ? `<ul class="degraded-list">${degraded}</ul>` : ""}`;
-    const versions = [...(job.versions || [])].sort((x, y) => Number(x.version) - Number(y.version));
-    byId("version-list").innerHTML = versions.map(item => `<button class="version-chip ${item.version === output.version ? "is-active" : ""}" data-video-version="${item.version}">版本 ${item.version}</button>`).join("");
+    const versionMap = new Map();
+    for (const item of [...(job.versions || []), output].filter(Boolean)) versionMap.set(Number(item.version), item);
+    const versions = [...versionMap.values()].sort((x, y) => Number(x.version) - Number(y.version));
+    byId("version-history-help").textContent = versions.length > 1
+      ? "点旧版可以直接对比和下载；只有当前最新版可以继续返修或审核。"
+      : "当前只有这一版；以后每次返修都会把旧版留在这里。";
+    byId("version-list").innerHTML = versions.map(item => {
+      const latest = Number(item.version) === Number(output.version);
+      return `<button class="version-chip ${latest ? "is-active" : ""}" data-video-version="${item.version}">${latest ? "当前" : "旧版"} v${item.version}</button>`;
+    }).join("");
     byId("review-history").innerHTML = (job.reviews || []).length
       ? `<strong>返修记录</strong>${job.reviews.map(item => `<p>版本 ${htmlEscape(item.version)}：${htmlEscape(item.feedback)}</p>`).join("")}`
       : "";

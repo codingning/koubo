@@ -523,7 +523,13 @@
                   <div id="cover-downloads" class="artifact-links cover-downloads"></div>
                 </section>
                 <p id="edit-summary" class="edit-summary demo-hide"></p>
-                <div id="version-list" class="version-list demo-hide"></div>
+                <section id="version-history-panel" class="version-history-panel">
+                  <div class="version-history-head">
+                    <strong id="version-history-title">保留的旧版本</strong>
+                    <small id="version-history-help">每次返修都会留下旧版，可以随时切换预览和下载。</small>
+                  </div>
+                  <div id="version-list" class="version-list"></div>
+                </section>
                 <div class="review-box">
                   <label for="video-review-feedback"><strong>哪里不合格，直接用自然语言告诉AI</strong><small>例如：开头重复删掉；第12秒字幕错了；重点卡片太多；这段停顿要保留。</small></label>
                   <textarea id="video-review-feedback" rows="4" placeholder="没有问题就点击“审核通过”；有问题就写修改意见。"></textarea>
