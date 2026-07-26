@@ -443,8 +443,8 @@ def reference_issues(data: dict[str, Any], research: dict[str, Any], topic_plan:
     elif not used_ids.issubset(available_ids):
         issues.append("referenceResearch.sourceIds 引用了未完成全文核验的来源")
     required_ids = {
-        str(item) for item in (topic_plan or {}).get("requiredSourceIds", []) if str(item)
-    } if isinstance((topic_plan or {}).get("requiredSourceIds"), list) else set()
+        str(item) for item in (topic_plan or {}).get("requiredReferenceSourceIds", []) if str(item)
+    } if isinstance((topic_plan or {}).get("requiredReferenceSourceIds"), list) else set()
     if required_ids and not required_ids.issubset(used_ids):
         issues.append("referenceResearch.sourceIds 没有使用用户本次明确指定且已全文核验的参考视频")
     for field, minimum, label in (
@@ -477,7 +477,7 @@ def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
         "proofOpening": "开头0—8秒先展示什么结果证据",
         "methodPromise": "观众继续看能学会的2—4步方法",
         "productionMode": "normal|self-demonstrating-final-video；若成片本身承担结果证据则用后者",
-        "requiredSourceIds": ["用户明确要求使用的完整参考来源sourceId"],
+        "requiredReferenceSourceIds": ["用户明确要求使用的完整参考来源sourceId；没有明确指定时留空"],
         "personalEvidenceRole": "个人进度只负责证明什么",
         "searchQueries": ["抖音同题搜索词1", "搜索词2", "搜索词3"],
         "keywords": ["用于匹配参考视频的关键词"],
@@ -508,9 +508,16 @@ def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
         data["lockedDirection"] = locked_direction
         data["lockedDirectionHash"] = locked_direction_hash
         data["directionSource"] = direction_source
-    requested_source = str((payload.get("editorial_brief") or {}).get("requiredReference") or "").strip()
-    if requested_source:
-        data["requiredSourceIds"] = [requested_source]
+    editorial_brief = payload.get("editorial_brief") or {}
+    requested_sources = editorial_brief.get("requiredReferenceSourceIds")
+    if not isinstance(requested_sources, list):
+        requested_sources = []
+    legacy_requested_source = str(editorial_brief.get("requiredReference") or "").strip()
+    if legacy_requested_source:
+        requested_sources = [*requested_sources, legacy_requested_source]
+    data["requiredReferenceSourceIds"] = list(dict.fromkeys(
+        str(item).strip() for item in requested_sources if str(item).strip()
+    ))
     if str((payload.get("editorial_brief") or {}).get("productionMode") or "").strip():
         data["productionMode"] = str(payload["editorial_brief"]["productionMode"])
     result["data"] = data
@@ -690,7 +697,7 @@ Content Strategist 已确认的分析上下文：
 13. 不得自行增加证据中没有的拍摄遍数、耗时、播放量、结果或“明天一定发布”等承诺。self-demonstrating-final-video 模式允许使用“你现在看到的效果就是AI剪的”这类只有在最终成片中才成立的自证表达，但必须附带可执行的发布条件；如果最终成片没有真实呈现这些效果，就禁止发布或必须改稿，不能靠口头声称成功。
 14. titles 3个；covers 3个；candidates 最多5个。证据不足时明确写“今天不建议发布”，不要编造。
 15. 只能使用 reference_research.fullContentSources 中完成全文核验的来源来概括视频结构和知识。metadataOnlySources 只能用于发现选题和评论问题，不能假装看过完整视频。
-16. referenceResearch.sourceIds 至少记录1条实际使用的完整来源，并必须包含 topic_plan.requiredSourceIds 中用户明确指定的来源；至少提炼2条知识、2个结构选择和1个互动/收藏设计。全部用自己的话重组，并用本人的真实进度、证据和限制形成原创版本。
+16. referenceResearch.sourceIds 至少记录1条实际使用的完整来源，并必须包含 topic_plan.requiredReferenceSourceIds 中用户明确指定的来源；至少提炼2条知识、2个结构选择和1个互动/收藏设计。全部用自己的话重组，并用本人的真实进度、证据和限制形成原创版本。
 """
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     result = call_json(messages, temperature=0.4, max_tokens=10000)
@@ -731,7 +738,7 @@ Content Strategist 已确认的分析上下文：
 上一版JSON：
 {json.dumps(result.get('data', {}), ensure_ascii=False, indent=2)}
 
-        请在不增加任何新事实的前提下重写完整JSON。{lock_instruction} mainTopic 必须逐字等于服务端锁定方向；Content Strategist 已确认的受众、观众收益、核心问题、弱点、不确定性和证据边界必须被保留。主线必须是普通观众如何使用AI得到具体结果，开头0—8秒先展示成片效果或前后对比，然后再解释输入、第一版、具体返修、结果和边界；删除文件名、Git、代码量和内部实现汇报。若topic_plan.productionMode为self-demonstrating-final-video，让最终Day 2成片本身承担结果证据，不要用“测试素材、真人待验证”拆掉开头钩子；改为填写严格的publicationCondition，只有最终渲染和人工审核确认画面真实具备所述效果时才允许发布。完整版必须达到2—3分钟、550—950个有效字符并拆成7—12段。证据写着尚未拍摄或发布时，不能虚构拍摄遍数、耗时或发布结果。只能把reference_research.fullContentSources中的全文核验来源写入referenceResearch.sourceIds，并包含topic_plan.requiredSourceIds；外部知识和结构全部重新组织，不复制原句或画面。resultFirstProof与shooting.openingProof必须具体，shooting.visualBeats至少4项。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
+        请在不增加任何新事实的前提下重写完整JSON。{lock_instruction} mainTopic 必须逐字等于服务端锁定方向；Content Strategist 已确认的受众、观众收益、核心问题、弱点、不确定性和证据边界必须被保留。主线必须是普通观众如何使用AI得到具体结果，开头0—8秒先展示成片效果或前后对比，然后再解释输入、第一版、具体返修、结果和边界；删除文件名、Git、代码量和内部实现汇报。若topic_plan.productionMode为self-demonstrating-final-video，让最终Day 2成片本身承担结果证据，不要用“测试素材、真人待验证”拆掉开头钩子；改为填写严格的publicationCondition，只有最终渲染和人工审核确认画面真实具备所述效果时才允许发布。完整版必须达到2—3分钟、550—950个有效字符并拆成7—12段。证据写着尚未拍摄或发布时，不能虚构拍摄遍数、耗时或发布结果。只能把reference_research.fullContentSources中的全文核验来源写入referenceResearch.sourceIds，并包含topic_plan.requiredReferenceSourceIds；外部知识和结构全部重新组织，不复制原句或画面。resultFirstProof与shooting.openingProof必须具体，shooting.visualBeats至少4项。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
         result = call_json(messages + [{"role": "assistant", "content": json.dumps(result.get("data", {}), ensure_ascii=False)}, {"role": "user", "content": repair}], temperature=0.15, max_tokens=10000)
         issues = (
             structure_issues(result.get("data", {}))

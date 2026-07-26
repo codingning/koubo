@@ -1076,6 +1076,13 @@ export async function auditGeneratedContentScript({
   return artifact;
 }
 
+export function normalizeRequiredReferenceSourceIds(editorialBrief = {}) {
+  return [...new Set([
+    ...(Array.isArray(editorialBrief.requiredReferenceSourceIds) ? editorialBrief.requiredReferenceSourceIds : []),
+    ...(editorialBrief.requiredReference ? [editorialBrief.requiredReference] : []),
+  ].map(value => String(value || "").trim()).filter(Boolean))];
+}
+
 export async function generateContent(options = {}, dependencies = {}) {
   let generationContext = await validateContentGenerationStrategy(options, {
     readArtifactFn: dependencies.readArtifactFn,
@@ -1104,6 +1111,7 @@ export async function generateContent(options = {}, dependencies = {}) {
     let contentStyle = {};
     try { contentStyle = await readJsonFile(path.join(root, "config", "content_style.json")); } catch {}
     const editorialBrief = options.editorialBrief && typeof options.editorialBrief === "object" ? options.editorialBrief : {};
+    const requiredReferenceSourceIds = normalizeRequiredReferenceSourceIds(editorialBrief);
     const planLock = generationLockPayload(generationContext);
     const topicResult = await runAiFn({
       operation: "plan_topic",
@@ -1122,7 +1130,10 @@ export async function generateContent(options = {}, dependencies = {}) {
       existing_topics: existingTopics,
       ...planLock,
     }, dir, "topic-plan");
-    const topicPlan = preserveLockedDirection(topicResult.data, generationContext, "plan_topic");
+    const topicPlan = {
+      ...preserveLockedDirection(topicResult.data, generationContext, "plan_topic"),
+      requiredReferenceSourceIds,
+    };
     generationContext = generationContextFromPlan(generationContext, topicPlan);
     await writeJson(path.join(dir, "topic-plan.json"), topicPlan);
     const referenceFile = path.join(dir, "reference-research.json");
@@ -2646,7 +2657,7 @@ function visualTopicForJob(job, settings = {}) {
     viewerUseCase: "观众如何复用这套AI方法得到具体结果",
     searchQueries,
     keywords,
-    requiredSourceIds: (settings.manualReferenceUrls || []).map(url => String(url).match(/\d{12,}/)?.[0]).filter(Boolean).map(id => `douyin-${id}`),
+    requiredReferenceSourceIds: (settings.manualReferenceUrls || []).map(url => String(url).match(/\d{12,}/)?.[0]).filter(Boolean).map(id => `douyin-${id}`),
   };
 }
 

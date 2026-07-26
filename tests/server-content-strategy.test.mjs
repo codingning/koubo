@@ -17,10 +17,22 @@ const {
   closeServerResourcesForTests,
   generateContent,
   hashLockedDirection,
+  normalizeRequiredReferenceSourceIds,
   preserveLockedDirection,
   validateContentGenerationStrategy,
   writeMultiAgentArtifact,
 } = serverModule;
+
+test("required reference ids are normalized separately from content evidence ids", () => {
+  assert.deepEqual(normalizeRequiredReferenceSourceIds({
+    requiredReferenceSourceIds: ["douyin-7641901934210813234", "douyin-7641901934210813234", ""],
+    requiredReference: "douyin-7662756855256562067",
+    requiredSourceIds: ["job-20260725062114-297235-v2", "proof-sample-final"],
+  }), [
+    "douyin-7641901934210813234",
+    "douyin-7662756855256562067",
+  ]);
+});
 
 test.after(async () => {
   await closeServerResourcesForTests();
