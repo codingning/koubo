@@ -469,6 +469,8 @@ assert(app.includes('job?.status === "approved" ? "已通过，可预览和下�
 assert(app.includes('document.body.classList.toggle("is-demo-mode"') && html.includes("上传原片 → 等待处理 → 看真实效果 → 用一句话返修 → 下载成片"), "演示模式没有收敛成普通用户五步路径");
 assert(read("web/styles.css").includes("body.is-demo-mode #view-edit .demo-hide"), "演示模式没有隐藏技术治理区域");
 assert(app.includes("commentary-quotation") && app.includes("data-attribution-text") && app.includes("data-reject-media"), "素材审核板缺少评论性引用、来源署名或拒绝操作");
+assert(app.includes("expectedAssetDecisionVersion: Number(currentVideoJob.assetDecisionVersion || 0)") && app.includes('"X-Expected-Asset-Decision-Version"'), "素材审核或文件替换没有绑定当前素材决策版本");
+assert(serverSource.includes("assertExpectedAssetDecisionVersion") && app.includes("素材决定没有变化"), "服务端或网页缺少素材决策版本门与幂等反馈");
 assert(serverSource.includes("口播稿没有自然说明所采用的创作者名称"), "外部素材未检查稿件中的创作者披露");
 assert(serverSource.includes("paidGenerationRequiresConfirmation") && serverSource.includes("paymentConfirmed"), "付费素材缺少费用确认门禁");
 assert(serverSource.includes("asset.composited = rendered.has(asset.id)"), "批准素材没有在成功渲染后写入实际合成状态");

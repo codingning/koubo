@@ -72,10 +72,11 @@ function reviewedAsset(id, file, placement = { start: 1.25, end: 4.75, mode: "br
     mediaKind: "video",
     reviewStatus: "approved",
     approved: true,
+    ownership: "user-confirmed",
     placement,
-    clipStart: 0,
-    clipEnd: null,
-    clipDuration: null,
+    clipStart: 1.1,
+    clipEnd: 4.6,
+    clipDuration: 3.5,
     licenseBasis: "user-owned-local",
     usagePurpose: "本地证据",
     paymentConfirmed: true,
@@ -137,6 +138,9 @@ test("motion sample snapshot freezes decision version, approved ids, file hashes
   assert.deepEqual(snapshot.approvedAssetIds, ["asset-approved"]);
   assert.equal(snapshot.assets[0].fileSha256, sha256(approvedFile));
   assert.deepEqual(snapshot.assets[0].placement, { start: 1.25, end: 4.75, mode: "broll" });
+  assert.equal(snapshot.assets[0].clipStart, 1.1);
+  assert.equal(snapshot.assets[0].clipEnd, 4.6);
+  assert.equal(snapshot.assets[0].clipDuration, 3.5);
   assert.match(snapshot.snapshotHash, /^[a-f0-9]{64}$/);
 
   const snapshotFileName = "motion-sample-asset-snapshot-v3.json";
@@ -160,6 +164,13 @@ test("motion sample snapshot freezes decision version, approved ids, file hashes
   approved.placement = { start: 1.5, end: 4.75, mode: "broll" };
   await assert.rejects(assertMotionSampleAssetSnapshotCurrent(job), /缺少当前状态的 asset-decisions 审计记录/);
   approved.placement = { start: 1.25, end: 4.75, mode: "broll" };
+
+  for (const [field, changed] of [["clipStart", 1.2], ["clipEnd", 4.7], ["clipDuration", 3.6]]) {
+    const original = approved[field];
+    approved[field] = changed;
+    await assert.rejects(assertMotionSampleAssetSnapshotCurrent(job), /缺少当前状态的 asset-decisions 审计记录/, field);
+    approved[field] = original;
+  }
 
   await fsp.rm(path.join(jobDir, "asset-decisions.json"));
   await assert.rejects(assertMotionSampleAssetSnapshotCurrent(job), /缺少 asset-decisions\.json/);
@@ -186,6 +197,29 @@ test("preview auto review backfills missing decision audit before snapshot creat
   assert.equal(fs.existsSync(path.join(jobDir, "asset-decisions.json")), true);
   const snapshot = await buildAssetDecisionSnapshot(job);
   assert.deepEqual(snapshot.approvedAssetIds, ["approved-backfill"]);
+});
+
+test("preview auto review creates an explicit empty-catalog genesis and valid empty snapshot", async () => {
+  const jobId = `${suiteId}-empty-catalog`;
+  const jobDir = await createJobDir(jobId);
+  const job = baseJob(jobId, []);
+  await persistJob(jobDir, job);
+
+  const first = await autoReviewLocalAssetsForPreview(job, { invalidateSampleReview: false });
+  assert.equal(first.review.total, 0);
+  assert.equal(first.review.reviewComplete, true);
+  assert.equal(first.review.renderReady, true);
+  assert.equal(first.decisions.length, 1);
+  assert.equal(first.decisions[0].eventType, "asset-catalog-empty");
+  assert.equal(job.assetDecisionVersion, 1);
+  const snapshot = await buildAssetDecisionSnapshot(job);
+  assert.equal(snapshot.decisionVersion, 1);
+  assert.deepEqual(snapshot.approvedAssetIds, []);
+  assert.deepEqual(snapshot.assets, []);
+
+  const second = await autoReviewLocalAssetsForPreview(job, { invalidateSampleReview: false });
+  assert.equal(second.decisions.length, 0);
+  assert.equal(job.assetDecisionVersion, 1);
 });
 
 test("an asset decision version invalidates the existing sample and full render but preserves approved keyframes", async () => {
@@ -220,7 +254,7 @@ test("upload, replacement, approval, rejection, and placement changes invalidate
     const assetFile = path.join(jobDir, "asset.mp4");
     await fsp.writeFile(assetFile, `asset-${action}`);
     const asset = reviewedAsset("asset-1", assetFile);
-    if (action === "rejection") asset.reviewStatus = "pending", asset.approved = false;
+    if (action === "approval") asset.reviewStatus = "pending", asset.approved = false;
     const job = baseJob(jobId, action === "upload" ? [] : [asset]);
     await persistJob(jobDir, job);
     scenarios.push({ action, jobId, jobDir });
@@ -237,16 +271,17 @@ test("upload, replacement, approval, rejection, and placement changes invalidate
     } else if (scenario.action === "replacement") {
       response = await fetch(`${baseUrl}/api/jobs/${scenario.jobId}/assets/asset-1/file`, {
         method: "POST",
-        headers: { "X-File-Name": "replacement.mp4" },
+        headers: { "X-File-Name": "replacement.mp4", "X-Expected-Asset-Decision-Version": "0" },
         body: Buffer.from("replacement-route-asset"),
       });
     } else if (scenario.action === "approval") {
-      ({ response } = await postJson(baseUrl, `/api/jobs/${scenario.jobId}/assets/asset-1/approve`, { approved: true }));
+      ({ response } = await postJson(baseUrl, `/api/jobs/${scenario.jobId}/assets/asset-1/approve`, { approved: true, expectedAssetDecisionVersion: 0 }));
     } else if (scenario.action === "rejection") {
-      ({ response } = await postJson(baseUrl, `/api/jobs/${scenario.jobId}/assets/asset-1/approve`, { approved: false }));
+      ({ response } = await postJson(baseUrl, `/api/jobs/${scenario.jobId}/assets/asset-1/approve`, { approved: false, expectedAssetDecisionVersion: 0 }));
     } else {
       ({ response } = await postJson(baseUrl, `/api/jobs/${scenario.jobId}/assets/asset-1/approve`, {
         approved: true,
+        expectedAssetDecisionVersion: 0,
         placement: { start: 2, end: 6, mode: "pip" },
       }));
     }
@@ -262,6 +297,85 @@ test("upload, replacement, approval, rejection, and placement changes invalidate
     assert.equal(audit.at(-1).decisionVersion, 1, scenario.action);
     if (scenario.action === "placement") assert.deepEqual(audit.at(-1).placement, { start: 2, end: 6, mode: "pip" });
   }
+});
+
+test("identical asset decision replay preserves the reviewed sample and decision version", async () => {
+  if (!httpServerForTests.listening) {
+    await new Promise((resolve, reject) => {
+      httpServerForTests.once("error", reject);
+      httpServerForTests.listen(0, "127.0.0.1", resolve);
+    });
+  }
+  const baseUrl = `http://127.0.0.1:${httpServerForTests.address().port}`;
+  const jobId = `${suiteId}-idempotent`;
+  const jobDir = await createJobDir(jobId);
+  const assetFile = path.join(jobDir, "asset.mp4");
+  await fsp.writeFile(assetFile, "idempotent-asset");
+  const asset = reviewedAsset("asset-1", assetFile);
+  const job = baseJob(jobId, [asset]);
+  const audit = await assetDecisionAuditEntry(asset, { eventType: "asset-approved", reason: "fixture approval" });
+  appendAssetDecisionAudit(job, [audit], { invalidateSampleReview: false });
+  await fsp.writeFile(path.join(jobDir, "asset-decisions.json"), JSON.stringify(job.assetDecisions, null, 2));
+  await persistJob(jobDir, job);
+
+  const { response, payload } = await postJson(baseUrl, `/api/jobs/${jobId}/assets/asset-1/approve`, {
+    expectedAssetDecisionVersion: 1,
+    approved: true,
+    reviewStatus: "approved",
+    ownership: "user-confirmed",
+    clipStart: 1.1,
+    clipEnd: 4.6,
+    clipDuration: 3.5,
+    paymentConfirmed: true,
+    placement: { start: 1.25, end: 4.75, mode: "broll" },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(payload.replayed, true);
+  const persisted = JSON.parse(await fsp.readFile(path.join(jobDir, "job.json"), "utf8"));
+  assert.equal(persisted.assetDecisionVersion, 1);
+  assert.equal(persisted.assetDecisions.length, 1);
+  assert.equal(persisted.workflow.stages.motion_sample.status, "awaiting_review");
+  assert.equal(persisted.workflow.stages.motion_sample.artifacts.url, "/sample-v3.mp4");
+  assert.equal(persisted.workflow.stages.full_render.status, "approved");
+});
+
+test("stale asset decision versions reject approval and replacement before mutation", async () => {
+  if (!httpServerForTests.listening) {
+    await new Promise((resolve, reject) => {
+      httpServerForTests.once("error", reject);
+      httpServerForTests.listen(0, "127.0.0.1", resolve);
+    });
+  }
+  const baseUrl = `http://127.0.0.1:${httpServerForTests.address().port}`;
+  const jobId = `${suiteId}-stale`;
+  const jobDir = await createJobDir(jobId);
+  const assetFile = path.join(jobDir, "asset.mp4");
+  await fsp.writeFile(assetFile, "stale-original");
+  const job = baseJob(jobId, [reviewedAsset("asset-1", assetFile)]);
+  job.assetDecisionVersion = 1;
+  await persistJob(jobDir, job);
+  const before = await fsp.readFile(path.join(jobDir, "job.json"), "utf8");
+
+  const missingVersion = await postJson(baseUrl, `/api/jobs/${jobId}/assets/asset-1/approve`, { approved: false });
+  assert.equal(missingVersion.response.status, 409);
+  assert.match(missingVersion.payload.error, /缺少有效的素材决策版本/);
+
+  const approval = await postJson(baseUrl, `/api/jobs/${jobId}/assets/asset-1/approve`, {
+    expectedAssetDecisionVersion: 0,
+    approved: false,
+  });
+  assert.equal(approval.response.status, 409);
+  assert.match(approval.payload.error, /当前为 v1/);
+
+  const replacement = await fetch(`${baseUrl}/api/jobs/${jobId}/assets/asset-1/file`, {
+    method: "POST",
+    headers: { "X-File-Name": "stale-replacement.mp4", "X-Expected-Asset-Decision-Version": "0" },
+    body: Buffer.from("must-not-be-written"),
+  });
+  assert.equal(replacement.status, 409);
+  assert.equal(await fsp.readFile(path.join(jobDir, "job.json"), "utf8"), before);
+  assert.equal(await fsp.readFile(assetFile, "utf8"), "stale-original");
+  assert.equal(fs.existsSync(path.join(jobDir, "assets", "replacements")), false);
 });
 
 test("sample approval and full-render start both revalidate frozen asset hashes", async () => {

@@ -2375,6 +2375,7 @@
     const id = row.dataset.assetId;
     const value = selector => row.querySelector(selector)?.value?.trim() || "";
     const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      expectedAssetDecisionVersion: Number(currentVideoJob.assetDecisionVersion || 0),
       approved: decision === "approved", reviewStatus: decision, ownership: "user-confirmed",
       creatorName: value("[data-creator-name]"), workTitle: value("[data-work-title]"), sourceUrl: value("[data-source-url]"),
       usagePurpose: value("[data-usage-purpose]"), licenseBasis: value("[data-license-basis]"), attributionText: value("[data-attribution-text]"),
@@ -2384,13 +2385,13 @@
       placement: Number.isFinite(start) && Number.isFinite(end) ? { start, end, mode: value("[data-media-mode]") || "broll" } : null
     }) });
     const payload = await response.json(); if (!response.ok) return toast(payload.error || "素材批准失败");
-    currentVideoJob = payload.job; renderVideoJob(currentVideoJob); toast(decision === "approved" ? "素材已批准并通过合规检查" : "素材已拒绝，不会进入成片");
+    currentVideoJob = payload.job; renderVideoJob(currentVideoJob); toast(payload.replayed ? "素材决定没有变化，已保留当前样片审核" : decision === "approved" ? "素材已批准并通过合规检查" : "素材已拒绝，不会进入成片");
   }
 
   async function replaceMediaAsset(row, file) {
     if (!file || !currentVideoJob?.id) return;
     const id = row.dataset.assetId;
-    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/file`, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) }, body: file });
+    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/file`, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-Expected-Asset-Decision-Version": String(Number(currentVideoJob.assetDecisionVersion || 0)) }, body: file });
     const payload = await response.json();
     if (!response.ok) return toast(payload.error || "替换素材失败");
     currentVideoJob = payload.job;

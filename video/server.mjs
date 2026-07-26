@@ -144,6 +144,63 @@ function assetDecisionVersion(job) {
   const audited = Math.max(0, ...(job?.assetDecisions || []).map(item => Number(item?.decisionVersion) || 0));
   return Math.max(declared, audited);
 }
+function assertExpectedAssetDecisionVersion(job, expectedVersion) {
+  if (expectedVersion === undefined || expectedVersion === null || String(expectedVersion).trim() === "") {
+    throw Object.assign(new Error("缺少有效的素材决策版本，请刷新任务后重试"), { statusCode: 409 });
+  }
+  const requested = Number(expectedVersion);
+  const current = assetDecisionVersion(job);
+  if (!Number.isInteger(requested) || requested < 0) {
+    throw Object.assign(new Error("缺少有效的素材决策版本，请刷新任务后重试"), { statusCode: 409 });
+  }
+  if (requested !== current) {
+    throw Object.assign(new Error(`页面素材决策版本为 v${requested}，当前为 v${current}，请刷新后重试`), { statusCode: 409 });
+  }
+  return current;
+}
+function assetReviewDecisionFingerprint(rawAsset = {}) {
+  const asset = normalizeAssetRecord(rawAsset);
+  return contentHash({
+    reviewStatus: asset.reviewStatus,
+    approved: asset.approved === true,
+    ownership: String(asset.ownership || "user-provided"),
+    sourceType: asset.sourceType,
+    mediaKind: asset.mediaKind,
+    creatorName: asset.creatorName,
+    workTitle: asset.workTitle,
+    sourceUrl: asset.sourceUrl,
+    usagePurpose: asset.usagePurpose,
+    licenseBasis: asset.licenseBasis,
+    attributionText: asset.attributionText,
+    clipStart: optionalAssetEvidenceNumber(asset.clipStart) ?? 0,
+    clipEnd: optionalAssetEvidenceNumber(asset.clipEnd),
+    clipDuration: optionalAssetEvidenceNumber(asset.clipDuration),
+    paymentConfirmed: asset.paymentConfirmed === true,
+    placement: normalizedAssetEvidencePlacement(asset.placement),
+  });
+}
+function emptyAssetCatalogAuditEntry() {
+  const state = assetDecisionStateHashInput({
+    assetId: "__asset_catalog__",
+    reviewStatus: "approved",
+    mediaKind: "none",
+    sourceType: "none",
+    fileSha256: null,
+    placement: null,
+    clipStart: 0,
+    clipEnd: null,
+    clipDuration: null,
+  });
+  return {
+    ...state,
+    stateHash: contentHash(state),
+    eventType: "asset-catalog-empty",
+    reason: "本次样片明确不采用补充图片或视频素材，仅使用原始媒体与程序化图形",
+    auditBackfill: true,
+    licenseBasis: "not-applicable",
+    usagePurpose: "empty-approved-set",
+  };
+}
 async function currentAssetDecisionState(rawAsset) {
   const asset = normalizeAssetRecord(rawAsset);
   const fileSha256 = asset.path && fs.existsSync(asset.path) ? await sha256File(asset.path) : null;
@@ -1777,8 +1834,8 @@ function assetReviewSummary(job, outputDuration = null) {
     pending: pending.length,
     approved: approved.length,
     rejected: rejected.length,
-    reviewComplete: assets.length > 0 && pending.length === 0,
-    renderReady: assets.length > 0 && pending.length === 0 && complianceIssues.length === 0,
+    reviewComplete: pending.length === 0,
+    renderReady: pending.length === 0 && complianceIssues.length === 0,
     complianceIssues
   };
 }
@@ -3798,6 +3855,13 @@ async function autoReviewLocalAssetsForPreview(job, options = {}) {
       decidedAt,
     });
   }
+  if (!(job.assets || []).length) {
+    const currentVersion = assetDecisionVersion(job);
+    const hasCurrentEmptyCatalogAudit = (job.assetDecisions || []).some(record =>
+      record?.eventType === "asset-catalog-empty" && Number(record?.decisionVersion || 0) === currentVersion,
+    );
+    if (!hasCurrentEmptyCatalogAudit) pendingAuditEntries.push({ ...emptyAssetCatalogAuditEntry(), decidedAt });
+  }
   job.options = { ...job.options, reviewMode: "full-preview-with-context-segments", autoReviewLocalAssets: true };
   const auditBatch = appendAssetDecisionAudit(job, pendingAuditEntries, {
     at: decidedAt,
@@ -4438,6 +4502,7 @@ const server = http.createServer(async (req, res) => {
         const job = await readJob(jobId);
         const asset = (job.assets || []).find(item => item.id === assetId);
         if (!asset) return json(res, 404, { error: "素材不存在" });
+        assertExpectedAssetDecisionVersion(job, req.headers["x-expected-asset-decision-version"]);
         const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
         const kind = mediaKindFor(fileName);
         if (!["image", "video"].includes(kind)) return json(res, 400, { error: "替换文件必须是图片或视频" });
@@ -4475,10 +4540,12 @@ const server = http.createServer(async (req, res) => {
         const job = await readJob(jobId);
         const asset = (job.assets || []).find(item => item.id === assetId);
         if (!asset) return json(res, 404, { error: "素材不存在" });
+        assertExpectedAssetDecisionVersion(job, body.expectedAssetDecisionVersion);
         const before = JSON.parse(JSON.stringify(asset));
         const reviewStatus = body.reviewStatus === "rejected" || body.approved === false ? "rejected" : body.approved === true ? "approved" : "pending";
         const nextSourceType = String(body.sourceType || asset.sourceType || "local-upload").slice(0, 80);
-        Object.assign(asset, {
+        const candidate = normalizeAssetRecord({
+          ...asset,
           reviewStatus,
           approved: reviewStatus === "approved",
           ownership: String(body.ownership || asset.ownership || "user-provided").slice(0, 120),
@@ -4494,17 +4561,19 @@ const server = http.createServer(async (req, res) => {
           clipDuration: Number.isFinite(Number(body.clipDuration)) && Number(body.clipDuration) > 0 ? Number(body.clipDuration) : asset.clipDuration,
           paymentConfirmed: PAID_SOURCE_TYPES.has(nextSourceType) ? body.paymentConfirmed === true : body.paymentConfirmed === undefined ? asset.paymentConfirmed === true : body.paymentConfirmed === true,
           placement: body.placement ? normalizePlacement(body.placement) : asset.placement,
-          updatedAt: new Date().toISOString()
+          updatedAt: asset.updatedAt,
         });
-        const normalized = normalizeAssetRecord(asset);
-        Object.assign(asset, normalized);
         const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-        const issues = assetComplianceIssues(asset, job, duration);
+        const issues = assetComplianceIssues(candidate, job, duration);
         if (reviewStatus === "approved" && issues.length) {
-          Object.keys(asset).forEach(key => delete asset[key]);
-          Object.assign(asset, before);
           return json(res, 409, { error: issues.join("；"), issues });
         }
+        if (assetReviewDecisionFingerprint(before) === assetReviewDecisionFingerprint(candidate)) {
+          return json(res, 200, { job, asset, replayed: true });
+        }
+        candidate.updatedAt = new Date().toISOString();
+        Object.keys(asset).forEach(key => delete asset[key]);
+        Object.assign(asset, candidate);
         const decisionAudit = await assetDecisionAuditEntry(asset, {
           eventType: reviewStatus === "approved" ? "asset-approved" : reviewStatus === "rejected" ? "asset-rejected" : "asset-review-reset",
           reason: reviewStatus === "approved" ? "用户批准素材进入渲染" : reviewStatus === "rejected" ? "用户拒绝素材进入渲染" : "素材审核状态已重置",
@@ -4516,7 +4585,7 @@ const server = http.createServer(async (req, res) => {
         await persistAssetDecisionAudit(job);
         await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
         await saveJob(job);
-        return json(res, 200, { job, asset });
+        return json(res, 200, { job, asset, replayed: false });
       });
     }
     const assetRenderMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/render$/);
