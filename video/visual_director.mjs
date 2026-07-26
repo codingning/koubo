@@ -395,6 +395,28 @@ function evenlySpaced(items, count) {
 }
 
 const KEYFRAME_PRIMARY_VISUAL_KINDS = new Set(["inherit", "hook-contrast", "memo-action", "copy-prompt"]);
+export const DIRECTOR_SCENE_LAYOUT_MODES = [
+  "speaker-focus",
+  "split-right",
+  "graphic-focus",
+  "evidence-focus",
+];
+const DIRECTOR_SCENE_LAYOUT_MODE_SET = new Set(DIRECTOR_SCENE_LAYOUT_MODES);
+
+function normalizeSceneLayoutMode(value, fallback = "split-right") {
+  const requested = cleanText(value, 40);
+  return DIRECTOR_SCENE_LAYOUT_MODE_SET.has(requested) ? requested : fallback;
+}
+
+function normalizeSceneLayoutSelection(value, fallback = "split-right") {
+  const requestedMode = cleanText(value, 40) || null;
+  const mode = normalizeSceneLayoutMode(requestedMode, fallback);
+  return {
+    requestedMode,
+    mode,
+    fallbackReason: requestedMode && requestedMode !== mode ? "unsupported-layout-mode" : null,
+  };
+}
 
 function inferKeyframePrimaryVisualKind(frame, segment) {
   const text = `${frame?.composition || ""} ${segment?.rightVisual?.type || ""} ${segment?.rightVisual?.description || ""}`;
@@ -633,6 +655,25 @@ export function normalizeMotionDirection(raw, breakdown, options = {}) {
   const strongest = requestedStrongest && sampleSegments.includes(requestedStrongest)
     ? requestedStrongest
     : sampleSegments[0] || null;
+  const suppliedLayouts = new Map(array(value.segmentLayouts).map((item) => [cleanText(item?.segmentId, 20), item]));
+  const segmentLayouts = sampleSegments.map((segment) => {
+    const supplied = suppliedLayouts.get(segment.id) || {};
+    const selection = normalizeSceneLayoutSelection(supplied.mode || supplied.layoutMode);
+    return {
+      segmentId: segment.id,
+      requestedMode: selection.requestedMode,
+      mode: selection.mode,
+      reason: cleanText(
+        supplied.reason || (selection.fallbackReason
+          ? "布局模式不在安全白名单内，保持兼容的左右分屏"
+          : selection.requestedMode
+            ? "按本段内容决定人物、图形和证据的主次"
+            : "未提供逐段布局选择，保持兼容的左右分屏"),
+        300,
+      ),
+      fallbackReason: selection.fallbackReason,
+    };
+  });
   const bindSegment = (item) => {
     if (item.target === "speaker") {
       const latest = Math.max(0, end - start - choreographyCompletionSeconds(item.target, item.actionPreset, item.easing));
@@ -692,6 +733,7 @@ export function normalizeMotionDirection(raw, breakdown, options = {}) {
       summaryDelaySeconds: Number(summaryAt.toFixed(3)),
       factStaggerSeconds: Number(factStagger.toFixed(3)),
     },
+    segmentLayouts,
     choreography: boundChoreography,
     generatedAt: new Date().toISOString(),
   };
@@ -705,8 +747,12 @@ export function normalizeFullDirection(raw, breakdown) {
     globalRules: array(value.globalRules).map((item) => cleanText(item, 400)).filter(Boolean).slice(0, 16),
     segmentMotion: array(breakdown?.segments).map((segment, index) => {
       const item = supplied.get(segment.id) || {};
+      const layoutSelection = normalizeSceneLayoutSelection(item.layoutMode || item.mode);
       return {
         segmentId: segment.id,
+        requestedLayoutMode: layoutSelection.requestedMode,
+        layoutMode: layoutSelection.mode,
+        layoutFallbackReason: layoutSelection.fallbackReason,
         visualMode: cleanText(item.visualMode || segment.rightVisual?.type || "二维信息动效", 120),
         titleAt: clampNumber(item.titleAt, 0.08, 0, 3),
         summaryAt: clampNumber(item.summaryAt, 0.85, 0.2, 4),
@@ -838,6 +884,20 @@ function sceneWindow(segment, rangeStart, rangeEnd) {
   return { start: start - rangeStart, end: end - rangeStart, duration: end - start };
 }
 
+function speakerPoseForLayout(mode, scale = 1) {
+  if (mode === "speaker-focus") return { x: -470 * scale, y: 0, scale: 1.18 };
+  if (mode === "graphic-focus") return { x: 0, y: 0, scale: 0.42 };
+  if (mode === "evidence-focus") return { x: 0, y: 0, scale: 0.36 };
+  return { x: 0, y: 0, scale: 1 };
+}
+
+function effectiveSceneLayoutMode(requestedMode, { hasEvidence = false, hasGraphic = false } = {}) {
+  const requested = normalizeSceneLayoutMode(requestedMode);
+  if (requested === "evidence-focus" && !hasEvidence) return hasGraphic ? "graphic-focus" : "speaker-focus";
+  if (requested === "graphic-focus" && !hasGraphic && !hasEvidence) return "speaker-focus";
+  return requested;
+}
+
 function gsapFromLine(selector, vars, at) {
   return `tl.from(${JSON.stringify(selector)},${JSON.stringify(vars)}, ${Number(at).toFixed(3)});`;
 }
@@ -884,6 +944,8 @@ export async function buildHyperframesDirectorProject(options) {
     throw new Error("内容拆解必须提供非空且唯一的 segmentId");
   }
   const keyframeBySegmentId = new Map(array(keyframeDirection?.frames).map((frame) => [frame.segmentId, frame]));
+  const motionLayoutBySegmentId = new Map(array(motionDirection?.segmentLayouts).map((item) => [item?.segmentId, item]));
+  const fullLayoutBySegmentId = new Map(array(fullDirection?.segmentMotion).map((item) => [item?.segmentId, item]));
   const keyframePresentation = isObject(keyframeDirection?.presentation) ? keyframeDirection.presentation : {};
   const showInternalLabels = keyframePresentation.showInternalLabels === true;
   const showSafeGuides = keyframePresentation.showSafeGuides === true;
@@ -909,11 +971,32 @@ export async function buildHyperframesDirectorProject(options) {
   const seenDomSegmentIds = new Set();
   scenes = scenes.map((scene, index) => {
     const presentation = resolveScenePresentation(scene.segment, scene.frame);
+    const motionLayout = motionLayoutBySegmentId.get(scene.segment.id) || null;
+    const fullLayout = fullLayoutBySegmentId.get(scene.segment.id) || null;
+    const directionLayout = mode === "sample" ? motionLayout : fullLayout;
+    const rawRequestedLayout = mode === "sample"
+      ? directionLayout?.requestedMode ?? directionLayout?.mode
+      : directionLayout?.requestedLayoutMode ?? directionLayout?.layoutMode;
+    const requestedLayoutMode = mode === "keyframes" ? "split-right" : normalizeSceneLayoutMode(rawRequestedLayout);
+    const layoutSelectionFallback = mode === "keyframes"
+      ? null
+      : directionLayout?.fallbackReason || directionLayout?.layoutFallbackReason || (!rawRequestedLayout ? "direction-layout-missing" : null);
     return {
       ...scene,
       presentation,
       domId: `scene-${uniqueSegmentId(scene.segment.id, index, seenDomSegmentIds)}`,
       primaryMarkup: primaryVisualMarkup(presentation, scene.segment),
+      layoutRequestedRaw: rawRequestedLayout || requestedLayoutMode,
+      requestedLayoutMode,
+      layoutReason: cleanText(
+        mode === "keyframes"
+          ? "关键帧审核保持静态左右构图"
+          : mode === "sample" ? motionLayout?.reason : fullLayout?.reason,
+        300,
+      ),
+      layoutSelectionFallback,
+      contentLockedByKeyframe: Boolean(scene.frame),
+      layoutLockedByKeyframe: mode === "keyframes",
     };
   });
 
@@ -992,9 +1075,26 @@ export async function buildHyperframesDirectorProject(options) {
     return { asset, index, rawStart, start, end, ownerScene: matchedScene };
   }).filter((entry) => entry.end - entry.start >= 0.2);
   const compositedAssetIds = evidenceEntries.map((entry) => entry.asset.id);
-  const sceneUsesEvidence = (window) => evidenceEntries.some((entry) => entry.end > window.start && entry.start < window.end);
-  const sceneHtml = scenes.map(({ segment, presentation, window, domId, primaryMarkup }) => {
-    const hasEvidence = sceneUsesEvidence(window);
+  for (const scene of scenes) {
+    scene.hasEvidence = evidenceEntries.some((entry) => entry.ownerScene === scene);
+    scene.effectiveLayoutMode = effectiveSceneLayoutMode(scene.requestedLayoutMode, {
+      hasEvidence: scene.hasEvidence,
+      hasGraphic: Boolean(scene.primaryMarkup),
+    });
+    scene.layoutFallback = scene.effectiveLayoutMode === scene.requestedLayoutMode ? null : {
+      requested: scene.requestedLayoutMode,
+      effective: scene.effectiveLayoutMode,
+      reason: scene.requestedLayoutMode === "evidence-focus" ? "本段没有已批准证据素材" : "本段没有可渲染主视觉",
+    };
+    if (!scene.layoutFallback && scene.layoutSelectionFallback) {
+      scene.layoutFallback = {
+        requested: scene.requestedLayoutMode,
+        effective: scene.effectiveLayoutMode,
+        reason: scene.layoutSelectionFallback,
+      };
+    }
+  }
+  const sceneHtml = scenes.map(({ segment, presentation, window, domId, primaryMarkup, hasEvidence, effectiveLayoutMode }) => {
     const visualKindClass = ` primary-${presentation.primaryVisual.kind}`;
     const titleHtml = presentation.title ? `<h1>${html(presentation.title)}</h1><div class="title-rule"></div>` : "";
     const keyLineHtml = presentation.keyLine ? `<p>${html(presentation.keyLine)}</p>` : "";
@@ -1002,7 +1102,7 @@ export async function buildHyperframesDirectorProject(options) {
     const factsHtml = presentation.factCards.length ? `<section class="facts">${presentation.factCards.map((fact, index) => `<article class="fact fact-${index + 1}"><span>0${index + 1}</span><small>${html(fact.label)}</small><b>${html(fact.value)}</b></article>`).join("")}</section>` : "";
     const visualHead = showInternalLabels ? `<div class="visual-head"><span>${html(segment.rightVisual.type)}</span><b>${html(segment.id)}</b></div>` : "";
     return `
-    <section id="${html(domId)}" data-segment-id="${html(segment.id)}" class="scene clip${hasEvidence ? " has-evidence" : ""}${showInternalLabels ? " show-internal-labels" : " audience-facing"}${visualKindClass}" data-start="${window.start.toFixed(3)}" data-duration="${window.duration.toFixed(3)}" data-track-index="${10 + allSegments.indexOf(segment)}">
+    <section id="${html(domId)}" data-segment-id="${html(segment.id)}" data-layout-mode="${html(effectiveLayoutMode)}" class="scene clip layout-${html(effectiveLayoutMode)}${hasEvidence ? " has-evidence" : ""}${showInternalLabels ? " show-internal-labels" : " audience-facing"}${visualKindClass}" data-start="${window.start.toFixed(3)}" data-duration="${window.duration.toFixed(3)}" data-track-index="${10 + allSegments.indexOf(segment)}">
       ${showInternalLabels ? `<div class="scene-number">${html(segment.id)} / ${String(allSegments.length).padStart(2, "0")}</div><div class="eyebrow">AI VISUAL DIRECTOR · HYPERFRAMES</div>` : ""}
       <header class="title-block">
         ${titleHtml}
@@ -1027,20 +1127,31 @@ export async function buildHyperframesDirectorProject(options) {
     return `<div class="caption clip" data-start="${start.toFixed(3)}" data-duration="${Math.max(0.1, end - start).toFixed(3)}" data-track-index="80" id="caption-${index + 1}">${html(cue.text)}</div>`;
   }).join("");
 
-  const evidenceHtml = evidenceEntries.map(({ asset, index, rawStart, start, end }) => {
+  const evidenceHtml = evidenceEntries.map(({ asset, index, rawStart, start, end, ownerScene }) => {
     const mediaStart = Number(asset.clipStart || 0) + Math.max(0, start - rawStart);
     const media = asset.mediaKind === "video"
       ? `<video id="evidence-media-${index + 1}" src="${html(asset.projectFile)}" class="evidence-media clip" data-start="${start.toFixed(3)}" data-duration="${(end - start).toFixed(3)}" data-track-index="${70 + index}" data-media-start="${mediaStart.toFixed(3)}" data-layout-allow-occlusion data-layout-allow-overlap muted playsinline preload="auto"></video>`
       : `<img src="${html(asset.projectFile)}" class="evidence-media" data-layout-allow-occlusion data-layout-allow-overlap alt="">`;
-    return `<aside class="evidence" id="evidence-${index + 1}" data-layout-allow-overflow data-layout-allow-occlusion data-layout-allow-overlap>${media}${asset.attributionText ? `<small>${html(asset.attributionText)}</small>` : ""}</aside>`;
+    const layoutMode = ownerScene?.effectiveLayoutMode || "split-right";
+    return `<aside class="evidence layout-${html(layoutMode)}" id="evidence-${index + 1}" data-layout-mode="${html(layoutMode)}" data-layout-allow-overflow data-layout-allow-occlusion data-layout-allow-overlap>${media}${asset.attributionText ? `<small>${html(asset.attributionText)}</small>` : ""}</aside>`;
   }).join("");
 
   const scale = width / 1920;
   const animationLines = [];
-  scenes.forEach((scene) => {
+  scenes.forEach((scene, sceneIndex) => {
     const { segment, presentation, window } = scene;
     const id = `#${scene.domId}`;
-    const hasVisualPanel = !sceneUsesEvidence(window) && Boolean(scene.primaryMarkup);
+    const speakerPose = speakerPoseForLayout(scene.effectiveLayoutMode, scale);
+    if (mode !== "keyframes" && sceneIndex > 0) {
+      const layoutAt = Math.max(0.02, window.start + 0.02);
+      animationLines.push(`tl.to("#speakerStage",${JSON.stringify({
+        ...speakerPose,
+        duration: 0.52,
+        ease: "power3.inOut",
+        overwrite: "auto",
+      })},${layoutAt.toFixed(3)});`);
+    }
+    const hasVisualPanel = !scene.hasEvidence && Boolean(scene.primaryMarkup);
     const motion = motionById.get(segment.id) || {};
     const titleBeat = sampleBeatForScene(scene, "title");
     const keyLineBeat = sampleBeatForScene(scene, "key-line");
@@ -1110,7 +1221,10 @@ export async function buildHyperframesDirectorProject(options) {
     const entrance = resolved
       ? choreographyEntranceVars("visual", resolved.beat.actionPreset, resolved.beat.easing, scale)
       : { opacity: 0, scale: 0.94, x: 44 * scale, duration: 0.52, ease: "power3.out" };
-    animationLines.push(`${gsapFromLine(`#evidence-${index + 1}`, entrance, start)}tl.to("#speakerStage",{scale:.52,duration:.52,ease:"power3.inOut"},${start.toFixed(3)});tl.to("#evidence-${index + 1}",{opacity:0,duration:.25},${Math.max(start, end - 0.25).toFixed(3)});tl.set("#evidence-${index + 1}",{opacity:0},${end.toFixed(3)});tl.to("#speakerStage",{scale:1,duration:.32,ease:"power3.out"},${Math.max(start, end - 0.3).toFixed(3)});`);
+    const sceneMode = ownerScene?.effectiveLayoutMode || "split-right";
+    const scenePose = speakerPoseForLayout(sceneMode, scale);
+    const evidencePose = sceneMode === "split-right" ? { ...scenePose, scale: 0.52 } : scenePose;
+    animationLines.push(`${gsapFromLine(`#evidence-${index + 1}`, entrance, start)}tl.to("#speakerStage",${JSON.stringify({ ...evidencePose, duration: 0.52, ease: "power3.inOut", overwrite: "auto" })},${start.toFixed(3)});tl.to("#evidence-${index + 1}",{opacity:0,duration:.25},${Math.max(start, end - 0.25).toFixed(3)});tl.set("#evidence-${index + 1}",{opacity:0},${end.toFixed(3)});tl.to("#speakerStage",${JSON.stringify({ ...scenePose, duration: 0.32, ease: "power3.out", overwrite: "auto" })},${Math.max(start, end - 0.3).toFixed(3)});`);
   });
   const speakerBeatRaw = mode === "sample" ? sampleChoreography.find((item) => item?.target === "speaker") : null;
   const speakerBeat = speakerBeatRaw ? {
@@ -1119,8 +1233,22 @@ export async function buildHyperframesDirectorProject(options) {
     at: Number(Math.min(Math.max(0, duration - choreographyCompletionSeconds("speaker", speakerBeatRaw.actionPreset, speakerBeatRaw.easing)), Math.max(0, Number(speakerBeatRaw.at || 0))).toFixed(3)),
   } : null;
   if (speakerBeat) markChoreographyApplied(null, speakerBeat, "#speakerStage");
+  const firstSpeakerPose = speakerPoseForLayout(scenes[0]?.effectiveLayoutMode || "split-right", scale);
+  const speakerPoseAt = (at) => speakerPoseForLayout(
+    scenes.find((scene) => at >= scene.window.start && at < scene.window.end)?.effectiveLayoutMode
+      || scenes.at(-1)?.effectiveLayoutMode
+      || "split-right",
+    scale,
+  );
   const defaultSpeakerEntrance = { opacity: 0, x: 80 * scale, scale: 0.95, duration: 0.8, ease: "power4.out" };
-  let speakerTimeline = gsapFromLine("#speakerStage", defaultSpeakerEntrance, 0.18);
+  let speakerTimeline = firstSpeakerPose.x === 0 && firstSpeakerPose.y === 0 && firstSpeakerPose.scale === 1
+    ? gsapFromLine("#speakerStage", defaultSpeakerEntrance, 0.18)
+    : gsapFromToLine(
+      "#speakerStage",
+      { opacity: 0, x: firstSpeakerPose.x + 80 * scale, y: firstSpeakerPose.y, scale: Math.max(0.1, firstSpeakerPose.scale - 0.05) },
+      { ...firstSpeakerPose, opacity: 1, duration: 0.8, ease: "power4.out" },
+      0.18,
+    );
   if (speakerBeat) {
     const customEntrance = choreographyEntranceVars("speaker", speakerBeat.beat.actionPreset, speakerBeat.beat.easing, scale);
     if (speakerBeat.at <= 0.35) {
@@ -1128,10 +1256,11 @@ export async function buildHyperframesDirectorProject(options) {
     } else {
       const { duration: speakerDuration, ease: speakerEase, opacity: _ignoredOpacity, ...speakerPose } = customEntrance;
       if (!Object.keys(speakerPose).length) speakerPose.scale = 0.985;
+      const targetPose = speakerPoseAt(speakerBeat.at);
       speakerTimeline += gsapFromToLine(
         "#speakerStage",
         speakerPose,
-        { x: 0, y: 0, scale: 1, duration: speakerDuration, ease: speakerEase, immediateRender: false },
+        { ...targetPose, duration: speakerDuration, ease: speakerEase, immediateRender: false },
         speakerBeat.at,
       );
     }
@@ -1168,6 +1297,9 @@ export async function buildHyperframesDirectorProject(options) {
 .speaker-stage{position:absolute;z-index:20;right:${70 * scale}px;top:${92 * scale}px;width:${560 * scale}px;height:${880 * scale}px;border:${3 * scale}px solid rgba(255,106,61,.72);border-radius:${34 * scale}px;overflow:hidden;background:#090d14;box-shadow:0 ${35 * scale}px ${90 * scale}px rgba(0,0,0,.46)}${speakerLabelCss}.speaker-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}${safeGuideCss}.caption{position:absolute;z-index:100;left:50%;bottom:${38 * scale}px;transform:translateX(-50%);max-width:${1220 * scale}px;padding:${12 * scale}px ${26 * scale}px;color:#fff;background:rgba(5,8,13,.72);border-radius:${13 * scale}px;font-size:${31 * scale}px;font-weight:800;line-height:1.3;text-align:center;text-shadow:0 ${3 * scale}px ${8 * scale}px #000;border:1px solid rgba(255,255,255,.12)}.evidence{position:absolute;z-index:50;left:${65 * scale}px;top:${180 * scale}px;width:${1120 * scale}px;height:${700 * scale}px;padding:${14 * scale}px;border:${3 * scale}px solid var(--secondary);border-radius:${24 * scale}px;background:#080c12;box-shadow:0 ${32 * scale}px ${90 * scale}px rgba(0,0,0,.55);overflow:hidden}.evidence-media{width:100%;height:100%;object-fit:contain;background:#06090e}.evidence small{position:absolute;left:${24 * scale}px;bottom:${22 * scale}px;padding:${10 * scale}px ${15 * scale}px;background:rgba(0,0,0,.78);border-radius:${8 * scale}px;color:#fff;font-size:${17 * scale}px}
 .speaker-stage{z-index:60;transform-origin:right bottom}.evidence{left:${860 * scale}px;top:${180 * scale}px;width:${990 * scale}px;height:${700 * scale}px}.visual-panel{left:${860 * scale}px;top:${300 * scale}px;width:${390 * scale}px;height:${360 * scale}px;padding:${54 * scale}px ${18 * scale}px ${18 * scale}px}.visual-head{left:${18 * scale}px;right:${18 * scale}px}.flow,.visual-cards{align-items:stretch;flex-direction:column;gap:${9 * scale}px}.flow article,.visual-cards article{width:100%;min-height:0;flex:1;padding:${12 * scale}px ${14 * scale}px}.flow article span,.visual-cards span{font-size:${14 * scale}px}.flow b,.visual-cards b{display:inline-block;margin:${8 * scale}px ${8 * scale}px 4px 0;font-size:${17 * scale}px}.flow small,.visual-cards small{font-size:${13 * scale}px}.flow>i{display:none}.browser{padding:${55 * scale}px ${15 * scale}px ${12 * scale}px}.browser p{font-size:${14 * scale}px}.prompt-line{gap:${8 * scale}px;padding:${7 * scale}px ${8 * scale}px}.prompt-line b{min-width:${70 * scale}px}.qa-row{grid-template-columns:${34 * scale}px ${70 * scale}px 1fr ${20 * scale}px;padding:${9 * scale}px}.chart b{font-size:${14 * scale}px}.chart small{font-size:${11 * scale}px}.compare{gap:${8 * scale}px}.compare article{padding:${12 * scale}px}.compare b{font-size:${17 * scale}px;margin-top:${18 * scale}px}
 .scene.audience-facing .title-block{margin-top:${8 * scale}px}.scene.audience-facing.primary-hook-contrast .visual-panel,.scene.audience-facing.primary-memo-action .visual-panel,.scene.audience-facing.primary-copy-prompt .visual-panel{left:${70 * scale}px;top:${430 * scale}px;width:${1050 * scale}px;height:${430 * scale}px;padding:${24 * scale}px ${28 * scale}px}.visual-panel.audience-facing{padding-top:${24 * scale}px}.hook-contrast{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:${42 * scale}px;height:100%}.tool-stack{position:relative;height:${260 * scale}px}.tool-stack span{position:absolute;left:${40 * scale}px;width:${300 * scale}px;height:${150 * scale}px;border:1px solid rgba(255,255,255,.15);border-radius:${18 * scale}px;background:linear-gradient(145deg,rgba(255,255,255,.11),rgba(255,255,255,.04));box-shadow:0 ${16 * scale}px ${36 * scale}px rgba(0,0,0,.25)}.tool-stack span:nth-child(1){top:${78 * scale}px;transform:rotate(-8deg);opacity:.45}.tool-stack span:nth-child(2){top:${46 * scale}px;left:${78 * scale}px;transform:rotate(4deg);opacity:.7}.tool-stack span:nth-child(3){top:${18 * scale}px;left:${116 * scale}px;border-color:rgba(255,106,61,.65)}.tool-stack b{position:absolute;left:${175 * scale}px;top:${78 * scale}px;font-size:${30 * scale}px}.hook-contrast>em{color:var(--warning);font-size:${58 * scale}px;font-style:normal}.first-step{padding:${42 * scale}px;border:2px solid var(--secondary);border-radius:${24 * scale}px;background:rgba(85,214,255,.1);text-align:center}.first-step small{display:block;color:var(--muted);font-size:${20 * scale}px}.first-step b{display:block;margin-top:${18 * scale}px;color:var(--secondary);font-size:${42 * scale}px}.memo-card{height:100%;overflow:hidden;border-radius:${24 * scale}px;background:#f4f5f7;color:#172033;box-shadow:0 ${24 * scale}px ${60 * scale}px rgba(0,0,0,.35)}.memo-card header{height:${64 * scale}px;padding:0 ${26 * scale}px;display:flex;align-items:center;gap:${14 * scale}px;background:#e9ebef;border-bottom:1px solid #d6dae1}.memo-card header i{width:${18 * scale}px;height:${18 * scale}px;border-radius:50%;background:#ffd166}.memo-card header b{font-size:${22 * scale}px}.memo-card header span{margin-left:auto;color:#1f53c6;font-size:${18 * scale}px}.memo-note{position:relative;height:${228 * scale}px;padding:${32 * scale}px ${42 * scale}px}.memo-note small{color:#5b616c;font-size:${16 * scale}px}.memo-note p{max-width:${830 * scale}px;margin:${18 * scale}px 0 0;font-size:${34 * scale}px;line-height:1.45;font-weight:700}.memo-cursor{display:inline-block;width:${3 * scale}px;height:${38 * scale}px;margin-left:${8 * scale}px;background:#2563eb;vertical-align:middle}.memo-card footer{height:${86 * scale}px;padding:0 ${36 * scale}px;display:flex;align-items:center;gap:${18 * scale}px;background:#fff;border-top:1px solid #e2e5ea}.memo-card footer span{display:grid;place-items:center;width:${36 * scale}px;height:${36 * scale}px;border-radius:50%;background:#15803d;color:#fff;font-weight:900}.memo-card footer b{font-size:${22 * scale}px}.copy-prompt-card{height:100%;padding:${30 * scale}px ${38 * scale}px;border:2px solid rgba(85,214,255,.55);border-radius:${24 * scale}px;background:linear-gradient(145deg,rgba(11,18,30,.98),rgba(17,27,44,.96));box-shadow:0 ${24 * scale}px ${70 * scale}px rgba(0,0,0,.4)}.copy-prompt-card header{display:flex;justify-content:space-between;align-items:center}.copy-prompt-card header span{padding:${8 * scale}px ${15 * scale}px;border-radius:${99 * scale}px;background:rgba(85,214,255,.14);color:var(--secondary);font-size:${17 * scale}px;font-weight:800}.copy-prompt-card header i{color:var(--muted);font-style:normal;font-size:${16 * scale}px}.copy-prompt-card blockquote{margin:${34 * scale}px 0 ${24 * scale}px;font-size:${39 * scale}px;line-height:1.55;font-weight:800;letter-spacing:-${1 * scale}px}.copy-prompt-card mark{padding:0 ${4 * scale}px;background:transparent;color:var(--warning);box-shadow:inset 0 -${7 * scale}px rgba(255,106,61,.35)}.copy-prompt-card footer{color:var(--muted);font-size:${18 * scale}px}
+.scene.layout-speaker-focus .title-block{position:absolute;left:${70 * scale}px;top:${70 * scale}px;margin:0;max-width:${590 * scale}px}.scene.layout-speaker-focus .title-block h1{font-size:${50 * scale}px;max-width:${590 * scale}px}.scene.layout-speaker-focus .title-block p{font-size:${23 * scale}px}.scene.layout-speaker-focus .summary{left:${70 * scale}px;top:${260 * scale}px;width:${560 * scale}px;min-height:${76 * scale}px;padding:${16 * scale}px ${22 * scale}px ${16 * scale}px ${56 * scale}px}.scene.layout-speaker-focus .summary span{font-size:${21 * scale}px}.scene.layout-speaker-focus .facts{left:${70 * scale}px;top:auto;bottom:${80 * scale}px;width:${620 * scale}px}.scene.layout-speaker-focus .fact{min-height:${112 * scale}px;padding:${14 * scale}px}.scene.layout-speaker-focus.audience-facing .visual-panel{left:${70 * scale}px;top:${420 * scale}px;width:${560 * scale}px;height:${330 * scale}px;padding:${22 * scale}px}.scene.layout-speaker-focus .copy-prompt-card blockquote{font-size:${25 * scale}px}.scene.layout-speaker-focus .memo-note p{font-size:${25 * scale}px}.evidence.layout-speaker-focus{left:${70 * scale}px;top:${470 * scale}px;width:${560 * scale}px;height:${350 * scale}px}
+.scene.layout-graphic-focus .title-block{position:absolute;left:${70 * scale}px;top:${52 * scale}px;margin:0;max-width:${1440 * scale}px}.scene.layout-graphic-focus .title-block h1{font-size:${48 * scale}px;max-width:${1100 * scale}px}.scene.layout-graphic-focus .title-block p{font-size:${22 * scale}px}.scene.layout-graphic-focus .summary{left:${70 * scale}px;top:${190 * scale}px;width:${980 * scale}px;min-height:${70 * scale}px;padding:${14 * scale}px ${22 * scale}px ${14 * scale}px ${56 * scale}px}.scene.layout-graphic-focus .summary span{font-size:${21 * scale}px}.scene.layout-graphic-focus .facts{left:${1080 * scale}px;top:${177 * scale}px;width:${460 * scale}px;gap:${8 * scale}px}.scene.layout-graphic-focus .fact{min-height:${88 * scale}px;padding:${10 * scale}px}.scene.layout-graphic-focus .fact small{margin:${8 * scale}px 0 ${4 * scale}px;font-size:${13 * scale}px}.scene.layout-graphic-focus .fact b{font-size:${16 * scale}px}.scene.layout-graphic-focus.audience-facing .visual-panel{left:${70 * scale}px;top:${300 * scale}px;width:${1500 * scale}px;height:${620 * scale}px;padding:${36 * scale}px}.scene.layout-graphic-focus .flow,.scene.layout-graphic-focus .visual-cards{align-items:center;flex-direction:row;gap:${20 * scale}px}.scene.layout-graphic-focus .flow article,.scene.layout-graphic-focus .visual-cards article{width:30%;min-height:${190 * scale}px;padding:${22 * scale}px}.scene.layout-graphic-focus .flow article span,.scene.layout-graphic-focus .visual-cards span{font-size:${18 * scale}px}.scene.layout-graphic-focus .flow b,.scene.layout-graphic-focus .visual-cards b{display:block;margin:${24 * scale}px 0 ${12 * scale}px;font-size:${25 * scale}px}.scene.layout-graphic-focus .flow small,.scene.layout-graphic-focus .visual-cards small{font-size:${17 * scale}px}.scene.layout-graphic-focus .flow>i{display:block}.scene.layout-graphic-focus .browser p{font-size:${18 * scale}px}.scene.layout-graphic-focus .prompt-line{gap:${18 * scale}px;padding:${12 * scale}px ${16 * scale}px}.scene.layout-graphic-focus .prompt-line b{min-width:${110 * scale}px}.scene.layout-graphic-focus .compare{gap:${20 * scale}px}.scene.layout-graphic-focus .compare article{padding:${24 * scale}px}.scene.layout-graphic-focus .compare b{font-size:${26 * scale}px;margin-top:${30 * scale}px}.evidence.layout-graphic-focus{left:${70 * scale}px;top:${300 * scale}px;width:${1500 * scale}px;height:${620 * scale}px}
+.scene.layout-evidence-focus .title-block{position:absolute;left:${70 * scale}px;top:${48 * scale}px;margin:0;max-width:${1450 * scale}px}.scene.layout-evidence-focus .title-block h1{font-size:${46 * scale}px;max-width:${1060 * scale}px}.scene.layout-evidence-focus .title-block p{font-size:${21 * scale}px}.scene.layout-evidence-focus .summary{left:${70 * scale}px;top:${190 * scale}px;width:${960 * scale}px;min-height:${66 * scale}px;padding:${13 * scale}px ${22 * scale}px ${13 * scale}px ${56 * scale}px;z-index:56}.scene.layout-evidence-focus .summary span{font-size:${20 * scale}px}.scene.layout-evidence-focus .facts{left:${90 * scale}px;top:auto;bottom:${72 * scale}px;width:${1180 * scale}px;z-index:58}.scene.layout-evidence-focus .fact{min-height:${96 * scale}px;padding:${12 * scale}px;background:rgba(10,14,22,.86)}.evidence.layout-evidence-focus{left:${55 * scale}px;top:${285 * scale}px;width:${1550 * scale}px;height:${665 * scale}px;border-width:${4 * scale}px;box-shadow:0 ${36 * scale}px ${100 * scale}px rgba(0,0,0,.62)}
 </style></head><body><div id="root" data-composition-id="main" data-start="0" data-duration="${duration.toFixed(3)}" data-width="${width}" data-height="${height}" data-fps="${fps}"><div class="top-progress"><i id="progress"></i></div>${audioHtml}${sceneHtml}<aside class="speaker-stage" id="speakerStage" data-layout-allow-overflow>${speakerHtml}${showSafeGuides ? `<div class="speaker-safe"></div>` : ""}</aside>${evidenceHtml}${captionHtml}</div>
 <script>window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true,defaults:{ease:"power3.out"}});tl.fromTo("#progress",{scaleX:0},{scaleX:1,duration:${duration.toFixed(3)},ease:"none"},0);${speakerTimeline}${animationLines.join("\n")}document.querySelectorAll(".caption").forEach((caption)=>{const start=Number(caption.dataset.start),d=Number(caption.dataset.duration);tl.from(caption,{opacity:0,y:${14 * scale},scale:.97,duration:.18},start);tl.to(caption,{opacity:0,y:-${8 * scale},duration:.14},start+Math.max(.2,d-.14));});window.__timelines.main=tl;</script></body></html>`;
 
@@ -1192,6 +1324,15 @@ export async function buildHyperframesDirectorProject(options) {
     compositedAssetIds,
     skippedAssetConflicts,
     motionDirectionConsumed: mode === "sample" && isObject(motionDirection),
+    sceneLayouts: scenes.map((scene) => ({
+      segmentId: scene.segment.id,
+      requestedMode: scene.layoutRequestedRaw,
+      effectiveMode: scene.effectiveLayoutMode,
+      lockedByKeyframe: scene.layoutLockedByKeyframe,
+      contentLockedByKeyframe: scene.contentLockedByKeyframe,
+      hasEvidence: scene.hasEvidence,
+      fallbackReason: scene.layoutFallback?.reason || null,
+    })),
     appliedChoreography,
     unappliedChoreography,
     snapshotTimes,

@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   buildHyperframesDirectorProject,
+  DIRECTOR_SCENE_LAYOUT_MODES,
   findLockedVisualIntentConflict,
   normalizeContentBreakdown,
   normalizeFullDirection,
@@ -393,6 +394,124 @@ test("sample and full HTML inherit approved keyframe presentation by segmentId",
     const documentHtml = fs.readFileSync(project.indexPath, "utf8");
     assertInheritedScenes(documentHtml, direction);
   }
+});
+
+test("approved keyframe content does not lock dynamic sample layout", async t => {
+  const direction = normalizeKeyframeDirection(rawDirection, breakdown, 3);
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    segmentLayouts: [
+      { segmentId: "S01", mode: "speaker-focus", reason: "人物承担开场冲突" },
+      { segmentId: "S04", mode: "graphic-focus", reason: "备忘录动作成为主画面" },
+      { segmentId: "S06", mode: "split-right", reason: "人物与完整提示词并列收束" },
+    ],
+  }, breakdown, { outputDuration: 9, keyframeDirection: direction });
+
+  assert.deepEqual(DIRECTOR_SCENE_LAYOUT_MODES, ["speaker-focus", "split-right", "graphic-focus", "evidence-focus"]);
+  assert.deepEqual(motionDirection.segmentLayouts.map(item => item.mode), ["speaker-focus", "graphic-focus", "split-right"]);
+  assert.equal(motionDirection.segmentLayouts.some(item => Object.hasOwn(item, "lockedByKeyframe")), false);
+
+  const project = await renderFixtureProject(t, "sample", direction, { motionDirection });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+
+  assert.match(sceneHtml(documentHtml, "S01", "S04"), /class="scene clip layout-speaker-focus/);
+  assert.match(sceneHtml(documentHtml, "S04", "S06"), /class="scene clip layout-graphic-focus/);
+  assert.match(sceneHtml(documentHtml, "S06"), /class="scene clip layout-split-right/);
+  assert.match(documentHtml, /tl\.fromTo\("#speakerStage",\{[^}]*"opacity":0[^}]*\},\{"x":-470,"y":0,"scale":1\.18,"opacity":1[^}]*\}, 0\.180\);/);
+  assert.match(documentHtml, /tl\.to\("#speakerStage",\{"x":0,"y":0,"scale":0\.42,"duration":0\.52,"ease":"power3\.inOut","overwrite":"auto"\},3\.020\);/);
+  assert.match(documentHtml, /tl\.to\("#speakerStage",\{"x":0,"y":0,"scale":1,"duration":0\.52,"ease":"power3\.inOut","overwrite":"auto"\},6\.020\);/);
+  assert.deepEqual(manifest.sceneLayouts.map(item => item.effectiveMode), ["speaker-focus", "graphic-focus", "split-right"]);
+  assert.equal(manifest.sceneLayouts.every(item => item.lockedByKeyframe === false), true);
+  assert.equal(manifest.sceneLayouts.every(item => item.contentLockedByKeyframe === true), true);
+});
+
+test("unsupported and unavailable layout modes fail closed with manifest evidence", async t => {
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    segmentLayouts: [
+      { segmentId: "S01", mode: "freeform-fullscreen" },
+      { segmentId: "S04", mode: "evidence-focus" },
+    ],
+  }, breakdown, { outputDuration: 9 });
+
+  assert.equal(motionDirection.segmentLayouts[0].requestedMode, "freeform-fullscreen");
+  assert.equal(motionDirection.segmentLayouts[0].mode, "split-right");
+  assert.equal(motionDirection.segmentLayouts[0].fallbackReason, "unsupported-layout-mode");
+
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, { motionDirection });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+  const unsupported = manifest.sceneLayouts.find(item => item.segmentId === "S01");
+  const missingEvidence = manifest.sceneLayouts.find(item => item.segmentId === "S04");
+
+  assert.deepEqual(unsupported, {
+    segmentId: "S01",
+    requestedMode: "freeform-fullscreen",
+    effectiveMode: "split-right",
+    lockedByKeyframe: false,
+    contentLockedByKeyframe: false,
+    hasEvidence: false,
+    fallbackReason: "unsupported-layout-mode",
+  });
+  assert.equal(missingEvidence.requestedMode, "evidence-focus");
+  assert.equal(missingEvidence.effectiveMode, "graphic-focus");
+  assert.equal(missingEvidence.hasEvidence, false);
+  assert.match(missingEvidence.fallbackReason, /没有已批准证据素材/);
+  assert.match(sceneHtml(documentHtml, "S04", "S06"), /class="scene clip layout-graphic-focus/);
+});
+
+test("approved evidence can become the primary layer while the speaker shrinks to PiP", async t => {
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    segmentLayouts: [
+      { segmentId: "S01", mode: "split-right" },
+      { segmentId: "S04", mode: "evidence-focus" },
+      { segmentId: "S06", mode: "speaker-focus" },
+    ],
+  }, breakdown, { outputDuration: 9 });
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, {
+    motionDirection,
+    approvedAssets: [{
+      id: "approved-evidence",
+      sourceType: "local-derived",
+      mediaKind: "image",
+      path: sourceVideoFixture,
+      placement: { start: 3.1, end: 5.8, mode: "broll" },
+    }],
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+  const evidenceLayout = manifest.sceneLayouts.find(item => item.segmentId === "S04");
+
+  assert.equal(evidenceLayout.effectiveMode, "evidence-focus");
+  assert.equal(evidenceLayout.hasEvidence, true);
+  assert.equal(evidenceLayout.fallbackReason, null);
+  assert.match(documentHtml, /<aside class="evidence layout-evidence-focus"[^>]+data-layout-mode="evidence-focus"/);
+  assert.match(documentHtml, /tl\.to\("#speakerStage",\{"x":0,"y":0,"scale":0\.36,"duration":0\.52,"ease":"power3\.inOut","overwrite":"auto"\},3\.020\);/);
+  assert.match(documentHtml, /\.evidence\.layout-evidence-focus\{left:/);
+});
+
+test("full direction consumes per-segment layout mode", async t => {
+  const direction = normalizeKeyframeDirection(rawDirection, breakdown, 3);
+  const fullDirection = normalizeFullDirection({
+    segmentMotion: [
+      { segmentId: "S01", layoutMode: "speaker-focus" },
+      { segmentId: "S04", layoutMode: "graphic-focus" },
+      { segmentId: "S06", layoutMode: "split-right" },
+    ],
+  }, breakdown);
+  const project = await renderFixtureProject(t, "full", direction, { fullDirection });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+
+  assert.deepEqual(fullDirection.segmentMotion.map(item => item.layoutMode), ["speaker-focus", "graphic-focus", "split-right"]);
+  assert.deepEqual(manifest.sceneLayouts.map(item => item.effectiveMode), ["speaker-focus", "graphic-focus", "split-right"]);
+  assert.match(sceneHtml(documentHtml, "S01", "S04"), /layout-speaker-focus/);
+  assert.match(sceneHtml(documentHtml, "S04", "S06"), /layout-graphic-focus/);
 });
 
 test("overlapping approved assets cannot replace locked keyframe visual intent", async t => {

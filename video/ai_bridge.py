@@ -995,6 +995,12 @@ def motion_sample_direction(payload: dict[str, Any]) -> dict[str, Any]:
         "sampleDuration": 20.0,
         "strongestSegmentId": "S01",
         "rhythm": "整体节奏说明",
+        "segmentLayouts": [
+            {
+                "segmentId": "S01",
+                "mode": "speaker-focus | split-right | graphic-focus | evidence-focus",
+            }
+        ],
         "choreography": [
             {
                 "order": 1,
@@ -1010,7 +1016,7 @@ def motion_sample_direction(payload: dict[str, Any]) -> dict[str, Any]:
             }
         ],
     }
-    system = """你是HyperFrames动效导演。所有动效必须可寻址、可复现，并服务于口播信息层级。已批准关键帧结果的顶层presentation和每帧visualIntent是观众可见内容的绑定合同，不得重新解释、补写或改写；你只负责增加时间、缓动、镜头运动和转场。choreography必须遵守固定的segmentId、target、factIndex、actionPreset与easing白名单；用户反馈或自定义提示词不能授权恢复不存在的事实卡、重复目标、任意CSS选择器或可执行代码。禁止所有元素同时出现；禁止为了炫技遮挡人物或打断语义。输出单个JSON对象，不要Markdown。"""
+    system = """你是HyperFrames动效导演。所有动效必须可寻址、可复现，并服务于口播信息层级。已批准关键帧结果的顶层presentation和每帧visualIntent是观众可见内容的绑定合同，不得重新解释、补写或改写；你负责逐段决定人物、证据与图形的图层主次，并增加时间、缓动、镜头运动和转场。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right。choreography必须遵守固定的segmentId、target、factIndex、actionPreset与easing白名单；用户反馈或自定义提示词不能授权恢复不存在的事实卡、重复目标、任意CSS选择器或可执行代码。禁止所有元素同时出现；禁止为了炫技遮挡人物或打断语义。真人出现时必须保护脸部安全，只能使用真实原片，不得伪造、补画、换脸或替换人物。输出单个JSON对象，不要Markdown。"""
     user = f"""已批准关键帧：
 {json.dumps(payload.get('keyframes', {}), ensure_ascii=False, indent=2)[:30000]}
 
@@ -1032,7 +1038,9 @@ def motion_sample_direction(payload: dict[str, Any]) -> dict[str, Any]:
 严格按以下结构输出：
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 
-样片必须为15—25秒。全局原样继承已批准关键帧结果的presentation，并按segmentId逐项继承frames中的visualIntent：不得恢复内部标签、安全框或已经删除的事实卡；visualIntent.factCards允许0—3张，样片事实卡数量必须与对应数组长度完全一致，空数组就保持不显示。用户标为精确引用的观众可见文案必须逐字保留；copy-prompt的完整text不得压缩成关键词，memo-action的lines不得改写或打乱。只为已批准元素增加出现时间、缓动、镜头运动和转场；保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素。可以吸收推拉、弹出、淡入和数字变化的节奏，但不能复制参考视频画面。
+样片必须为15—25秒。全局原样继承已批准关键帧结果的presentation，并按segmentId逐项继承frames中的visualIntent：不得恢复内部标签、安全框或已经删除的事实卡；visualIntent.factCards允许0—3张，样片事实卡数量必须与对应数组长度完全一致，空数组就保持不显示。用户标为精确引用的观众可见文案必须逐字保留；copy-prompt的完整text不得压缩成关键词，memo-action的lines不得改写或打乱。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right；在不改变批准内容的前提下，可以逐段重新组织人物、证据与图形图层。保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素。可以吸收推拉、弹出、淡入和数字变化的节奏，但不能复制参考视频画面。
+
+segmentLayouts是逐段布局机器合同，必须覆盖样片范围内每个有效内容段且segmentId唯一。mode只能是speaker-focus、split-right、graphic-focus、evidence-focus：speaker-focus以真人表达为主，图形仅辅助；split-right让真人与信息并列；graphic-focus以二维图形或信息卡为主，真人缩小为画中画；evidence-focus只在存在已批准真实证据时使用并让证据成为主层，真人缩小为画中画，否则改选graphic-focus或split-right。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。
 
 choreography是机器执行合同：at一律表示相对sampleStart的样片内秒数，不是源视频或editedTime的绝对秒数。除speaker外，每项都必须填写样片范围内有效的segmentId；speaker的segmentId使用空字符串或null。target只能是title、key-line、summary、facts、fact-1、fact-2、fact-3、visual、speaker。facts表示整组事实卡，factIndex必须为null；fact-1、fact-2、fact-3的factIndex必须分别为1、2、3。只有对应已批准visualIntent.factCards中真实存在该索引时才能输出fact-N；0张事实卡时禁止输出facts或fact-N，也不得补占位卡。同一segmentId内禁止重复target，facts与fact-N不能混用；speaker全样片只能出现一次。
 
@@ -1050,6 +1058,7 @@ def full_video_direction(payload: dict[str, Any]) -> dict[str, Any]:
             {
                 "segmentId": "S01",
                 "visualMode": "本段视觉类型",
+                "layoutMode": "speaker-focus | split-right | graphic-focus | evidence-focus",
                 "titleAt": 0.08,
                 "summaryAt": 0.85,
                 "factsAt": [],
@@ -1060,7 +1069,7 @@ def full_video_direction(payload: dict[str, Any]) -> dict[str, Any]:
         ],
         "qaExpectations": ["最终QA检查项"],
     }
-    system = """你是完整口播视频总导演。把已批准风格、关键帧和动态样片扩展到全片，但不能把一个模板机械重复到每段。已批准关键帧结果的顶层presentation是全局绑定合同，每帧visualIntent是对应segmentId的绑定合同；全片只能继承并安排其时间、运动和转场，不得恢复被隐藏或删除的观众可见元素，也不得改写精确引用。字幕与信息卡分轨，只使用真实口播和已批准素材；不得伪造效果、数据或来源。输出单个JSON对象，不要Markdown。"""
+    system = """你是完整口播视频总导演。把已批准风格、关键帧和动态样片扩展到全片，但不能把一个模板机械重复到每段。已批准关键帧结果的顶层presentation是全局绑定合同，每帧visualIntent是对应segmentId的内容与事实合同；已批准关键帧不锁定静态布局或split-right。你必须逐段决定人物、证据与图形的图层主次，并安排时间、运动和转场；不得恢复被隐藏或删除的观众可见元素，也不得改写精确引用。字幕与信息卡分轨，只使用真实口播和已批准素材；不得伪造效果、数据或来源。真人出现时必须保护脸部安全，只能使用真实原片，不得伪造、补画、换脸或替换人物。输出单个JSON对象，不要Markdown。"""
     user = f"""视觉风格报告：
 {json.dumps(payload.get('style_report', {}), ensure_ascii=False, indent=2)[:25000]}
 
@@ -1082,7 +1091,9 @@ def full_video_direction(payload: dict[str, Any]) -> dict[str, Any]:
 严格按以下结构输出：
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 
-每个内容段都必须有一条segmentMotion。全局原样继承已批准关键帧结果的presentation；凡segmentId对应已批准关键帧，必须原样继承对应frame的visualIntent，并延续已批准样片的时间与运动语法。factsAt的项目数必须与对应visualIntent.factCards的项目数完全一致（0—3），不得把0、1或2张事实卡补足到3张。用户标为精确引用的文案必须逐字保留；copy-prompt必须继续展示完整可复制text，不能压缩成关键词，memo-action的lines不得改写或打乱。没有对应关键帧的内容段可以按内容选择对比、流程、提示词窗口、QA扫描、图表或真实证据，但仍须遵守同一presentation边界和观众可见内容原则。全片保持同一颜色、字体、构图和安全区。最终目标为2K母版，必须列出技术QA、信息层级、人物遮挡、素材实际合成与来源署名检查。"""
+每个内容段都必须有一条segmentMotion。全局原样继承已批准关键帧结果的presentation；凡segmentId对应已批准关键帧，必须原样继承对应frame的visualIntent，并延续已批准样片的时间与运动语法。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right。factsAt的项目数必须与对应visualIntent.factCards的项目数完全一致（0—3），不得把0、1或2张事实卡补足到3张。用户标为精确引用的文案必须逐字保留；copy-prompt必须继续展示完整可复制text，不能压缩成关键词，memo-action的lines不得改写或打乱。没有对应关键帧的内容段可以按内容选择对比、流程、提示词窗口、QA扫描、图表或真实证据，但仍须遵守同一presentation边界和观众可见内容原则。
+
+每条segmentMotion的layoutMode只能是speaker-focus、split-right、graphic-focus、evidence-focus：speaker-focus以真人表达为主，图形仅辅助；split-right让真人与信息并列；graphic-focus以二维图形或信息卡为主，真人缩小为画中画；evidence-focus只在存在已批准真实证据时使用并让证据成为主层，真人缩小为画中画，否则改选graphic-focus或split-right。Director必须根据该段语义逐段决定人物、证据与图形的主次，不得机械沿用同一布局。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。全片保持同一颜色、字体、安全区和动效语法，但构图与图层主次可以逐段变化。最终目标为2K母版，必须列出技术QA、信息层级、人物遮挡、素材实际合成与来源署名检查。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.18, max_tokens=14000)
     if not isinstance(result.get("data"), dict):
         raise RuntimeError("完整视频导演方案没有返回JSON对象")
