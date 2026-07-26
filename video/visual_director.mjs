@@ -894,6 +894,7 @@ function speakerPoseForLayout(mode, scale = 1) {
 function effectiveSceneLayoutMode(requestedMode, { hasEvidence = false, hasGraphic = false } = {}) {
   const requested = normalizeSceneLayoutMode(requestedMode);
   if (requested === "evidence-focus" && !hasEvidence) return hasGraphic ? "graphic-focus" : "speaker-focus";
+  if (requested === "graphic-focus" && hasEvidence) return "evidence-focus";
   if (requested === "graphic-focus" && !hasGraphic && !hasEvidence) return "speaker-focus";
   return requested;
 }
@@ -1062,19 +1063,21 @@ export async function buildHyperframesDirectorProject(options) {
       Number(motion.visualAt ?? (mode === "keyframes" ? 0.66 : Math.min(4.2, Math.max(2.7, window.duration * 0.42)))),
     );
   };
-  const evidenceEntries = mode === "keyframes" ? [] : copiedAssets.map((asset, index) => {
-    const rawStart = Math.max(0, Number(asset.placement.start) - rangeStart);
-    const end = Math.min(duration, Number(asset.placement.end) - rangeStart);
-    const ownerScene = scenes
-      .map((scene) => ({ scene, overlap: Math.max(0, Math.min(end, scene.window.end) - Math.max(rawStart, scene.window.start)) }))
-      .sort((left, right) => right.overlap - left.overlap)[0];
-    const matchedScene = ownerScene?.overlap > 0 ? ownerScene.scene : null;
-    const revealAt = matchedScene ? visualRevealAt(matchedScene) : rawStart;
-    const latestUsefulStart = Math.max(rawStart, end - 0.8);
-    const start = Math.min(Math.max(rawStart, revealAt), latestUsefulStart);
-    return { asset, index, rawStart, start, end, ownerScene: matchedScene };
-  }).filter((entry) => entry.end - entry.start >= 0.2);
-  const compositedAssetIds = evidenceEntries.map((entry) => entry.asset.id);
+  const evidenceEntries = mode === "keyframes" ? [] : copiedAssets.flatMap((asset) => {
+    const relativePlacementStart = Number(asset.placement.start) - rangeStart;
+    const rawStart = Math.max(0, relativePlacementStart);
+    const rawEnd = Math.min(duration, Number(asset.placement.end) - rangeStart);
+    return scenes.flatMap((scene) => {
+      const overlapStart = Math.max(rawStart, scene.window.start);
+      const overlapEnd = Math.min(rawEnd, scene.window.end);
+      if (overlapEnd - overlapStart < 0.2) return [];
+      const revealAt = visualRevealAt(scene);
+      const latestUsefulStart = Math.max(overlapStart, overlapEnd - 0.8);
+      const start = Math.min(Math.max(overlapStart, revealAt), latestUsefulStart);
+      return [{ asset, relativePlacementStart, start, end: overlapEnd, ownerScene: scene }];
+    });
+  }).map((entry, index) => ({ ...entry, index }));
+  const compositedAssetIds = unique(evidenceEntries.map((entry) => entry.asset.id));
   for (const scene of scenes) {
     scene.hasEvidence = evidenceEntries.some((entry) => entry.ownerScene === scene);
     scene.effectiveLayoutMode = effectiveSceneLayoutMode(scene.requestedLayoutMode, {
@@ -1084,7 +1087,11 @@ export async function buildHyperframesDirectorProject(options) {
     scene.layoutFallback = scene.effectiveLayoutMode === scene.requestedLayoutMode ? null : {
       requested: scene.requestedLayoutMode,
       effective: scene.effectiveLayoutMode,
-      reason: scene.requestedLayoutMode === "evidence-focus" ? "本段没有已批准证据素材" : "本段没有可渲染主视觉",
+      reason: scene.requestedLayoutMode === "evidence-focus"
+        ? "本段没有已批准证据素材"
+        : scene.requestedLayoutMode === "graphic-focus" && scene.hasEvidence
+          ? "本段存在已批准证据素材，实际主层切换为证据"
+          : "本段没有可渲染主视觉",
     };
     if (!scene.layoutFallback && scene.layoutSelectionFallback) {
       scene.layoutFallback = {
@@ -1127,8 +1134,8 @@ export async function buildHyperframesDirectorProject(options) {
     return `<div class="caption clip" data-start="${start.toFixed(3)}" data-duration="${Math.max(0.1, end - start).toFixed(3)}" data-track-index="80" id="caption-${index + 1}">${html(cue.text)}</div>`;
   }).join("");
 
-  const evidenceHtml = evidenceEntries.map(({ asset, index, rawStart, start, end, ownerScene }) => {
-    const mediaStart = Number(asset.clipStart || 0) + Math.max(0, start - rawStart);
+  const evidenceHtml = evidenceEntries.map(({ asset, index, relativePlacementStart, start, end, ownerScene }) => {
+    const mediaStart = Number(asset.clipStart || 0) + Math.max(0, start - relativePlacementStart);
     const media = asset.mediaKind === "video"
       ? `<video id="evidence-media-${index + 1}" src="${html(asset.projectFile)}" class="evidence-media clip" data-start="${start.toFixed(3)}" data-duration="${(end - start).toFixed(3)}" data-track-index="${70 + index}" data-media-start="${mediaStart.toFixed(3)}" data-layout-allow-occlusion data-layout-allow-overlap muted playsinline preload="auto"></video>`
       : `<img src="${html(asset.projectFile)}" class="evidence-media" data-layout-allow-occlusion data-layout-allow-overlap alt="">`;

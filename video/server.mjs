@@ -144,15 +144,19 @@ function assetDecisionVersion(job) {
   const audited = Math.max(0, ...(job?.assetDecisions || []).map(item => Number(item?.decisionVersion) || 0));
   return Math.max(declared, audited);
 }
-function assertExpectedAssetDecisionVersion(job, expectedVersion) {
+function expectedAssetDecisionVersionValue(expectedVersion) {
   if (expectedVersion === undefined || expectedVersion === null || String(expectedVersion).trim() === "") {
     throw Object.assign(new Error("缺少有效的素材决策版本，请刷新任务后重试"), { statusCode: 409 });
   }
   const requested = Number(expectedVersion);
-  const current = assetDecisionVersion(job);
   if (!Number.isInteger(requested) || requested < 0) {
     throw Object.assign(new Error("缺少有效的素材决策版本，请刷新任务后重试"), { statusCode: 409 });
   }
+  return requested;
+}
+function assertExpectedAssetDecisionVersion(job, expectedVersion) {
+  const requested = expectedAssetDecisionVersionValue(expectedVersion);
+  const current = assetDecisionVersion(job);
   if (requested !== current) {
     throw Object.assign(new Error(`页面素材决策版本为 v${requested}，当前为 v${current}，请刷新后重试`), { statusCode: 409 });
   }
@@ -1829,13 +1833,18 @@ function assetReviewSummary(job, outputDuration = null) {
   const approved = assets.filter(asset => asset.reviewStatus === "approved");
   const rejected = assets.filter(asset => asset.reviewStatus === "rejected");
   const complianceIssues = approved.flatMap(asset => assetComplianceIssues(asset, job, outputDuration).map(issue => ({ assetId: asset.id, issue })));
+  const currentDecisionVersion = assetDecisionVersion(job);
+  const emptyCatalogReviewed = assets.length === 0 && currentDecisionVersion > 0 && (job.assetDecisions || []).some(record =>
+    record?.eventType === "asset-catalog-empty" && Number(record?.decisionVersion || 0) === currentDecisionVersion,
+  );
+  const catalogReviewed = assets.length > 0 || emptyCatalogReviewed;
   return {
     total: assets.length,
     pending: pending.length,
     approved: approved.length,
     rejected: rejected.length,
-    reviewComplete: pending.length === 0,
-    renderReady: pending.length === 0 && complianceIssues.length === 0,
+    reviewComplete: catalogReviewed && pending.length === 0,
+    renderReady: catalogReviewed && pending.length === 0 && complianceIssues.length === 0,
     complianceIssues
   };
 }
@@ -4540,7 +4549,7 @@ const server = http.createServer(async (req, res) => {
         const job = await readJob(jobId);
         const asset = (job.assets || []).find(item => item.id === assetId);
         if (!asset) return json(res, 404, { error: "素材不存在" });
-        assertExpectedAssetDecisionVersion(job, body.expectedAssetDecisionVersion);
+        const expectedDecisionVersion = expectedAssetDecisionVersionValue(body.expectedAssetDecisionVersion);
         const before = JSON.parse(JSON.stringify(asset));
         const reviewStatus = body.reviewStatus === "rejected" || body.approved === false ? "rejected" : body.approved === true ? "approved" : "pending";
         const nextSourceType = String(body.sourceType || asset.sourceType || "local-upload").slice(0, 80);
@@ -4569,8 +4578,11 @@ const server = http.createServer(async (req, res) => {
           return json(res, 409, { error: issues.join("；"), issues });
         }
         if (assetReviewDecisionFingerprint(before) === assetReviewDecisionFingerprint(candidate)) {
+          const currentDecisionVersion = assetDecisionVersion(job);
+          if (expectedDecisionVersion > currentDecisionVersion) assertExpectedAssetDecisionVersion(job, expectedDecisionVersion);
           return json(res, 200, { job, asset, replayed: true });
         }
+        assertExpectedAssetDecisionVersion(job, expectedDecisionVersion);
         candidate.updatedAt = new Date().toISOString();
         Object.keys(asset).forEach(key => delete asset[key]);
         Object.assign(asset, candidate);

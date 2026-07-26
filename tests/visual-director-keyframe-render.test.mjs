@@ -495,6 +495,107 @@ test("approved evidence can become the primary layer while the speaker shrinks t
   assert.match(documentHtml, /\.evidence\.layout-evidence-focus\{left:/);
 });
 
+test("evidence spanning multiple segments is split and participates in every overlapping layout", async t => {
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    segmentLayouts: [
+      { segmentId: "S01", mode: "split-right" },
+      { segmentId: "S04", mode: "evidence-focus" },
+      { segmentId: "S06", mode: "evidence-focus" },
+    ],
+  }, breakdown, { outputDuration: 9 });
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, {
+    motionDirection,
+    approvedAssets: [{
+      id: "cross-segment-evidence",
+      sourceType: "local-derived",
+      mediaKind: "video",
+      path: sourceVideoFixture,
+      placement: { start: 2.5, end: 6.5, mode: "broll" },
+      clipStart: 0.5,
+    }],
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+
+  assert.deepEqual(manifest.sceneLayouts.map(item => item.hasEvidence), [true, true, true]);
+  assert.deepEqual(manifest.sceneLayouts.map(item => item.effectiveMode), ["split-right", "evidence-focus", "evidence-focus"]);
+  assert.equal((documentHtml.match(/<aside class="evidence /g) || []).length, 3);
+  assert.match(documentHtml, /id="evidence-1"[^>]+data-layout-mode="split-right"/);
+  assert.match(documentHtml, /id="evidence-2"[^>]+data-layout-mode="evidence-focus"/);
+  assert.match(documentHtml, /id="evidence-3"[^>]+data-layout-mode="evidence-focus"/);
+  assert.deepEqual(project.compositedAssetIds, ["cross-segment-evidence"]);
+});
+
+test("sample beginning inside evidence placement preserves elapsed media offset", async t => {
+  const offsetBreakdown = normalizeContentBreakdown({
+    segments: [
+      { id: "P01", sourceTime: { start: 0, end: 10 }, editedTime: { start: 0, end: 10 } },
+      { id: "P02", sourceTime: { start: 10, end: 15 }, editedTime: { start: 10, end: 15 } },
+      { id: "P03", sourceTime: { start: 15, end: 20 }, editedTime: { start: 15, end: 20 } },
+    ],
+  }, { sourceDuration: 20, outputDuration: 20, minimumSegments: 3, maximumSegments: 3 });
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 10,
+    sampleDuration: 5,
+    segmentLayouts: [{ segmentId: "P02", mode: "evidence-focus" }],
+  }, offsetBreakdown, { outputDuration: 20 });
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, {
+    breakdown: offsetBreakdown,
+    motionDirection,
+    rangeStart: 10,
+    rangeEnd: 15,
+    approvedAssets: [{
+      id: "sample-offset-evidence",
+      sourceType: "local-derived",
+      mediaKind: "video",
+      path: sourceVideoFixture,
+      placement: { start: 5, end: 15, mode: "broll" },
+      clipStart: 2,
+    }],
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const evidenceVideo = documentHtml.match(/<video id="evidence-media-1"[^>]*data-start="([^"]+)"[^>]*data-media-start="([^"]+)"/);
+
+  assert.ok(evidenceVideo, "missing evidence video timing");
+  const sampleStart = Number(evidenceVideo[1]);
+  const mediaStart = Number(evidenceVideo[2]);
+  assert.equal(mediaStart, 2 + (10 + sampleStart - 5));
+});
+
+test("graphic-focus with approved evidence records a truthful evidence-focus fallback", async t => {
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    segmentLayouts: [
+      { segmentId: "S01", mode: "split-right" },
+      { segmentId: "S04", mode: "graphic-focus" },
+      { segmentId: "S06", mode: "speaker-focus" },
+    ],
+  }, breakdown, { outputDuration: 9 });
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, {
+    motionDirection,
+    approvedAssets: [{
+      id: "graphic-conflict-evidence",
+      sourceType: "local-derived",
+      mediaKind: "video",
+      path: sourceVideoFixture,
+      placement: { start: 3.2, end: 5.7, mode: "broll" },
+    }],
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+  const scene = manifest.sceneLayouts.find(item => item.segmentId === "S04");
+
+  assert.equal(scene.requestedMode, "graphic-focus");
+  assert.equal(scene.effectiveMode, "evidence-focus");
+  assert.equal(scene.hasEvidence, true);
+  assert.match(scene.fallbackReason, /实际主层切换为证据/);
+  assert.match(sceneHtml(documentHtml, "S04", "S06"), /class="scene clip layout-evidence-focus has-evidence/);
+  assert.match(documentHtml, /<aside class="evidence layout-evidence-focus"/);
+});
+
 test("full direction consumes per-segment layout mode", async t => {
   const direction = normalizeKeyframeDirection(rawDirection, breakdown, 3);
   const fullDirection = normalizeFullDirection({

@@ -18,6 +18,7 @@ const {
   appendAssetDecisionAudit,
   assertMotionSampleAssetSnapshotCurrent,
   assetDecisionAuditEntry,
+  assetReviewSummary,
   autoReviewLocalAssetsForPreview,
   buildAssetDecisionSnapshot,
   closeServerResourcesForTests,
@@ -204,6 +205,8 @@ test("preview auto review creates an explicit empty-catalog genesis and valid em
   const jobDir = await createJobDir(jobId);
   const job = baseJob(jobId, []);
   await persistJob(jobDir, job);
+  assert.equal(assetReviewSummary(job).reviewComplete, false);
+  assert.equal(assetReviewSummary(job).renderReady, false);
 
   const first = await autoReviewLocalAssetsForPreview(job, { invalidateSampleReview: false });
   assert.equal(first.review.total, 0);
@@ -299,7 +302,7 @@ test("upload, replacement, approval, rejection, and placement changes invalidate
   }
 });
 
-test("identical asset decision replay preserves the reviewed sample and decision version", async () => {
+test("lost-response replay with the original version does not append or invalidate twice", async () => {
   if (!httpServerForTests.listening) {
     await new Promise((resolve, reject) => {
       httpServerForTests.once("error", reject);
@@ -312,14 +315,13 @@ test("identical asset decision replay preserves the reviewed sample and decision
   const assetFile = path.join(jobDir, "asset.mp4");
   await fsp.writeFile(assetFile, "idempotent-asset");
   const asset = reviewedAsset("asset-1", assetFile);
+  asset.reviewStatus = "pending";
+  asset.approved = false;
   const job = baseJob(jobId, [asset]);
-  const audit = await assetDecisionAuditEntry(asset, { eventType: "asset-approved", reason: "fixture approval" });
-  appendAssetDecisionAudit(job, [audit], { invalidateSampleReview: false });
-  await fsp.writeFile(path.join(jobDir, "asset-decisions.json"), JSON.stringify(job.assetDecisions, null, 2));
   await persistJob(jobDir, job);
 
-  const { response, payload } = await postJson(baseUrl, `/api/jobs/${jobId}/assets/asset-1/approve`, {
-    expectedAssetDecisionVersion: 1,
+  const requestBody = {
+    expectedAssetDecisionVersion: 0,
     approved: true,
     reviewStatus: "approved",
     ownership: "user-confirmed",
@@ -328,15 +330,21 @@ test("identical asset decision replay preserves the reviewed sample and decision
     clipDuration: 3.5,
     paymentConfirmed: true,
     placement: { start: 1.25, end: 4.75, mode: "broll" },
-  });
-  assert.equal(response.status, 200);
-  assert.equal(payload.replayed, true);
+  };
+  const first = await postJson(baseUrl, `/api/jobs/${jobId}/assets/asset-1/approve`, requestBody);
+  assert.equal(first.response.status, 200);
+  assert.equal(first.payload.replayed, false);
+  assert.equal(first.payload.job.assetDecisionVersion, 1);
+
+  const replay = await postJson(baseUrl, `/api/jobs/${jobId}/assets/asset-1/approve`, requestBody);
+  assert.equal(replay.response.status, 200);
+  assert.equal(replay.payload.replayed, true);
   const persisted = JSON.parse(await fsp.readFile(path.join(jobDir, "job.json"), "utf8"));
   assert.equal(persisted.assetDecisionVersion, 1);
   assert.equal(persisted.assetDecisions.length, 1);
-  assert.equal(persisted.workflow.stages.motion_sample.status, "awaiting_review");
-  assert.equal(persisted.workflow.stages.motion_sample.artifacts.url, "/sample-v3.mp4");
-  assert.equal(persisted.workflow.stages.full_render.status, "approved");
+  assert.equal(persisted.workflow.stages.motion_sample.status, "pending");
+  assert.equal(persisted.workflow.stages.motion_sample.artifacts, null);
+  assert.equal(persisted.workflow.stages.full_render.status, "pending");
 });
 
 test("stale asset decision versions reject approval and replacement before mutation", async () => {
