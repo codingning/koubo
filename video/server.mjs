@@ -2456,12 +2456,12 @@ function parseQaDetection(stderr) {
     truePeakDbfs: truePeak ? Number(truePeak[1]) : null,
   };
 }
-async function runQa(job, version, outputPath, expectedDuration, timeline, variants, packaging, captionPackaging, coverPackaging, mediaManifest, colorManagement) {
+async function runQa(job, version, outputPath, expectedDuration, timeline, variants, packaging, captionPackaging, coverPackaging, mediaManifest, colorManagement, audioTargetOverride = null) {
   const metadata = await probe(outputPath);
   await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
   const scan = await run("ffmpeg", ["-hide_banner", "-i", outputPath, "-vf", "blackdetect=d=0.4:pix_th=0.02,freezedetect=n=-55dB:d=2", ...(metadata.hasAudio ? ["-af", "ebur128=peak=true"] : []), "-f", "null", "-"]);
   const detection = parseQaDetection(scan.stderr);
-  const audioTargets = hyperframesMasterAudioTargets(job.workflow?.config?.rendering?.final || {});
+  const audioTargets = hyperframesMasterAudioTargets(audioTargetOverride || job.workflow?.config?.rendering?.final || {});
   const audioExpected = job.source?.hasAudio !== false;
   const audioPresent = audioExpected ? metadata.hasAudio === true : true;
   const aacAudio = metadata.hasAudio === true ? metadata.audioCodec === "aac" : !audioExpected;
@@ -3104,12 +3104,339 @@ export async function normalizeHyperframesMaster(inputPath, outputPath, width, h
   return probe(outputPath);
 }
 
+export function parseAudioOnlyRevisionFeedback(feedback) {
+  const text = String(feedback || "").normalize("NFKC").replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const loudness = text.match(/(-?\d+(?:\.\d+)?)\s*LUFS/i);
+  const truePeak = text.match(/(-?\d+(?:\.\d+)?)\s*dBTP/i);
+  const clauses = text.split(/[。；;\n]+/).map(item => item.trim()).filter(Boolean);
+  if (clauses.length !== 2) return null;
+  const [audioClause, preserveClause] = clauses;
+  const protectedTerms = ["画面", "字幕", "动效", "时间线", "素材"];
+  const preservesEveryVisualTerm = protectedTerms.every(term => preserveClause.includes(term))
+    && /^(?:其余|其他|除音频外)?[画面字幕动效时间线素材、,和以及与及]*(?:全部|均|都)?(?:保持|维持)(?:完全)?不变$/.test(preserveClause);
+  const strictAudioClause = /^(?:只|仅)(?:把|将)?[^,，、]{0,18}(?:人声|音频)(?:响度|音量)?(?:调整|规范化|标准化|处理)?(?:到|至|为|目标为|控制在)?(?:约)?\s*-?\d+(?:\.\d+)?\s*LUFS(?:,|，|、)?(?:并)?(?:真峰值|TP|true peak)[^,，、]{0,12}(?:不高于|不超过|<=|≤|控制在)\s*-?\d+(?:\.\d+)?\s*dBTP$/i.test(audioClause);
+  const truePeakIsCeiling = /(?:真峰值|TP|true peak)[^。；;\n]{0,18}(?:不高于|不超过|<=|≤|上限|控制在)/i.test(text);
+  const loudnessValue = loudness ? Number(loudness[1]) : NaN;
+  const truePeakValue = truePeak ? Number(truePeak[1]) : NaN;
+  const targetsInRange = Number.isFinite(loudnessValue) && loudnessValue >= -36 && loudnessValue <= -5
+    && Number.isFinite(truePeakValue) && truePeakValue >= -12 && truePeakValue <= 0;
+  if (!loudness || !truePeak || !truePeakIsCeiling || !targetsInRange || !strictAudioClause || !preservesEveryVisualTerm) return null;
+  return {
+    mode: "audio-only",
+    loudnessLufs: loudnessValue,
+    truePeakDbtp: truePeakValue,
+    feedback: text,
+  };
+}
+
+export function hasAudioOnlyRevisionIntent(feedback) {
+  const text = String(feedback || "").normalize("NFKC").replace(/\s+/g, " ").trim();
+  if (!text || !/(?:人声|音频|响度|音量|LUFS|dBTP|真峰值)/i.test(text)) return false;
+  if (/^(?:只|仅)(?:把|将)?(?:画面|字幕|动效|时间线|素材)/.test(text)) return false;
+  const visualMutation = /(?:修改|调整|更换|替换|增加|添加|删除|去掉|移动|提前|延后|重做|重剪|裁剪|缩放|放大|缩小|加粗|变大|改色|调亮|调暗|加快|减慢|改字)[^。；;\n]{0,18}(?:画面|字幕|动效|时间线|素材)|(?:画面|字幕|动效|时间线|素材)[^。；;\n]{0,18}(?:修改|调整|更换|替换|增加|添加|删除|去掉|移动|提前|延后|重做|重剪|裁剪|缩放|放大|缩小|加粗|变大|改色|调亮|调暗|加快|减慢|改字)/.test(text);
+  if (visualMutation) return false;
+  return /(?:只|仅)(?:把|将)?(?:整条|全片|整个|全部)?(?:人声|音频|响度|音量)/.test(text)
+    || /(?:其余|其他|画面|字幕|动效|时间线|素材)[^。；;\n]{0,48}(?:保持不变|不变|不改|别动)/.test(text);
+}
+
+async function ffmpegVideoHash(file, mode) {
+  const args = mode === "decoded-frames"
+    ? ["-v", "error", "-i", file, "-map", "0:v:0", "-an", "-c:v", "rawvideo", "-pix_fmt", "yuv420p", "-f", "hash", "-hash", "sha256", "-"]
+    : ["-v", "error", "-i", file, "-map", "0:v:0", "-c", "copy", "-f", "streamhash", "-hash", "sha256", "-"];
+  const result = await run("ffmpeg", args, { timeoutMs: 30 * 60 * 1000 });
+  const match = `${result.stdout || ""}\n${result.stderr || ""}`.match(/SHA256=([a-f0-9]{64})/i);
+  if (!match) throw new Error(`无法计算视频${mode === "decoded-frames" ? "逐帧" : "码流"}哈希`);
+  return match[1].toLowerCase();
+}
+
+async function videoPacketTimingSha256(file) {
+  const result = await run("ffprobe", [
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "packet=pts_time,dts_time,duration_time,flags",
+    "-of", "csv=p=0",
+    file,
+  ], { timeoutMs: 30 * 60 * 1000 });
+  return crypto.createHash("sha256").update(String(result.stdout || "").replace(/\r\n/g, "\n")).digest("hex");
+}
+
+function timelineRevisionEvidence(timeline = {}) {
+  const value = structuredClone(timeline || {});
+  delete value.version;
+  delete value.generatedAt;
+  if (value.source) delete value.source.path;
+  return value;
+}
+
+async function cleanupAudioOnlyRevisionArtifacts(jobDir, version) {
+  const names = [
+    `final-v${version}.mp4`,
+    `thumbnail-v${version}.jpg`,
+    `timeline-v${version}.json`,
+    `timeline-v${version}.edl`,
+    `media-manifest-v${version}.json`,
+    `qa-report-v${version}.json`,
+    `review-preview-v${version}.mp4`,
+    `review-bundle-v${version}.json`,
+    `audio-only-revision-v${version}.json`,
+  ];
+  let entries = [];
+  try { entries = await fsp.readdir(jobDir); } catch {}
+  names.push(...entries.filter(name => name.startsWith(`review-segment-v${version}-`)));
+  await Promise.all(names.map(name => fsp.rm(confined(jobDir, name), { force: true })));
+  await fsp.rm(confined(jobDir, path.join("variants", `v${version}`)), { recursive: true, force: true });
+}
+
+async function runAudioOnlyFullRevision(job, stageVersion, feedbackSpec, approvedSampleAssetSnapshot, outputDuration) {
+  const jobDir = confined(jobsRoot, job.id);
+  const previousOutput = structuredClone(job.output || {});
+  const previousVersion = Number(previousOutput.version || 0);
+  if (!previousVersion || !previousOutput.path) throw new Error("当前批准成片不存在，不能执行音频专用返修");
+  const previousOutputPath = confined(jobDir, previousOutput.path);
+  const expectedPreviousOutputPath = path.join(jobDir, `final-v${previousVersion}.mp4`);
+  if (previousOutputPath.toLowerCase() !== expectedPreviousOutputPath.toLowerCase() || previousOutput.url !== `/video-jobs/${job.id}/final-v${previousVersion}.mp4`) {
+    throw new Error("当前批准成片路径或 URL 与任务版本不一致，拒绝音频专用返修");
+  }
+  if (!fs.existsSync(previousOutputPath)) throw new Error("当前批准成片不存在，不能执行音频专用返修");
+  if (previousOutput.qaPass !== true || previousOutput.finalReview?.status !== "approved") throw new Error("音频专用返修只能从已通过 QA 且已批准的当前成片创建新版本");
+  const previousMediaSha256 = await sha256File(previousOutputPath);
+  const approvedMediaSha256 = String(previousOutput.finalReview?.mediaSha256 || previousOutput.mediaSha256 || "").toLowerCase();
+  if (!approvedMediaSha256 || previousMediaSha256.toLowerCase() !== approvedMediaSha256) throw new Error("当前批准成片哈希与最终审核记录不一致，拒绝音频专用返修");
+  const approvedReviewPath = path.join(jobDir, `final-review-v${previousVersion}.json`);
+  const previousManifestPath = path.join(jobDir, `media-manifest-v${previousVersion}.json`);
+  const previousBundlePath = path.join(jobDir, `review-bundle-v${previousVersion}.json`);
+  const previousPreviewPath = path.join(jobDir, `review-preview-v${previousVersion}.mp4`);
+  const previousTimelinePath = path.join(jobDir, `timeline-v${previousVersion}.json`);
+  for (const file of [approvedReviewPath, previousManifestPath, previousBundlePath, previousPreviewPath, previousTimelinePath]) {
+    if (!fs.existsSync(file)) throw new Error(`当前批准版本缺少证据文件：${path.basename(file)}`);
+  }
+  const approvedReview = await readJsonFile(approvedReviewPath);
+  if (approvedReview.status !== "approved" || Number(approvedReview.version) !== previousVersion) throw new Error("当前版本的最终审核记录不是已批准状态");
+  if (!approvedReview.evidenceHash || finalReviewEvidenceHash(approvedReview) !== approvedReview.evidenceHash) throw new Error("当前版本最终审核记录的证据哈希已损坏");
+  if (!approvedReview.recordHash || finalReviewRecordHash(approvedReview) !== approvedReview.recordHash) throw new Error("当前版本最终审核记录的完整记录哈希已损坏");
+  if (String(approvedReview.mediaSha256 || "").toLowerCase() !== previousMediaSha256.toLowerCase()) throw new Error("当前版本最终审核记录绑定的媒体哈希不一致");
+  const embeddedFinalReview = previousOutput.finalReview || {};
+  const authoritativeFinalReviewUrl = `/video-jobs/${job.id}/final-review-v${previousVersion}.json`;
+  if (Number(embeddedFinalReview.version) !== previousVersion
+    || embeddedFinalReview.status !== "approved"
+    || embeddedFinalReview.url !== authoritativeFinalReviewUrl
+    || String(embeddedFinalReview.mediaSha256 || "").toLowerCase() !== previousMediaSha256.toLowerCase()
+    || embeddedFinalReview.evidenceHash !== approvedReview.evidenceHash
+    || embeddedFinalReview.recordHash !== approvedReview.recordHash) {
+    throw new Error("job.json 内嵌的最终审核摘要与权威版本化记录不一致");
+  }
+  const authoritativePreviousFinalReview = {
+    status: "approved",
+    version: previousVersion,
+    url: authoritativeFinalReviewUrl,
+    mediaSha256: previousMediaSha256,
+    approvedAt: approvedReview.approvedAt,
+    evidenceHash: approvedReview.evidenceHash,
+    recordHash: approvedReview.recordHash,
+  };
+  if (String(approvedReview.reviewBundle?.sha256 || "").toLowerCase() !== (await sha256File(previousBundlePath)).toLowerCase()) throw new Error("当前版本审核预览包哈希不一致");
+  if (String(approvedReview.reviewBundle?.previewSha256 || "").toLowerCase() !== (await sha256File(previousPreviewPath)).toLowerCase()) throw new Error("当前版本审核预览哈希不一致");
+  if (String(approvedReview.mediaManifest?.sha256 || "").toLowerCase() !== (await sha256File(previousManifestPath)).toLowerCase()) throw new Error("当前版本素材清单哈希不一致");
+  const previousManifest = await readJsonFile(previousManifestPath);
+  const previousTimeline = await readJsonFile(previousTimelinePath);
+  if (Number(previousManifest.version) !== previousVersion || Number(previousTimeline.version) !== previousVersion) throw new Error("当前批准版本的素材清单或时间线版本不一致");
+  const manifestSnapshot = previousManifest.motionSampleAssetSnapshot;
+  const expectedSnapshotSha256 = job.workflow?.stages?.motion_sample?.artifacts?.assetSnapshotSha256 || null;
+  if (!manifestSnapshot
+    || Number(manifestSnapshot.decisionVersion) !== Number(approvedSampleAssetSnapshot.decisionVersion)
+    || manifestSnapshot.snapshotHash !== approvedSampleAssetSnapshot.snapshotHash
+    || manifestSnapshot.artifactSha256 !== expectedSnapshotSha256) {
+    throw new Error("当前批准版本的素材清单与动态样片冻结快照不一致");
+  }
+  const approvedRenderedAssetIds = [...(approvedReview.renderedAssetIds || [])].sort();
+  const manifestRenderedAssetIds = [...(previousManifest.renderedAssetIds || [])].sort();
+  if (JSON.stringify(approvedRenderedAssetIds) !== JSON.stringify(manifestRenderedAssetIds)) throw new Error("当前批准记录与素材清单的已渲染素材不一致");
+  const configuredTargets = hyperframesMasterAudioTargets(job.workflow?.config?.rendering?.final || {});
+  if (Math.abs(feedbackSpec.loudnessLufs - configuredTargets.loudnessLufs) > 0.05 || Math.abs(feedbackSpec.truePeakDbtp - configuredTargets.truePeakDbtp) > 0.05) {
+    throw new Error(`音频专用返修当前只支持工作流目标 ${configuredTargets.loudnessLufs} LUFS / ${configuredTargets.truePeakDbtp} dBTP`);
+  }
+  const previousMetadata = await probe(previousOutputPath);
+  if (!previousMetadata.hasAudio) throw new Error("当前成片没有音轨，不能执行响度返修");
+  const videoVersion = Math.max(0, ...(job.versions || []).map(item => Number(item.version) || 0), Number(job.currentVersion || 0)) + 1;
+  const outputPath = path.join(jobDir, `final-v${videoVersion}.mp4`);
+  const sourceVideoStreamSha256 = await ffmpegVideoHash(previousOutputPath, "stream");
+  const sourceDecodedFramesSha256 = await ffmpegVideoHash(previousOutputPath, "decoded-frames");
+  const sourceVideoPacketTimingSha256 = await videoPacketTimingSha256(previousOutputPath);
+  const metadata = await normalizeHyperframesMaster(
+    previousOutputPath,
+    outputPath,
+    previousMetadata.width,
+    previousMetadata.height,
+    previousMetadata.fps,
+    { loudnessTarget: feedbackSpec.loudnessLufs, truePeakTarget: feedbackSpec.truePeakDbtp },
+  );
+  const outputVideoStreamSha256 = await ffmpegVideoHash(outputPath, "stream");
+  const outputDecodedFramesSha256 = await ffmpegVideoHash(outputPath, "decoded-frames");
+  const outputVideoPacketTimingSha256 = await videoPacketTimingSha256(outputPath);
+  if (sourceVideoStreamSha256 !== outputVideoStreamSha256 || sourceDecodedFramesSha256 !== outputDecodedFramesSha256 || sourceVideoPacketTimingSha256 !== outputVideoPacketTimingSha256) {
+    await fsp.rm(outputPath, { force: true });
+    throw new Error("音频专用返修改变了视频码流、逐帧画面或视频时间戳，已拒绝生成新版本");
+  }
+  const thumbnail = path.join(jobDir, `thumbnail-v${videoVersion}.jpg`);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(1.5, metadata.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnail]);
+  const timeline = structuredClone(previousTimeline);
+  timeline.version = videoVersion;
+  timeline.source = { ...(timeline.source || {}), path: confined(jobDir, job.sourcePath) };
+  timeline.generatedAt = new Date().toISOString();
+  const sourceTimelineEvidenceHash = contentHash(timelineRevisionEvidence(previousTimeline));
+  const outputTimelineEvidenceHash = contentHash(timelineRevisionEvidence(timeline));
+  if (sourceTimelineEvidenceHash !== outputTimelineEvidenceHash) throw new Error("音频专用返修的时间线与已批准版本不一致");
+  await writeTimelineArtifacts(jobDir, timeline, videoVersion);
+  const manifest = structuredClone(previousManifest);
+  manifest.version = videoVersion;
+  const currentAssets = new Map((job.assets || []).map(asset => [asset.id, asset]));
+  for (const asset of manifest.assets || []) {
+    const current = currentAssets.get(asset.id);
+    if (!current) throw new Error(`当前任务缺少已批准版本中的素材：${asset.id}`);
+    asset.path = confined(jobDir, current.path);
+    asset.url = current.url || asset.url;
+    asset.previewUrl = current.previewUrl || asset.previewUrl;
+    asset.fileName = current.fileName || asset.fileName;
+  }
+  manifest.motionSampleAssetSnapshot = structuredClone(previousManifest.motionSampleAssetSnapshot);
+  manifest.revision = { mode: "audio-only", sourceVersion: previousVersion, feedback: feedbackSpec.feedback };
+  manifest.renderCompletedAt = new Date().toISOString();
+  await writeJson(path.join(jobDir, `media-manifest-v${videoVersion}.json`), manifest);
+  const coverPackaging = structuredClone(previousOutput.cover || { requested: false, available: false, engine: "none", fallbackReason: null });
+  const variants = await renderVariants(job, videoVersion, outputPath);
+  const packaging = {
+    ...(previousOutput.packaging || {}),
+    revisionMode: "audio-only",
+    revisionEngine: "ffmpeg-loudnorm",
+    sourceVersion: previousVersion,
+  };
+  const captionPackaging = structuredClone(previousOutput.captionPackaging || { requested: "none", engine: "none", integrated: true, safeArea: true });
+  const colorManagement = structuredClone(previousOutput.colorManagement || videoColorPipeline(job.source));
+  const qaReport = await runQa(
+    job,
+    videoVersion,
+    outputPath,
+    Number(timeline.outputDuration || outputDuration),
+    timeline,
+    variants,
+    packaging,
+    captionPackaging,
+    coverPackaging,
+    manifest,
+    colorManagement,
+    { loudnessTarget: feedbackSpec.loudnessLufs, truePeakTarget: feedbackSpec.truePeakDbtp },
+  );
+  qaReport.checks.videoStreamIdentical = sourceVideoStreamSha256 === outputVideoStreamSha256;
+  qaReport.checks.decodedFramesIdentical = sourceDecodedFramesSha256 === outputDecodedFramesSha256;
+  qaReport.checks.videoPacketTimingIdentical = sourceVideoPacketTimingSha256 === outputVideoPacketTimingSha256;
+  qaReport.metrics.sourceVideoStreamSha256 = sourceVideoStreamSha256;
+  qaReport.metrics.outputVideoStreamSha256 = outputVideoStreamSha256;
+  qaReport.metrics.sourceDecodedFramesSha256 = sourceDecodedFramesSha256;
+  qaReport.metrics.outputDecodedFramesSha256 = outputDecodedFramesSha256;
+  qaReport.metrics.sourceVideoPacketTimingSha256 = sourceVideoPacketTimingSha256;
+  qaReport.metrics.outputVideoPacketTimingSha256 = outputVideoPacketTimingSha256;
+  qaReport.pass = qaReport.pass && qaReport.checks.videoStreamIdentical && qaReport.checks.decodedFramesIdentical && qaReport.checks.videoPacketTimingIdentical;
+  await writeJson(path.join(jobDir, `qa-report-v${videoVersion}.json`), qaReport);
+  if (!qaReport.pass) throw new Error("音频专用返修未通过响度、真峰值或媒体 QA，未切换当前版本");
+  const reviewBundle = await createReviewBundle(job, videoVersion, outputPath, Number(timeline.outputDuration || outputDuration));
+  const outputMediaSha256 = await sha256File(outputPath);
+  const revisionName = `audio-only-revision-v${videoVersion}.json`;
+  const revision = {
+    schemaVersion: 1,
+    mode: "audio-only",
+    sourceVersion: previousVersion,
+    outputVersion: videoVersion,
+    feedback: feedbackSpec.feedback,
+    targets: { loudnessLufs: feedbackSpec.loudnessLufs, truePeakDbtp: feedbackSpec.truePeakDbtp },
+    measured: { integratedLufs: qaReport.metrics.integratedLufs, truePeakDbfs: qaReport.metrics.truePeakDbfs },
+    sourceMediaSha256: previousMediaSha256,
+    outputMediaSha256,
+    sourceVideoStreamSha256,
+    outputVideoStreamSha256,
+    sourceDecodedFramesSha256,
+    outputDecodedFramesSha256,
+    sourceVideoPacketTimingSha256,
+    outputVideoPacketTimingSha256,
+    sourceTimelineSha256: await sha256File(previousTimelinePath),
+    outputTimelineSha256: await sha256File(path.join(jobDir, `timeline-v${videoVersion}.json`)),
+    sourceTimelineEvidenceHash,
+    outputTimelineEvidenceHash,
+    visualTimelineUnchanged: sourceTimelineEvidenceHash === outputTimelineEvidenceHash,
+    subtitlesUnchanged: true,
+    motionUnchanged: true,
+    assetsUnchanged: true,
+    createdAt: new Date().toISOString(),
+  };
+  await writeJson(path.join(jobDir, revisionName), revision);
+  const artifactUrl = name => `/video-jobs/${job.id}/${name}`;
+  const previousArtifacts = previousOutput.artifacts || {};
+  const output = {
+    version: videoVersion,
+    workflowStageVersion: stageVersion,
+    workflowDependencies: structuredClone(previousOutput.workflowDependencies || {}),
+    path: outputPath,
+    url: artifactUrl(`final-v${videoVersion}.mp4`),
+    thumbnailUrl: artifactUrl(`thumbnail-v${videoVersion}.jpg`),
+    metadata,
+    qa: qaReport.checks,
+    qaPass: qaReport.pass,
+    provenance: previousOutput.provenance,
+    planEngine: previousOutput.planEngine,
+    packaging,
+    captionPackaging,
+    cover: coverPackaging,
+    colorManagement,
+    variants,
+    reviewBundle,
+    media: { policy: manifest.policy, approvedAssets: manifest.assets.filter(asset => asset.approved).length },
+    artifacts: {
+      editPlan: previousArtifacts.editPlan || artifactUrl(`edit-plan-v${job.currentPlan.version}.json`),
+      timeline: artifactUrl(`timeline-v${videoVersion}.json`),
+      edl: artifactUrl(`timeline-v${videoVersion}.edl`),
+      qa: artifactUrl(`qa-report-v${videoVersion}.json`),
+      mediaManifest: artifactUrl(`media-manifest-v${videoVersion}.json`),
+      reviewBundle: artifactUrl(`review-bundle-v${videoVersion}.json`),
+      reviewPreview: reviewBundle.preview.url,
+      styleReport: previousArtifacts.styleReport,
+      contentBreakdown: previousArtifacts.contentBreakdown,
+      keyframeDirection: previousArtifacts.keyframeDirection,
+      motionSample: previousArtifacts.motionSample,
+      fullDirection: previousArtifacts.fullDirection,
+      hyperframesProject: previousArtifacts.hyperframesProject,
+      hyperframesManifest: previousArtifacts.hyperframesManifest,
+      audioOnlyRevision: artifactUrl(revisionName),
+    },
+    revision: { mode: "audio-only", sourceVersion: previousVersion, feedback: feedbackSpec.feedback },
+    createdAt: new Date().toISOString(),
+    model: null,
+  };
+  await fsp.copyFile(outputPath, path.join(jobDir, "final.mp4"));
+  await writePendingFinalReviewAlias(job, videoVersion, authoritativePreviousFinalReview);
+  job.currentVersion = videoVersion;
+  job.versions = [...(job.versions || []).filter(item => Number(item.version) !== videoVersion), output];
+  job.output = output;
+  return {
+    output,
+    direction: null,
+    directionUrl: previousArtifacts.fullDirection || null,
+    projectUrl: previousArtifacts.hyperframesProject || null,
+    manifestUrl: previousArtifacts.hyperframesManifest || null,
+    videoVersion,
+    revisionMode: "audio-only",
+    skipAutomaticOrdinaryViewerAudit: true,
+  };
+}
+
 async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "") {
   const jobDir = confined(jobsRoot, job.id);
   const outputDuration = job.currentPlan.keepSegments.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0);
   const approvedSampleAssetSnapshot = await assertMotionSampleAssetSnapshotCurrent(job);
   const review = assetReviewSummary(job, outputDuration);
   if (!review.reviewComplete || !review.renderReady) throw new Error("素材审核状态在样片批准后发生变化，请先处理所有素材再生成完整视频");
+  const audioOnlyRevision = parseAudioOnlyRevisionFeedback(feedback);
+  if (audioOnlyRevision) return runAudioOnlyFullRevision(job, stageVersion, audioOnlyRevision, approvedSampleAssetSnapshot, outputDuration);
+  if (hasAudioOnlyRevisionIntent(feedback)) throw new Error("检测到只改音频的意图，但反馈未满足安全旁路格式；请同时写明 LUFS、真峰值上限，以及画面、字幕、动效、时间线和素材全部保持不变");
   let modelResult = null;
   try {
     modelResult = await runAi({
@@ -3338,6 +3665,9 @@ export async function auditRenderedJobAfterFinalRender(job, trigger, dependencie
 }
 
 async function executeVisualStage(job, stageId, feedback = "") {
+  const audioOnlyRollback = stageId === "full_render" && hasAudioOnlyRevisionIntent(feedback)
+    ? structuredClone(job)
+    : null;
   const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
   const stage = workflow.stages[stageId];
   if (!stage || !["style_research", "content_breakdown", "keyframes", "motion_sample", "full_render"].includes(stageId)) throw new Error(`不可执行的视觉阶段：${stageId}`);
@@ -3363,6 +3693,7 @@ async function executeVisualStage(job, stageId, feedback = "") {
   delete job.error;
   delete job.errorDetail;
   delete job.errorStage;
+  delete job.revisionError;
   await saveVisualWorkflowConfig(job);
   await saveJob(job);
   try {
@@ -3401,11 +3732,44 @@ async function executeVisualStage(job, stageId, feedback = "") {
     job.progress = visualStageProgress(stageId, "complete");
     workflow.updatedAt = new Date().toISOString();
     await saveJob(job);
-    if (stageId === "full_render") {
+    if (stageId === "full_render" && artifacts?.skipAutomaticOrdinaryViewerAudit !== true) {
       await auditRenderedJobAfterFinalRender(job, "visual_director_v4_full_render");
     }
     return artifacts;
   } catch (error) {
+    if (audioOnlyRollback) {
+      for (const key of Object.keys(job)) delete job[key];
+      Object.assign(job, audioOnlyRollback);
+      const failedReview = [...(job.reviews || [])].reverse().find(item => item.feedback === feedback && Number(item.version) === Number(job.output?.version));
+      if (failedReview) {
+        failedReview.failed = true;
+        failedReview.error = error.message;
+      }
+      job.revisionError = error.message;
+      job.errorDetail = String(error.stderr || error.stdout || error.message || "").slice(-8000);
+      const rollbackDir = confined(jobsRoot, job.id);
+      const rollbackFailures = [];
+      const rollbackVersion = Math.max(0, ...(job.versions || []).map(item => Number(item.version) || 0), Number(job.currentVersion || 0)) + 1;
+      try { await cleanupAudioOnlyRevisionArtifacts(rollbackDir, rollbackVersion); }
+      catch (rollbackError) { rollbackFailures.push(`v${rollbackVersion} 临时产物：${rollbackError.message}`); }
+      try {
+        const rollbackOutputPath = assertCurrentOutputPath(job, Number(job.output?.version));
+        if (fs.existsSync(rollbackOutputPath)) await fsp.copyFile(rollbackOutputPath, path.join(rollbackDir, "final.mp4"));
+      } catch (rollbackError) { rollbackFailures.push(`final.mp4：${rollbackError.message}`); }
+      try {
+        const approvedVersion = Number(job.output?.finalReview?.version || job.output?.version || 0);
+        const approvedReview = path.join(rollbackDir, `final-review-v${approvedVersion}.json`);
+        if (approvedVersion && fs.existsSync(approvedReview)) await fsp.copyFile(approvedReview, path.join(rollbackDir, "final-review.json"));
+      } catch (rollbackError) { rollbackFailures.push(`final-review.json：${rollbackError.message}`); }
+      if (rollbackFailures.length) {
+        job.status = "error";
+        job.error = `音频专用返修失败，且别名回滚失败：${rollbackFailures.join("；")}`;
+      } else {
+        error.audioOnlyRollbackComplete = true;
+      }
+      await saveJob(job);
+      throw error;
+    }
     stage.status = "error";
     stage.updatedAt = new Date().toISOString();
     runRecord.status = "error";
@@ -3434,6 +3798,7 @@ async function runVisualWorkflowChain(job, startStage = "style_research", feedba
     if (startStage === "motion_sample") await executeVisualStage(job, "motion_sample", feedback);
     if (startStage === "full_render") await executeVisualStage(job, "full_render", feedback);
   } catch (error) {
+    if (error.audioOnlyRollbackComplete === true) return;
     if (job.status !== "error") {
       job.status = "error";
       job.error = error.message;
@@ -3518,6 +3883,17 @@ function assertOutputReviewVersion(job, expectedVersion) {
   if (!Number.isInteger(requestedVersion) || requestedVersion <= 0) throw Object.assign(new Error("缺少有效的成片审核版本，请刷新任务后重试"), { statusCode: 409 });
   if (requestedVersion !== currentVersion) throw Object.assign(new Error(`页面为 v${requestedVersion}，当前可审核成片为 v${currentVersion}，请刷新后重试`), { statusCode: 409 });
   return currentVersion;
+}
+
+function assertCurrentOutputPath(job, outputVersion = Number(job.output?.version)) {
+  const jobDir = confined(jobsRoot, job.id);
+  const outputPath = confined(jobDir, job.output?.path || "");
+  const expectedPath = path.join(jobDir, `final-v${Number(outputVersion)}.mp4`);
+  const expectedUrl = `/video-jobs/${job.id}/final-v${Number(outputVersion)}.mp4`;
+  if (outputPath.toLowerCase() !== expectedPath.toLowerCase() || job.output?.url !== expectedUrl) {
+    throw Object.assign(new Error("当前成片路径或 URL 与任务版本不一致，请刷新任务后重试"), { statusCode: 409 });
+  }
+  return outputPath;
 }
 
 function fullRenderStageVersionForOutput(job, outputVersion) {
@@ -4432,7 +4808,8 @@ const server = http.createServer(async (req, res) => {
       return await withJobMutation(jobId, async () => {
         const job = await readJob(jobId);
         const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
-        const mediaSha256 = await sha256File(job.output.path);
+        const currentOutputPath = assertCurrentOutputPath(job, outputVersion);
+        const mediaSha256 = await sha256File(currentOutputPath);
         const ordinaryViewerAudit = job.output.ordinaryViewerAudit || null;
         if (ordinaryViewerAudit?.mediaSha256 && String(ordinaryViewerAudit.mediaSha256).toLowerCase() !== mediaSha256.toLowerCase()) return json(res, 409, { error: "当前成片哈希与普通观众审查记录不一致，不能返修" });
         const reviewEvidence = {
@@ -4441,10 +4818,18 @@ const server = http.createServer(async (req, res) => {
           transcriptSha256: ordinaryViewerAudit?.transcriptSha256 || null,
         };
         if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          const audioOnlyIntent = hasAudioOnlyRevisionIntent(feedback);
+          const audioOnlyRevision = parseAudioOnlyRevisionFeedback(feedback);
+          if (audioOnlyIntent && !audioOnlyRevision) return json(res, 400, { error: "检测到只改音频的意图，但反馈未满足安全旁路格式；请同时写明 LUFS、真峰值上限，以及画面、字幕、动效、时间线和素材全部保持不变" });
+          if (audioOnlyRevision) {
+            const configuredTargets = hyperframesMasterAudioTargets(job.workflow?.config?.rendering?.final || {});
+            if (Math.abs(audioOnlyRevision.loudnessLufs - configuredTargets.loudnessLufs) > 0.05 || Math.abs(audioOnlyRevision.truePeakDbtp - configuredTargets.truePeakDbtp) > 0.05) {
+              return json(res, 409, { error: `音频专用返修当前只支持工作流目标 ${configuredTargets.loudnessLufs} LUFS / ${configuredTargets.truePeakDbtp} dBTP` });
+            }
+          }
           if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "动态样片尚未批准，不能返修完整视频" });
           await assertMotionSampleAssetSnapshotCurrent(job);
           job.reviews = [...(job.reviews || []), { version: outputVersion, feedback, ...reviewEvidence, createdAt: new Date().toISOString() }];
-          delete job.approvedAt;
           runVisualWorkflowChain(job, "full_render", feedback);
           return json(res, 202, { job, reusedTranscript: true, reusedDesign: true });
         }
@@ -4680,7 +5065,8 @@ const server = http.createServer(async (req, res) => {
           workflowStageVersion = fullRenderStageVersionForOutput(job, outputVersion);
           if (!workflowStageVersion) return json(res, 409, { error: "当前成片与完整渲染记录不匹配，不能最终审核" });
         }
-        const mediaSha256 = await sha256File(job.output.path);
+        const currentOutputPath = assertCurrentOutputPath(job, outputVersion);
+        const mediaSha256 = await sha256File(currentOutputPath);
         const ordinaryViewerAudit = job.output.ordinaryViewerAudit || null;
         if (ordinaryViewerAudit?.outputVersion && Number(ordinaryViewerAudit.outputVersion) !== outputVersion) return json(res, 409, { error: "普通观众审查版本与当前成片不一致，不能最终审核" });
         if (ordinaryViewerAudit?.mediaSha256 && String(ordinaryViewerAudit.mediaSha256).toLowerCase() !== mediaSha256.toLowerCase()) return json(res, 409, { error: "当前成片哈希与普通观众审查记录不一致，不能最终审核" });
