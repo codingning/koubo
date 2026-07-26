@@ -1110,7 +1110,7 @@ export async function buildHyperframesDirectorProject(options) {
     const entrance = resolved
       ? choreographyEntranceVars("visual", resolved.beat.actionPreset, resolved.beat.easing, scale)
       : { opacity: 0, scale: 0.94, x: 44 * scale, duration: 0.52, ease: "power3.out" };
-    animationLines.push(`${gsapFromLine(`#evidence-${index + 1}`, entrance, start)}tl.to("#speakerStage",{scale:.52,duration:.52,ease:"power3.inOut"},${start.toFixed(3)});tl.to("#evidence-${index + 1}",{opacity:0,duration:.25},${Math.max(start, end - 0.25).toFixed(3)});tl.to("#speakerStage",{scale:1,duration:.32,ease:"power3.out"},${Math.max(start, end - 0.3).toFixed(3)});`);
+    animationLines.push(`${gsapFromLine(`#evidence-${index + 1}`, entrance, start)}tl.to("#speakerStage",{scale:.52,duration:.52,ease:"power3.inOut"},${start.toFixed(3)});tl.to("#evidence-${index + 1}",{opacity:0,duration:.25},${Math.max(start, end - 0.25).toFixed(3)});tl.set("#evidence-${index + 1}",{opacity:0},${end.toFixed(3)});tl.to("#speakerStage",{scale:1,duration:.32,ease:"power3.out"},${Math.max(start, end - 0.3).toFixed(3)});`);
   });
   const speakerBeatRaw = mode === "sample" ? sampleChoreography.find((item) => item?.target === "speaker") : null;
   const speakerBeat = speakerBeatRaw ? {

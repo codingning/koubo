@@ -965,4 +965,5 @@ test("evidence choreography records its actual placement-constrained start", asy
   assert.equal(applied?.actionPreset, "push-in");
   assert.equal(applied?.easing, "power2.out");
   assert.match(documentHtml, /tl\.from\("#evidence-1",\{[^}]*"ease":"power2\.out"[^}]*\}, 0\.400\);/);
+  assert.match(documentHtml, /tl\.set\("#evidence-1",\{opacity:0\},1\.200\);/, "evidence exit must end with a seek-safe hard kill at the clip boundary");
 });
