@@ -160,6 +160,10 @@ function artifactId(subjectId, key) {
   return `${subjectId}.${suffix}`;
 }
 
+function sha256Text(value) {
+  return crypto.createHash("sha256").update(String(value), "utf8").digest("hex");
+}
+
 function recordContentHash(record) {
   const core = structuredClone(record);
   delete core.contentHash;
@@ -376,6 +380,95 @@ export function createMultiAgentApi({
       throw httpError(409, "content strategy confirmation is bound to a different locked direction");
     }
     return directionFromRecord({ approvedDirection: confirmation.approvedDirection });
+  }
+
+  async function confirmedContentStrategy(content, confirmationArtifactId) {
+    const requestedConfirmationId = String(confirmationArtifactId || "").trim();
+    if (!requestedConfirmationId) {
+      throw httpError(400, "directionConfirmationArtifactId is required");
+    }
+    const generation = content?.generation;
+    const expectedConfirmationId = String(generation?.strategyConfirmationArtifactId || "").trim();
+    const expectedAnalysisId = String(generation?.strategyAnalysisArtifactId || "").trim();
+    if (!expectedConfirmationId || !expectedAnalysisId) {
+      throw httpError(409, "content generation is missing its strategy analysis or confirmation binding");
+    }
+    if (requestedConfirmationId !== expectedConfirmationId) {
+      throw httpError(409, "content strategy confirmation does not match content generation");
+    }
+
+    const artifactReader = requireDependency(readArtifact, "readArtifact");
+    const confirmation = await artifactReader("content-strategy-confirmations", requestedConfirmationId);
+    if (!confirmation) throw httpError(404, "content strategy confirmation artifact not found");
+    if (confirmation.schemaVersion !== 1 || confirmation.kind !== "content_strategy_human_confirmation") {
+      throw httpError(409, "content strategy confirmation artifact has an invalid contract");
+    }
+    const confirmationContentHash = assertRecordContentHash(
+      confirmation,
+      "content strategy confirmation"
+    );
+    if (confirmation.decision !== "approved" || confirmation.scriptHandoffAllowed !== true) {
+      throw httpError(409, "content strategy confirmation is not approved");
+    }
+    if (confirmation.actor?.type !== "human" || !String(confirmation.actor?.id || "").trim()) {
+      throw httpError(409, "content strategy confirmation requires a human actor");
+    }
+    const lockedDirection = lockedDirectionFromRecord(content);
+    if (!lockedDirection || String(confirmation.lockedDirection || "").trim() !== lockedDirection) {
+      throw httpError(409, "content strategy confirmation is bound to a different locked direction");
+    }
+
+    const strategyAnalysisArtifactId = String(confirmation.analysisArtifactId || "").trim();
+    if (!strategyAnalysisArtifactId || strategyAnalysisArtifactId !== expectedAnalysisId) {
+      throw httpError(409, "content strategy analysis does not match content generation");
+    }
+    const analysisArtifact = await artifactReader(
+      "content-strategy-analyses",
+      strategyAnalysisArtifactId
+    );
+    if (!analysisArtifact) throw httpError(404, "content strategy analysis artifact not found");
+    if (analysisArtifact.schemaVersion !== 1 || analysisArtifact.kind !== "content_strategy_analysis") {
+      throw httpError(409, "content strategy analysis artifact has an invalid contract");
+    }
+    const analysisContentHash = assertRecordContentHash(
+      analysisArtifact,
+      "content strategy analysis"
+    );
+    if (String(confirmation.analysisContentHash || "").trim() !== analysisContentHash) {
+      throw httpError(409, "content strategy confirmation is bound to a different analysis content hash");
+    }
+    if (!analysisArtifact.input || !analysisArtifact.analysis) {
+      throw httpError(409, "content strategy analysis artifact is incomplete");
+    }
+    if (analysisArtifact.input.lockedDirection !== lockedDirection
+      || analysisArtifact.analysis.lockedDirection !== lockedDirection) {
+      throw httpError(409, "content strategy analysis is bound to a different locked direction");
+    }
+    const approvedDirection = {
+      audience: analysisArtifact.analysis.audience,
+      viewerBenefit: analysisArtifact.analysis.viewerBenefit,
+      coreQuestion: analysisArtifact.analysis.testableQuestion,
+      constraints: analysisArtifact.input.constraints || [],
+    };
+    if (canonicalJson(confirmation.approvedDirection) !== canonicalJson(approvedDirection)) {
+      throw httpError(409, "content strategy confirmation approvedDirection does not match its analysis");
+    }
+    const confirmedInput = structuredClone(analysisArtifact.input);
+    confirmedInput.userConfirmation = {
+      analysisApproved: true,
+      confirmedDirection: lockedDirection,
+    };
+    if (!canEnterScriptStage(confirmedInput, analysisArtifact.analysis)) {
+      throw httpError(409, "content strategy confirmation is not ready for Script Agent handoff");
+    }
+
+    return {
+      approvedDirection,
+      strategyAnalysisArtifactId,
+      strategyConfirmationArtifactId: requestedConfirmationId,
+      analysisContentHash,
+      confirmationContentHash,
+    };
   }
 
   async function handleRoute(req, url) {
@@ -642,25 +735,46 @@ export function createMultiAgentApi({
         const loaded = await reader(contentId);
         if (!loaded) throw httpError(404, "content not found");
         const content = structuredClone(loaded);
-        const approvedDirection = await confirmedDirection(
-          body.directionConfirmationArtifactId,
+        const variant = String(body.variant || "full").trim();
+        let script;
+        try {
+          script = contentScript(content, variant);
+        } catch (error) {
+          throw validationError(error);
+        }
+        const expectedScriptSha256 = String(body.expectedScriptSha256 || "").trim().toLowerCase();
+        if (!expectedScriptSha256) throw httpError(400, "expectedScriptSha256 is required");
+        if (!/^[a-f0-9]{64}$/u.test(expectedScriptSha256)) {
+          throw httpError(400, "expectedScriptSha256 must be a SHA-256 hex digest");
+        }
+        const scriptSha256 = sha256Text(script);
+        if (expectedScriptSha256 !== scriptSha256) {
+          throw httpError(409, "expected script SHA-256 does not match authoritative content");
+        }
+        const strategy = await confirmedContentStrategy(
           content,
-          { expectedLockedDirection: lockedDirectionFromRecord(content) }
+          body.directionConfirmationArtifactId
         );
         const input = {
-          approvedDirection,
+          approvedDirection: strategy.approvedDirection,
           facts: contentFacts(content, contentId),
-          script: contentScript(content, String(body.variant || "full")),
+          script,
         };
         const review = await runOrdinaryReview(input, { stage: "script" });
         const id = artifactId(`content-${contentId}-ordinary-review`, key);
-        const record = {
+        const record = withRecordContentHash({
           schemaVersion: 1,
           kind: "ordinary_viewer_review",
           stage: "script",
           inspectionMode: "script_text",
+          variant,
+          scriptSha256,
+          strategyAnalysisArtifactId: strategy.strategyAnalysisArtifactId,
+          strategyConfirmationArtifactId: strategy.strategyConfirmationArtifactId,
+          analysisContentHash: strategy.analysisContentHash,
+          confirmationContentHash: strategy.confirmationContentHash,
           subject: { type: "content", id: contentId, source: "authoritative_readContent" },
-          approvedDirection,
+          approvedDirection: strategy.approvedDirection,
           evidenceSourceIds: input.facts.map(item => item.sourceId),
           review,
           reviewedAt: clock(),
@@ -671,9 +785,21 @@ export function createMultiAgentApi({
             publishes: false,
             promotesMemory: false,
           },
-        };
+        });
         const artifact = await writeIndependentArtifact("ordinary-viewer-reviews", id, record);
-        return { status: 201, body: { reviewArtifactId: id, review, inspectionMode: record.inspectionMode, artifact } };
+        return {
+          status: 201,
+          body: {
+            reviewArtifactId: id,
+            review,
+            inspectionMode: record.inspectionMode,
+            variant,
+            scriptSha256,
+            strategyAnalysisArtifactId: strategy.strategyAnalysisArtifactId,
+            strategyConfirmationArtifactId: strategy.strategyConfirmationArtifactId,
+            artifact,
+          },
+        };
       });
     }
 

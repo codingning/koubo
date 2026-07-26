@@ -1,10 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { createMultiAgentApi } from "../../video/multi-agent/api.mjs";
+import { contentHash } from "../../video/multi-agent/contracts.mjs";
+
+function sha256Text(value) {
+  return crypto.createHash("sha256").update(String(value), "utf8").digest("hex");
+}
+
+function recordContentHash(record) {
+  const core = structuredClone(record);
+  delete core.contentHash;
+  return contentHash(core);
+}
 
 function fixtureJob(outputPath) {
   return {
@@ -293,6 +305,41 @@ async function apiFixture(t, overrides = {}) {
   };
 }
 
+async function bindContentStrategy(fixture, suffix = "fixture") {
+  const { request, content } = fixture;
+  const analyzed = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/analyze",
+    {
+      direction: content.lockedDirection,
+      audienceContext: content.audience,
+      evidence: content.evidence,
+      constraints: content.risks.map(item => item.text),
+    },
+    { idempotencyKey: `content-review-analysis-${suffix}` }
+  );
+  assert.equal(analyzed.status, 201, JSON.stringify(analyzed.data));
+  const confirmed = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/confirm",
+    {
+      analysisArtifactId: analyzed.data.analysisArtifactId,
+      decision: "approved",
+      actor: { type: "human", id: "owner" },
+    },
+    { idempotencyKey: `content-review-confirmation-${suffix}` }
+  );
+  assert.equal(confirmed.status, 201, JSON.stringify(confirmed.data));
+  content.generation = {
+    strategyAnalysisArtifactId: analyzed.data.analysisArtifactId,
+    strategyConfirmationArtifactId: confirmed.data.confirmationArtifactId,
+  };
+  return {
+    analysisArtifactId: analyzed.data.analysisArtifactId,
+    confirmationArtifactId: confirmed.data.confirmationArtifactId,
+  };
+}
+
 test("status reports opt-in capability while v4 remains the default", async t => {
   const { request } = await apiFixture(t);
   const response = await request("GET", "/api/multi-agent/status");
@@ -480,29 +527,84 @@ test("content strategy confirmation rejects non-human actors", async t => {
   assert.deepEqual(artifacts.map(item => item.kind), ["content-strategy-analyses"]);
 });
 
-test("content ordinary review reads the authoritative script and cannot mutate content", async t => {
-  const { request, content, ordinaryReviewCalls, artifacts } = await apiFixture(t);
+test("content ordinary review binds the exact authoritative short script and strategy chain", async t => {
+  const fixture = await apiFixture(t);
+  const { request, content, ordinaryReviewCalls, artifacts } = fixture;
+  const binding = await bindContentStrategy(fixture, "exact-short");
   const before = structuredClone(content);
+  const exactScript = content.shortScript.trim();
+  const scriptSha256 = sha256Text(exactScript);
+  const body = {
+    variant: "short",
+    expectedScriptSha256: scriptSha256,
+    directionConfirmationArtifactId: binding.confirmationArtifactId,
+  };
 
   const response = await request(
     "POST",
     "/api/contents/content.fixture/multi-agent/ordinary-review",
-    { variant: "full" },
-    { idempotencyKey: "content-ordinary-review-1" }
+    body,
+    { idempotencyKey: `content-ordinary-review-${scriptSha256.slice(0, 16)}` }
+  );
+  const replay = await request(
+    "POST",
+    "/api/contents/content.fixture/multi-agent/ordinary-review",
+    body,
+    { idempotencyKey: `content-ordinary-review-${scriptSha256.slice(0, 16)}` }
   );
 
   assert.equal(response.status, 201);
+  assert.deepEqual(replay, response);
   assert.equal(response.data.inspectionMode, "script_text");
+  assert.equal(response.data.variant, "short");
+  assert.equal(response.data.scriptSha256, scriptSha256);
   assert.equal(ordinaryReviewCalls.length, 1);
   assert.equal(ordinaryReviewCalls[0].options.stage, "script");
-  assert.equal(
-    ordinaryReviewCalls[0].input.script,
-    content.fullSegments.map(item => item.text).join("\n")
-  );
+  assert.equal(ordinaryReviewCalls[0].input.script, exactScript);
   assert.equal(ordinaryReviewCalls[0].input.facts[0].sourceId, "evidence.skill-audit");
-  assert.equal(artifacts[0].kind, "ordinary-viewer-reviews");
-  assert.equal(artifacts[0].value.subject.source, "authoritative_readContent");
+  const reviewArtifacts = artifacts.filter(item => item.kind === "ordinary-viewer-reviews");
+  assert.equal(reviewArtifacts.length, 1);
+  const record = reviewArtifacts[0].value;
+  assert.equal(record.subject.source, "authoritative_readContent");
+  assert.equal(record.variant, "short");
+  assert.equal(record.scriptSha256, scriptSha256);
+  assert.equal(record.strategyAnalysisArtifactId, binding.analysisArtifactId);
+  assert.equal(record.strategyConfirmationArtifactId, binding.confirmationArtifactId);
+  assert.match(record.analysisContentHash, /^[a-f0-9]{64}$/);
+  assert.match(record.confirmationContentHash, /^[a-f0-9]{64}$/);
+  assert.equal(record.contentHash, recordContentHash(record));
   assert.deepEqual(content, before);
+});
+
+test("content ordinary review requires the expected exact script hash and rejects mismatches", async t => {
+  const fixture = await apiFixture(t);
+  const { request, content, ordinaryReviewCalls, artifacts } = fixture;
+  const binding = await bindContentStrategy(fixture, "script-hash");
+  const baseBody = {
+    variant: "short",
+    directionConfirmationArtifactId: binding.confirmationArtifactId,
+  };
+
+  const missing = await request(
+    "POST",
+    "/api/contents/content.fixture/multi-agent/ordinary-review",
+    baseBody,
+    { idempotencyKey: "content-review-missing-script-hash" }
+  );
+  const mismatch = await request(
+    "POST",
+    "/api/contents/content.fixture/multi-agent/ordinary-review",
+    { ...baseBody, expectedScriptSha256: "0".repeat(64) },
+    { idempotencyKey: "content-review-wrong-script-hash" }
+  );
+
+  assert.equal(missing.status, 400);
+  assert.match(missing.data.error, /expectedScriptSha256.*required/i);
+  assert.equal(mismatch.status, 409);
+  assert.match(mismatch.data.error, /script sha-256.*authoritative/i);
+  assert.equal(ordinaryReviewCalls.length, 0);
+  assert.equal(artifacts.filter(item => item.kind === "ordinary-viewer-reviews").length, 0);
+  assert.equal(sha256Text(content.shortScript.trim()) === "0".repeat(64), false);
 });
 
 test("content ordinary review rejects a client-forged script candidate", async t => {
@@ -570,8 +672,10 @@ test("job ordinary review rejects an unrendered job", async t => {
   assert.equal(artifacts.length, 0);
 });
 
-test("ordinary review rejects a confirmation artifact bound to another locked direction", async t => {
-  const { request, ordinaryReviewCalls, artifacts } = await apiFixture(t);
+test("content ordinary review rejects a confirmation id that differs from content generation", async t => {
+  const fixture = await apiFixture(t);
+  const { request, content, ordinaryReviewCalls, artifacts } = fixture;
+  await bindContentStrategy(fixture, "content-generation-binding");
   const analyzed = await request(
     "POST",
     "/api/multi-agent/content-strategy/analyze",
@@ -595,17 +699,67 @@ test("ordinary review rejects a confirmation artifact bound to another locked di
   const response = await request(
     "POST",
     "/api/contents/content.fixture/multi-agent/ordinary-review",
-    { directionConfirmationArtifactId: confirmed.data.confirmationArtifactId },
+    {
+      variant: "short",
+      expectedScriptSha256: sha256Text(content.shortScript.trim()),
+      directionConfirmationArtifactId: confirmed.data.confirmationArtifactId,
+    },
     { idempotencyKey: "content-review-wrong-direction" }
   );
 
   assert.equal(response.status, 409);
-  assert.match(response.data.error, /different locked direction/);
+  assert.match(response.data.error, /confirmation.*content generation/i);
   assert.equal(ordinaryReviewCalls.length, 0);
-  assert.deepEqual(
-    artifacts.map(item => item.kind),
-    ["content-strategy-analyses", "content-strategy-confirmations"]
+  assert.equal(artifacts.filter(item => item.kind === "ordinary-viewer-reviews").length, 0);
+});
+
+test("content ordinary review rejects an analysis id that differs from the confirmed chain", async t => {
+  const fixture = await apiFixture(t);
+  const { request, content, ordinaryReviewCalls, artifacts } = fixture;
+  const binding = await bindContentStrategy(fixture, "analysis-generation-binding");
+  content.generation.strategyAnalysisArtifactId = "content-strategy.unrelated-analysis";
+
+  const response = await request(
+    "POST",
+    "/api/contents/content.fixture/multi-agent/ordinary-review",
+    {
+      variant: "short",
+      expectedScriptSha256: sha256Text(content.shortScript.trim()),
+      directionConfirmationArtifactId: binding.confirmationArtifactId,
+    },
+    { idempotencyKey: "content-review-wrong-analysis-id" }
   );
+
+  assert.equal(response.status, 409);
+  assert.match(response.data.error, /analysis.*content generation/i);
+  assert.equal(ordinaryReviewCalls.length, 0);
+  assert.equal(artifacts.filter(item => item.kind === "ordinary-viewer-reviews").length, 0);
+});
+
+test("content ordinary review revalidates the confirmation to analysis hash chain", async t => {
+  const fixture = await apiFixture(t);
+  const { request, content, ordinaryReviewCalls, artifacts } = fixture;
+  const binding = await bindContentStrategy(fixture, "chain-revalidation");
+  const analysisArtifact = artifacts.find(item => (
+    item.kind === "content-strategy-analyses" && item.id === binding.analysisArtifactId
+  ));
+  analysisArtifact.value.analysis.viewerBenefit = "被篡改的观众收益";
+
+  const response = await request(
+    "POST",
+    "/api/contents/content.fixture/multi-agent/ordinary-review",
+    {
+      variant: "short",
+      expectedScriptSha256: sha256Text(content.shortScript.trim()),
+      directionConfirmationArtifactId: binding.confirmationArtifactId,
+    },
+    { idempotencyKey: "content-review-tampered-analysis" }
+  );
+
+  assert.equal(response.status, 409);
+  assert.match(response.data.error, /analysis.*content hash/i);
+  assert.equal(ordinaryReviewCalls.length, 0);
+  assert.equal(artifacts.filter(item => item.kind === "ordinary-viewer-reviews").length, 0);
 });
 
 test("job ordinary review binds an explicit confirmation to the linked content direction", async t => {
