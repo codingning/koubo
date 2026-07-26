@@ -2448,13 +2448,31 @@ function parseQaDetection(stderr) {
     }
   }
   const loudness = [...String(stderr).matchAll(/I:\s*(-?[0-9.]+)\s+LUFS/g)].at(-1);
-  return { blackFrames: black, freezeFrames: freezes, integratedLufs: loudness ? Number(loudness[1]) : null };
+  const truePeak = [...String(stderr).matchAll(/Peak:\s*(-?[0-9.]+)\s+dBFS/g)].at(-1);
+  return {
+    blackFrames: black,
+    freezeFrames: freezes,
+    integratedLufs: loudness ? Number(loudness[1]) : null,
+    truePeakDbfs: truePeak ? Number(truePeak[1]) : null,
+  };
 }
 async function runQa(job, version, outputPath, expectedDuration, timeline, variants, packaging, captionPackaging, coverPackaging, mediaManifest, colorManagement) {
   const metadata = await probe(outputPath);
   await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
-  const scan = await run("ffmpeg", ["-hide_banner", "-i", outputPath, "-vf", "blackdetect=d=0.4:pix_th=0.02,freezedetect=n=-55dB:d=2", "-af", "ebur128=peak=true", "-f", "null", "-"]);
+  const scan = await run("ffmpeg", ["-hide_banner", "-i", outputPath, "-vf", "blackdetect=d=0.4:pix_th=0.02,freezedetect=n=-55dB:d=2", ...(metadata.hasAudio ? ["-af", "ebur128=peak=true"] : []), "-f", "null", "-"]);
   const detection = parseQaDetection(scan.stderr);
+  const audioTargets = hyperframesMasterAudioTargets(job.workflow?.config?.rendering?.final || {});
+  const audioExpected = job.source?.hasAudio !== false;
+  const audioPresent = audioExpected ? metadata.hasAudio === true : true;
+  const aacAudio = metadata.hasAudio === true ? metadata.audioCodec === "aac" : !audioExpected;
+  const integratedLoudnessTarget = !audioExpected || metadata.hasAudio !== true || (
+    Number.isFinite(detection.integratedLufs)
+    && Math.abs(detection.integratedLufs - audioTargets.loudnessLufs) <= 0.6
+  );
+  const truePeakTarget = !audioExpected || metadata.hasAudio !== true || (
+    Number.isFinite(detection.truePeakDbfs)
+    && detection.truePeakDbfs <= audioTargets.truePeakDbtp + 0.1
+  );
   const minimumSegment = Math.min(...timeline.clips.map(clip => clip.duration));
   const sdrBt709 = metadata.colorPrimaries === "bt709" && metadata.colorTransfer === "bt709" && metadata.colorSpace === "bt709";
   const captionSafeArea = job.options.captions === false
@@ -2487,17 +2505,20 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
   const mediaPass = Object.values(mediaCompliance).every(Boolean);
   const report = {
     version,
-    pass: metadata.videoCodec === "h264" && metadata.audioCodec === "aac" && metadata.pixelFormat === "yuv420p" && Math.abs(metadata.duration - expectedDuration) < 1.6 && sdrBt709 && captionSafeArea && coverDimensions && mediaPass,
+    pass: metadata.videoCodec === "h264" && aacAudio && audioPresent && metadata.pixelFormat === "yuv420p" && Math.abs(metadata.duration - expectedDuration) < 1.6 && sdrBt709 && integratedLoudnessTarget && truePeakTarget && captionSafeArea && coverDimensions && mediaPass,
     checks: {
       decodes: true,
       h264: metadata.videoCodec === "h264",
-      aac: metadata.audioCodec === "aac",
+      aac: aacAudio,
+      audioPresent,
       yuv420p: metadata.pixelFormat === "yuv420p",
       sdrBt709,
       durationMatches: Math.abs(metadata.duration - expectedDuration) < 1.6,
       expectedDimensions: metadata.width > 0 && metadata.height > 0,
       noLongBlackFrames: detection.blackFrames.length === 0,
       noLongFreezeFrames: detection.freezeFrames.length === 0,
+      integratedLoudnessTarget,
+      truePeakTarget,
       captionSafeArea,
       dynamicCaptionTrack: captionPackaging.engine === "hyperframes",
       cardSafeArea: timeline.cards.every(card => card.text.length <= 24),
@@ -2513,7 +2534,7 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
       externalAttributionRendered: mediaCompliance.externalAttributionRendered,
       externalScriptDisclosure: mediaCompliance.externalScriptDisclosure
     },
-    metrics: { expectedDuration, actualDuration: metadata.duration, minimumSegmentDuration: minimumSegment, integratedLufs: detection.integratedLufs, blackFrames: detection.blackFrames, freezeFrames: detection.freezeFrames, colorMetadata: { range: metadata.colorRange, space: metadata.colorSpace, transfer: metadata.colorTransfer, primaries: metadata.colorPrimaries } },
+    metrics: { expectedDuration, actualDuration: metadata.duration, minimumSegmentDuration: minimumSegment, integratedLufs: detection.integratedLufs, truePeakDbfs: detection.truePeakDbfs, audioExpected, audioTargets, blackFrames: detection.blackFrames, freezeFrames: detection.freezeFrames, colorMetadata: { range: metadata.colorRange, space: metadata.colorSpace, transfer: metadata.colorTransfer, primaries: metadata.colorPrimaries } },
     colorManagement,
     packaging,
     captionPackaging,
@@ -3050,13 +3071,34 @@ async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
   };
 }
 
-async function normalizeHyperframesMaster(inputPath, outputPath, width, height, fps) {
+function normalizedAudioTarget(value, fallback, minimum, maximum) {
+  const match = String(value ?? "").match(/-?\d+(?:\.\d+)?/);
+  const parsed = match ? Number(match[0]) : Number(value);
+  return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
+}
+
+function hyperframesMasterAudioTargets(spec = {}) {
+  return {
+    loudnessLufs: normalizedAudioTarget(spec.loudnessTarget, -16, -36, -5),
+    truePeakDbtp: normalizedAudioTarget(spec.truePeakTarget, -1.5, -12, 0),
+  };
+}
+
+export async function normalizeHyperframesMaster(inputPath, outputPath, width, height, fps, audioSpec = {}) {
   const metadata = await probe(inputPath);
-  const alreadyCompatible = metadata.videoCodec === "h264" && metadata.audioCodec === "aac" && metadata.pixelFormat === "yuv420p" && metadata.width === width && metadata.height === height;
+  const alreadyCompatible = metadata.videoCodec === "h264" && metadata.pixelFormat === "yuv420p" && metadata.width === width && metadata.height === height && Math.abs(Number(metadata.fps || 0) - fps) < 0.01;
+  const audioTargets = hyperframesMasterAudioTargets(audioSpec);
+  const audioArgs = metadata.hasAudio ? [
+    "-map", "0:a:0",
+    "-af", `loudnorm=I=${audioTargets.loudnessLufs}:TP=${audioTargets.truePeakDbtp}:LRA=11`,
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "-ar", "48000",
+  ] : ["-an"];
   if (alreadyCompatible) {
-    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", "-movflags", "+faststart", outputPath]);
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-map", "0:v:0", "-c:v", "copy", ...audioArgs, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", "-movflags", "+faststart", outputPath]);
   } else {
-    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=0x07090F,fps=${fps},format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709`, "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", outputPath], { timeoutMs: 90 * 60 * 1000 });
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-map", "0:v:0", "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=0x07090F,fps=${fps},format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709`, "-c:v", "libx264", "-preset", "medium", "-crf", "18", ...audioArgs, "-movflags", "+faststart", outputPath], { timeoutMs: 90 * 60 * 1000 });
   }
   await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
   return probe(outputPath);
@@ -3121,7 +3163,10 @@ async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "")
   const postRenderAssetSnapshot = await assertMotionSampleAssetSnapshotCurrent(job);
   if (postRenderAssetSnapshot.snapshotHash !== approvedSampleAssetSnapshot.snapshotHash) throw new Error("完整视频渲染期间动态样片素材快照发生变化，拒绝交付成片");
   const outputPath = path.join(jobDir, `final-v${videoVersion}.mp4`);
-  const metadata = await normalizeHyperframesMaster(rawPath, outputPath, width, height, fps);
+  const metadata = await normalizeHyperframesMaster(rawPath, outputPath, width, height, fps, {
+    ...(job.workflow?.config?.rendering?.final || {}),
+    ...finalSettings,
+  });
   await fsp.copyFile(outputPath, path.join(jobDir, "final.mp4"));
   const thumbnail = path.join(jobDir, `thumbnail-v${videoVersion}.jpg`);
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(1.5, metadata.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnail]);
