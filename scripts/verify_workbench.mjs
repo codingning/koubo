@@ -238,8 +238,12 @@ const fullRenderStageSource = sourceBetween(serverSource, "async function runFul
 assert(motionSampleStageSource.includes("keyframeDirection:"), "动态样片构建没有传播已批准关键帧的 presentation/visualIntent");
 assert(motionSampleStageSource.includes("motionDirection: direction"), "动态样片构建没有把规范化 choreography 传给 HyperFrames builder");
 assert(motionSampleStageSource.includes("previewReview.reviewComplete") && motionSampleStageSource.includes("previewReview.renderReady"), "动态样片没有在交给用户前确认素材自动审核已经可进入全片");
+assert(motionSampleStageSource.includes("buildAssetDecisionSnapshot(job)") && motionSampleStageSource.includes("writeMotionSampleAssetSnapshot"), "动态样片没有冻结素材决策版本、批准素材ID、文件哈希和placement");
 assert(fullRenderStageSource.includes("keyframeDirection:"), "完整视频构建没有传播已批准关键帧的 presentation/visualIntent");
+assert(fullRenderStageSource.includes("assertMotionSampleAssetSnapshotCurrent(job)"), "完整视频启动与渲染完成前没有复验动态样片素材快照");
 assert(fullRenderStageSource.includes("workflowDependencies") && serverSource.includes("dependenciesMatch"), "完整视频批准没有绑定当前关键帧与动态样片版本");
+assert(workflowStageRouteSource.includes('if (stageId === "full_render") await assertMotionSampleAssetSnapshotCurrent(job)'), "直接启动完整视频前没有复验动态样片素材快照");
+assert(serverSource.includes('appendAssetDecisionAudit(job, [uploadedAudit]') && serverSource.includes('appendAssetDecisionAudit(job, [replacedAudit]') && serverSource.includes('appendAssetDecisionAudit(job, [decisionAudit]'), "素材上传、替换或审核变化没有统一作废现有样片审核");
 assert(serverSource.includes('pipeline === VISUAL_WORKFLOW_VERSION') && serverSource.includes('runVisualWorkflowChain(job, "style_research")'), "新任务没有默认进入视觉导演v4流程");
 assert(serverSource.includes('runVisualWorkflowChain(job, "motion_sample")') && serverSource.includes('runVisualWorkflowChain(job, "full_render")'), "关键帧或动态样片审核门没有驱动下一阶段");
 assert(serverSource.includes('masterWidth || 2560') && serverSource.includes('masterHeight || (width === 2560 ? 1440 : 1080)'), "完整视频渲染没有保留2K母版路径");

@@ -109,6 +109,175 @@ async function sha256File(file) {
   });
   return hash.digest("hex");
 }
+function normalizedAssetEvidencePlacement(value) {
+  const placement = normalizePlacement(value);
+  if (!placement) return null;
+  return {
+    start: Number(placement.start.toFixed(6)),
+    end: Number(placement.end.toFixed(6)),
+    mode: placement.mode,
+  };
+}
+function optionalAssetEvidenceNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Number(number.toFixed(6)) : null;
+}
+function assetDecisionStateHashInput(value = {}) {
+  return {
+    assetId: String(value.assetId || ""),
+    reviewStatus: String(value.reviewStatus || "pending"),
+    mediaKind: String(value.mediaKind || "unknown"),
+    sourceType: String(value.sourceType || ""),
+    fileSha256: value.fileSha256 ? String(value.fileSha256).toLowerCase() : null,
+    placement: normalizedAssetEvidencePlacement(value.placement),
+    clipStart: optionalAssetEvidenceNumber(value.clipStart) ?? 0,
+    clipEnd: optionalAssetEvidenceNumber(value.clipEnd),
+    clipDuration: optionalAssetEvidenceNumber(value.clipDuration),
+  };
+}
+function assetDecisionStateHash(value = {}) {
+  return contentHash(assetDecisionStateHashInput(value));
+}
+function assetDecisionVersion(job) {
+  const declared = Number(job?.assetDecisionVersion) || 0;
+  const audited = Math.max(0, ...(job?.assetDecisions || []).map(item => Number(item?.decisionVersion) || 0));
+  return Math.max(declared, audited);
+}
+async function currentAssetDecisionState(rawAsset) {
+  const asset = normalizeAssetRecord(rawAsset);
+  const fileSha256 = asset.path && fs.existsSync(asset.path) ? await sha256File(asset.path) : null;
+  const state = assetDecisionStateHashInput({
+    assetId: asset.id,
+    reviewStatus: asset.reviewStatus,
+    mediaKind: asset.mediaKind,
+    sourceType: asset.sourceType,
+    fileSha256,
+    placement: asset.placement,
+    clipStart: asset.clipStart,
+    clipEnd: asset.clipEnd,
+    clipDuration: asset.clipDuration,
+  });
+  return { ...state, stateHash: contentHash(state) };
+}
+async function assetDecisionAuditEntry(rawAsset, details = {}) {
+  const state = await currentAssetDecisionState(rawAsset);
+  return {
+    ...state,
+    eventType: String(details.eventType || "asset-review-decided"),
+    reason: String(details.reason || "").slice(0, 1000),
+    auditBackfill: details.auditBackfill === true,
+    licenseBasis: String(rawAsset?.licenseBasis || ""),
+    usagePurpose: String(rawAsset?.usagePurpose || ""),
+  };
+}
+function appendAssetDecisionAudit(job, records, options = {}) {
+  const entries = Array.isArray(records) ? records.filter(Boolean) : [];
+  if (!entries.length) return { decisionVersion: assetDecisionVersion(job), entries: [], invalidatedStages: [] };
+  const at = String(options.at || new Date().toISOString());
+  const decisionVersion = assetDecisionVersion(job) + 1;
+  const appended = entries.map(record => ({ ...record, decisionVersion, decidedAt: record.decidedAt || at }));
+  job.assetDecisionVersion = decisionVersion;
+  job.assetDecisions = [...(job.assetDecisions || []), ...appended];
+  let invalidatedStages = [];
+  if (options.invalidateSampleReview !== false && job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+    const reason = String(options.reason || "素材状态发生变化，动态样片必须重新生成");
+    invalidatedStages = invalidateVisualStages(job.workflow, "keyframe_review", reason);
+    job.workflow.currentStage = "motion_sample";
+  }
+  if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+    job.workflow.audit ||= [];
+    job.workflow.audit.push({
+      type: "asset-decision-version-created",
+      decisionVersion,
+      eventTypes: [...new Set(appended.map(item => item.eventType))],
+      assetIds: [...new Set(appended.map(item => item.assetId).filter(Boolean))],
+      invalidatedStages,
+      at,
+    });
+    job.workflow.updatedAt = at;
+  }
+  return { decisionVersion, entries: appended, invalidatedStages };
+}
+function assetDecisionAuditFile(job) {
+  return path.join(confined(jobsRoot, job.id), "asset-decisions.json");
+}
+async function persistAssetDecisionAudit(job) {
+  await writeJson(assetDecisionAuditFile(job), job.assetDecisions || []);
+}
+function assetSnapshotHashInput(snapshot = {}) {
+  const { snapshotHash: _snapshotHash, createdAt: _createdAt, ...evidence } = snapshot;
+  return evidence;
+}
+async function readVerifiedAssetDecisionAudit(job) {
+  const auditFile = assetDecisionAuditFile(job);
+  if (!fs.existsSync(auditFile)) throw Object.assign(new Error("缺少 asset-decisions.json 素材审计记录，拒绝使用现有样片"), { statusCode: 409 });
+  const audit = await readJsonFile(auditFile);
+  if (!Array.isArray(audit)) throw Object.assign(new Error("asset-decisions.json 格式无效，拒绝使用现有样片"), { statusCode: 409 });
+  if (contentHash(audit) !== contentHash(job.assetDecisions || [])) throw Object.assign(new Error("asset-decisions.json 与任务内素材审计记录不一致，拒绝使用现有样片"), { statusCode: 409 });
+  const corrupt = audit.find(record => record?.stateHash && assetDecisionStateHash(record) !== record.stateHash);
+  if (corrupt) throw Object.assign(new Error(`素材 ${corrupt.assetId || "unknown"} 的审计状态哈希已损坏`), { statusCode: 409 });
+  const declaredVersion = Number(job.assetDecisionVersion) || 0;
+  const auditedVersion = Math.max(0, ...audit.map(item => Number(item?.decisionVersion) || 0));
+  if (!declaredVersion || declaredVersion !== auditedVersion) throw Object.assign(new Error("素材决策版本与 asset-decisions.json 不一致，拒绝使用现有样片"), { statusCode: 409 });
+  const states = await Promise.all((job.assets || []).map(currentAssetDecisionState));
+  const missing = states.filter(state => state.reviewStatus !== "pending" && !audit.some(record => record?.assetId === state.assetId && record?.stateHash === state.stateHash));
+  if (missing.length) throw Object.assign(new Error(`素材缺少当前状态的 asset-decisions 审计记录（文件哈希、批准状态或时间段可能已变化）：${missing.map(item => item.assetId).join("、")}`), { statusCode: 409 });
+  return {
+    audit,
+    auditFile,
+    decisionVersion: declaredVersion,
+    states,
+    sha256: await sha256File(auditFile),
+    contentHash: contentHash(audit),
+  };
+}
+async function buildAssetDecisionSnapshot(job) {
+  const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+  const review = assetReviewSummary(job, duration);
+  if (!review.reviewComplete || !review.renderReady) throw Object.assign(new Error("素材审核未完成，不能冻结动态样片素材快照"), { statusCode: 409 });
+  const audit = await readVerifiedAssetDecisionAudit(job);
+  const approved = audit.states.filter(state => state.reviewStatus === "approved").sort((left, right) => left.assetId.localeCompare(right.assetId));
+  const evidence = {
+    schemaVersion: 1,
+    decisionVersion: audit.decisionVersion,
+    decisionAuditSha256: audit.sha256,
+    decisionAuditContentHash: audit.contentHash,
+    approvedAssetIds: approved.map(item => item.assetId),
+    assets: approved,
+  };
+  return { ...evidence, snapshotHash: contentHash(evidence), createdAt: new Date().toISOString() };
+}
+async function writeMotionSampleAssetSnapshot(job, version, snapshot) {
+  const fileName = `motion-sample-asset-snapshot-v${version}.json`;
+  const file = path.join(confined(jobsRoot, job.id), fileName);
+  await writeJson(file, snapshot);
+  return {
+    snapshot,
+    fileName,
+    path: file,
+    url: `/video-jobs/${job.id}/${fileName}`,
+    sha256: await sha256File(file),
+  };
+}
+async function assertMotionSampleAssetSnapshotCurrent(job) {
+  const stage = job.workflow?.stages?.motion_sample;
+  const artifacts = stage?.artifacts;
+  if (!artifacts?.assetSnapshot || !artifacts?.assetSnapshotFile || !artifacts?.assetSnapshotSha256) {
+    throw Object.assign(new Error("动态样片缺少冻结的素材快照，请重新生成样片"), { statusCode: 409 });
+  }
+  const expectedFileName = `motion-sample-asset-snapshot-v${Number(stage.currentVersion || 0)}.json`;
+  if (artifacts.assetSnapshotFile !== expectedFileName) throw Object.assign(new Error("动态样片素材快照版本与样片版本不一致"), { statusCode: 409 });
+  const file = path.join(confined(jobsRoot, job.id), expectedFileName);
+  if (!fs.existsSync(file)) throw Object.assign(new Error("动态样片素材快照文件缺失，请重新生成样片"), { statusCode: 409 });
+  if ((await sha256File(file)).toLowerCase() !== String(artifacts.assetSnapshotSha256).toLowerCase()) throw Object.assign(new Error("动态样片素材快照文件哈希已变化"), { statusCode: 409 });
+  const stored = await readJsonFile(file);
+  if (contentHash(stored) !== contentHash(artifacts.assetSnapshot)) throw Object.assign(new Error("动态样片产物内的素材快照与冻结文件不一致"), { statusCode: 409 });
+  if (!stored.snapshotHash || contentHash(assetSnapshotHashInput(stored)) !== stored.snapshotHash) throw Object.assign(new Error("动态样片素材快照证据哈希已损坏"), { statusCode: 409 });
+  const current = await buildAssetDecisionSnapshot(job);
+  if (current.snapshotHash !== stored.snapshotHash) throw Object.assign(new Error("动态样片关联素材的决策版本、批准素材、文件哈希或时间段已变化，请重新生成样片"), { statusCode: 409 });
+  return stored;
+}
 function finalReviewEvidenceHash(review) {
   const { approvedAt: _approvedAt, evidenceHash: _evidenceHash, recordHash: _recordHash, ...evidence } = review || {};
   return contentHash(evidence);
@@ -1904,6 +2073,7 @@ async function discoverLocalProjectAssets(job) {
 }
 async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) {
   if (job.assetDiscovery?.preparedAt && !force) return job.assetDiscovery;
+  const previousAutomaticAssetIds = force ? (job.assets || []).filter(asset => asset.discoveredAutomatically === true).map(asset => asset.id) : [];
   if (force) {
     job.assetHistory = [...(job.assetHistory || []), {
       archivedAt: new Date().toISOString(),
@@ -2002,7 +2172,22 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
     rightsReviewMode: job.options?.rightsReviewMode || "strict",
     note: "已切换为富媒体优先：候选以真人原片衍生画面、前后对比、动态流程和真实项目证据为主，文字卡片只作补充；参考视频仅在必要时使用2—5秒并保留来源。"
   };
+  const discoveredAuditEntries = await Promise.all(assets.map(asset => assetDecisionAuditEntry(asset, {
+    eventType: force ? "asset-candidate-rediscovered" : "asset-candidate-discovered",
+    reason: reason || (force ? "重新发现素材候选" : "首次发现素材候选"),
+  })));
+  discoveredAuditEntries.push({
+    eventType: force ? "asset-candidates-replaced" : "asset-candidates-prepared",
+    reason: reason || (force ? "重新发现素材候选" : "首次发现素材候选"),
+    removedAssetIds: previousAutomaticAssetIds,
+    currentAutomaticAssetIds: assets.map(asset => asset.id),
+  });
+  appendAssetDecisionAudit(job, discoveredAuditEntries, {
+    invalidateSampleReview: force,
+    reason: reason || "素材候选已重新发现，动态样片必须重新生成",
+  });
   job.assetReview = assetReviewSummary(job, duration);
+  await persistAssetDecisionAudit(job);
   await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
   await saveJob(job);
   return job.assetDiscovery;
@@ -2713,16 +2898,7 @@ async function runKeyframeStage(job, version, stageConfig, feedback = "") {
 }
 
 async function ensurePreviewAssetDecisions(job) {
-  const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-  const review = assetReviewSummary(job, duration);
-  const keyframeDirection = job.workflow?.stages?.keyframes?.artifacts?.direction;
-  const hasLockedVisualConflict = (job.assets || []).some((asset) => asset.reviewStatus === "approved"
-    && findLockedVisualIntentConflict(asset, job.contentBreakdown, keyframeDirection));
-  if (review.reviewComplete && review.renderReady && !hasLockedVisualConflict) {
-    job.assetReview = review;
-    return review;
-  }
-  const decision = await autoReviewLocalAssetsForPreview(job);
+  const decision = await autoReviewLocalAssetsForPreview(job, { invalidateSampleReview: false });
   return decision.review;
 }
 
@@ -2753,6 +2929,7 @@ async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
   await writeJson(path.join(jobDir, directionName), direction);
   const previewReview = await ensurePreviewAssetDecisions(job);
   if (!previewReview.reviewComplete || !previewReview.renderReady) throw new Error("动态样片所需素材未完成自动审核，不能进入用户审核");
+  const assetSnapshot = await buildAssetDecisionSnapshot(job);
   const clean = await ensureWorkflowCleanSource(job);
   const captions = transcriptCues(job.transcript, job.currentPlan.keepSegments, job.script);
   const approvedAssets = (job.assets || []).filter(asset => asset.reviewStatus === "approved" && !assetComplianceIssues(asset, job, outputDuration).length);
@@ -2784,6 +2961,9 @@ async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
   if (metadata.duration < 14.5 || metadata.duration > 25.8) throw new Error(`动态样片时长${metadata.duration.toFixed(1)}秒，不在15—25秒门禁内`);
   const thumbnailPath = path.join(rendersDir, `motion-sample-v${version}.jpg`);
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(3, metadata.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnailPath]);
+  const postRenderSnapshot = await buildAssetDecisionSnapshot(job);
+  if (postRenderSnapshot.snapshotHash !== assetSnapshot.snapshotHash) throw new Error("动态样片渲染期间素材决策或文件发生变化，拒绝生成可审核样片");
+  const frozenAssetSnapshot = await writeMotionSampleAssetSnapshot(job, version, assetSnapshot);
   return {
     direction,
     directionUrl: workflowUrl(job, directionName),
@@ -2796,6 +2976,10 @@ async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
     qaUrl: workflowUrl(job, path.join(projectRelative, "qa", "check.txt")),
     sampleStart: direction.sampleStart,
     sampleEnd: direction.sampleEnd,
+    assetSnapshot: frozenAssetSnapshot.snapshot,
+    assetSnapshotFile: frozenAssetSnapshot.fileName,
+    assetSnapshotUrl: frozenAssetSnapshot.url,
+    assetSnapshotSha256: frozenAssetSnapshot.sha256,
     model: modelResult?.model || null,
   };
 }
@@ -2815,6 +2999,7 @@ async function normalizeHyperframesMaster(inputPath, outputPath, width, height, 
 async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "") {
   const jobDir = confined(jobsRoot, job.id);
   const outputDuration = job.currentPlan.keepSegments.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0);
+  const approvedSampleAssetSnapshot = await assertMotionSampleAssetSnapshotCurrent(job);
   const review = assetReviewSummary(job, outputDuration);
   if (!review.reviewComplete || !review.renderReady) throw new Error("素材审核状态在样片批准后发生变化，请先处理所有素材再生成完整视频");
   let modelResult = null;
@@ -2867,6 +3052,8 @@ async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "")
   await fsp.mkdir(rendersDir, { recursive: true });
   const rawPath = path.join(rendersDir, `full-hyperframes-v${videoVersion}-raw.mp4`);
   await runHyperframes(["render", ".", "--skill=talking-head-recut", "--output", rawPath, "--fps", String(fps), "--quality", "high", "--workers", "2"], projectDir, 4 * 60 * 60 * 1000);
+  const postRenderAssetSnapshot = await assertMotionSampleAssetSnapshotCurrent(job);
+  if (postRenderAssetSnapshot.snapshotHash !== approvedSampleAssetSnapshot.snapshotHash) throw new Error("完整视频渲染期间动态样片素材快照发生变化，拒绝交付成片");
   const outputPath = path.join(jobDir, `final-v${videoVersion}.mp4`);
   const metadata = await normalizeHyperframesMaster(rawPath, outputPath, width, height, fps);
   await fsp.copyFile(outputPath, path.join(jobDir, "final.mp4"));
@@ -2879,6 +3066,11 @@ async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "")
   for (const asset of manifest.assets) asset.composited = composited.has(asset.id);
   manifest.renderedAssetIds = [...composited];
   manifest.attributionTrack = manifest.assets.some(asset => asset.composited && EXTERNAL_SOURCE_TYPES.has(asset.sourceType)) ? "hyperframes-integrated" : null;
+  manifest.motionSampleAssetSnapshot = {
+    decisionVersion: approvedSampleAssetSnapshot.decisionVersion,
+    snapshotHash: approvedSampleAssetSnapshot.snapshotHash,
+    artifactSha256: job.workflow.stages.motion_sample?.artifacts?.assetSnapshotSha256 || null,
+  };
   manifest.renderCompletedAt = new Date().toISOString();
   await writeJson(path.join(jobDir, `media-manifest-v${videoVersion}.json`), manifest);
   let coverPackaging = { requested: job.options?.generateCover !== false, available: false, engine: "none", fallbackReason: null };
@@ -2898,6 +3090,9 @@ async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "")
     workflowDependencies: {
       keyframeVersion: Number(job.workflow?.stages?.keyframe_review?.approvedVersion) || null,
       motionSampleVersion: Number(job.workflow?.stages?.motion_sample?.approvedVersion) || null,
+      assetDecisionVersion: approvedSampleAssetSnapshot.decisionVersion,
+      motionSampleAssetSnapshotHash: approvedSampleAssetSnapshot.snapshotHash,
+      motionSampleAssetSnapshotSha256: job.workflow.stages.motion_sample?.artifacts?.assetSnapshotSha256 || null,
     },
     path: outputPath,
     url: artifactUrl(`final-v${videoVersion}.mp4`),
@@ -3185,6 +3380,7 @@ async function approveVisualGate(job, stageId, body = {}) {
     const stage = workflow.stages.motion_sample;
     if (!stage?.artifacts?.url || stage.status === "error") throw Object.assign(new Error("还没有可批准的动态样片"), { statusCode: 409 });
     if (stage.status !== "awaiting_review") throw Object.assign(new Error("当前动态样片不在待审核状态"), { statusCode: 409 });
+    const assetSnapshot = await assertMotionSampleAssetSnapshotCurrent(job);
     const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
     const review = assetReviewSummary(job, duration);
     job.assetReview = review;
@@ -3196,7 +3392,7 @@ async function approveVisualGate(job, stageId, body = {}) {
     stage.approvedVersion = stage.currentVersion;
     stage.feedback = String(body.feedback || "");
     stage.approvedAt = now;
-    workflow.audit.push({ type: "stage-approved", stageId, version: stage.currentVersion, at: now });
+    workflow.audit.push({ type: "stage-approved", stageId, version: stage.currentVersion, assetDecisionVersion: assetSnapshot.decisionVersion, assetSnapshotHash: assetSnapshot.snapshotHash, assetSnapshotSha256: stage.artifacts.assetSnapshotSha256, at: now });
     await saveJob(job);
     runVisualWorkflowChain(job, "full_render");
     return;
@@ -3577,38 +3773,48 @@ function previewAssetAutoReviewDecision(rawAsset, job, outputDuration = null) {
   };
 }
 
-async function autoReviewLocalAssetsForPreview(job) {
+async function autoReviewLocalAssetsForPreview(job, options = {}) {
   const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
   const decidedAt = new Date().toISOString();
-  const decisions = [];
+  const pendingAuditEntries = [];
   for (const asset of job.assets || []) {
     const decision = previewAssetAutoReviewDecision(asset, job, duration);
-    if (!decision.requiresUpdate) continue;
-    asset.reviewStatus = decision.reviewStatus;
-    asset.approved = decision.approved;
-    asset.updatedAt = decidedAt;
-    decisions.push({
-      assetId: asset.id,
-      reviewStatus: asset.reviewStatus,
-      placement: asset.placement || null,
+    if (decision.requiresUpdate) {
+      asset.reviewStatus = decision.reviewStatus;
+      asset.approved = decision.approved;
+      asset.updatedAt = decidedAt;
+    }
+    const state = await currentAssetDecisionState(asset);
+    const hasCurrentAudit = (job.assetDecisions || []).some(record => record?.assetId === state.assetId && record?.stateHash === state.stateHash);
+    if (!decision.requiresUpdate && hasCurrentAudit) continue;
+    pendingAuditEntries.push({
+      ...state,
+      eventType: decision.requiresUpdate ? "asset-auto-review-decided" : "asset-decision-audit-backfilled",
       licenseBasis: asset.licenseBasis || "",
       usagePurpose: asset.usagePurpose || "",
-      reason: decision.reason,
+      reason: decision.requiresUpdate ? decision.reason : "根据任务中当前素材状态补齐缺失的 asset-decisions 审计记录",
       visualIntentConflict: decision.visualIntentConflict,
-      decidedAt
+      auditBackfill: !decision.requiresUpdate,
+      decidedAt,
     });
   }
   job.options = { ...job.options, reviewMode: "full-preview-with-context-segments", autoReviewLocalAssets: true };
-  job.assetDecisions = [...(job.assetDecisions || []), ...decisions];
+  const auditBatch = appendAssetDecisionAudit(job, pendingAuditEntries, {
+    at: decidedAt,
+    invalidateSampleReview: options.invalidateSampleReview !== false,
+    reason: "素材自动审核或审计补齐后，动态样片必须重新生成",
+  });
   job.assetReview = assetReviewSummary(job, duration);
-  const visualSampleInProgress = job.workflow?.version === VISUAL_WORKFLOW_VERSION && job.workflow?.currentStage === "motion_sample";
+  const visualSampleInProgress = options.invalidateSampleReview === false
+    && job.workflow?.version === VISUAL_WORKFLOW_VERSION
+    && job.workflow?.currentStage === "motion_sample";
   job.status = visualSampleInProgress ? "rendering_sample" : "awaiting_asset_review";
   job.progress = visualSampleInProgress ? visualStageProgress("motion_sample") : 60;
   const jobDir = confined(jobsRoot, job.id);
-  await writeJson(path.join(jobDir, "asset-decisions.json"), job.assetDecisions);
+  await persistAssetDecisionAudit(job);
   await writeJson(path.join(jobDir, "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
   await saveJob(job);
-  return { decisions, review: job.assetReview };
+  return { decisions: auditBatch.entries, review: job.assetReview };
 }
 async function rerenderJob(job, reason = "", renderOptions = {}) {
   if (running.has(job.id)) return;
@@ -4070,6 +4276,7 @@ const server = http.createServer(async (req, res) => {
         if (action === "run") {
           if (stageId === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") return json(res, 409, { error: "请先批准关键帧" });
           if (stageId === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+          if (stageId === "full_render") await assertMotionSampleAssetSnapshotCurrent(job);
           if (body.settings !== undefined || body.prompt !== undefined) await updateVisualStageConfig(job, requestedStageId, body);
         }
         if (action === "approve") {
@@ -4117,6 +4324,7 @@ const server = http.createServer(async (req, res) => {
         };
         if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
           if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "动态样片尚未批准，不能返修完整视频" });
+          await assertMotionSampleAssetSnapshotCurrent(job);
           job.reviews = [...(job.reviews || []), { version: outputVersion, feedback, ...reviewEvidence, createdAt: new Date().toISOString() }];
           delete job.approvedAt;
           runVisualWorkflowChain(job, "full_render", feedback);
@@ -4146,6 +4354,7 @@ const server = http.createServer(async (req, res) => {
         const job = await readJob(jobId);
         if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
           if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+          await assertMotionSampleAssetSnapshotCurrent(job);
           runVisualWorkflowChain(job, "full_render", String(body.reason || "本地重渲染"));
           return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
         }
@@ -4211,8 +4420,13 @@ const server = http.createServer(async (req, res) => {
         const sizeBytes = await receiveUpload(req, assetPath);
         const asset = normalizeAssetRecord({ id: assetId, fileName, path: assetPath, url: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, previewUrl: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, sizeBytes, sourceType: "local-upload", sourceLabel: "用户本地上传", mediaKind: mediaKindFor(fileName), ownership: "user-provided", licenseBasis: "pending-confirmation", reviewStatus: "pending", approved: false, placement: null, discoveredAutomatically: false, paymentRequired: false, paymentConfirmed: true, createdAt: new Date().toISOString() });
         job.assets = [...(job.assets || []), asset];
+        const uploadedAudit = await assetDecisionAuditEntry(asset, { eventType: "asset-uploaded", reason: "用户上传了新的本地素材" });
+        appendAssetDecisionAudit(job, [uploadedAudit], { reason: `素材 ${asset.id} 已上传，现有动态样片审核失效` });
         job.status = "awaiting_asset_review";
         job.assetReview = assetReviewSummary(job);
+        delete job.approvedAt;
+        await persistAssetDecisionAudit(job);
+        await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
         await saveJob(job);
         return json(res, 201, { job, asset });
       });
@@ -4242,8 +4456,13 @@ const server = http.createServer(async (req, res) => {
         asset.reviewStatus = "pending";
         asset.approved = false;
         asset.updatedAt = new Date().toISOString();
+        const replacedAudit = await assetDecisionAuditEntry(asset, { eventType: "asset-file-replaced", reason: "素材本地文件已替换，必须重新审核" });
+        appendAssetDecisionAudit(job, [replacedAudit], { reason: `素材 ${asset.id} 的文件已替换，现有动态样片审核失效` });
         job.status = "awaiting_asset_review";
         job.assetReview = assetReviewSummary(job);
+        delete job.approvedAt;
+        await persistAssetDecisionAudit(job);
+        await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
         await saveJob(job);
         return json(res, 200, { job, asset });
       });
@@ -4286,11 +4505,16 @@ const server = http.createServer(async (req, res) => {
           Object.assign(asset, before);
           return json(res, 409, { error: issues.join("；"), issues });
         }
-        job.assetDecisions = [...(job.assetDecisions || []), { assetId: asset.id, reviewStatus, placement: asset.placement, licenseBasis: asset.licenseBasis, usagePurpose: asset.usagePurpose, decidedAt: new Date().toISOString() }];
+        const decisionAudit = await assetDecisionAuditEntry(asset, {
+          eventType: reviewStatus === "approved" ? "asset-approved" : reviewStatus === "rejected" ? "asset-rejected" : "asset-review-reset",
+          reason: reviewStatus === "approved" ? "用户批准素材进入渲染" : reviewStatus === "rejected" ? "用户拒绝素材进入渲染" : "素材审核状态已重置",
+        });
+        appendAssetDecisionAudit(job, [decisionAudit], { reason: `素材 ${asset.id} 的审核状态或时间段已变化，现有动态样片审核失效` });
         job.assetReview = assetReviewSummary(job, duration);
         job.status = "awaiting_asset_review";
         delete job.approvedAt;
-        await writeJson(path.join(confined(jobsRoot, job.id), "asset-decisions.json"), job.assetDecisions);
+        await persistAssetDecisionAudit(job);
+        await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
         await saveJob(job);
         return json(res, 200, { job, asset });
       });
@@ -4326,6 +4550,7 @@ const server = http.createServer(async (req, res) => {
         if (Number(reviewBundle.version) !== outputVersion) return json(res, 409, { error: "审核预览包版本与当前成片不一致，不能最终审核" });
         let workflowStageVersion = null;
         if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          await assertMotionSampleAssetSnapshotCurrent(job);
           workflowStageVersion = fullRenderStageVersionForOutput(job, outputVersion);
           if (!workflowStageVersion) return json(res, 409, { error: "当前成片与完整渲染记录不匹配，不能最终审核" });
         }
@@ -4410,6 +4635,13 @@ export {
   normalizeAssetRecord,
   assetComplianceIssues,
   assetReviewSummary,
+  assetDecisionVersion,
+  currentAssetDecisionState,
+  assetDecisionAuditEntry,
+  appendAssetDecisionAudit,
+  buildAssetDecisionSnapshot,
+  assertMotionSampleAssetSnapshotCurrent,
+  autoReviewLocalAssetsForPreview,
   candidatePlacement,
   previewAssetAutoReviewDecision,
   assertOutputReviewVersion,
