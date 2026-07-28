@@ -1290,10 +1290,16 @@ async function probe(file) {
   const raw = JSON.parse(stdout), video = raw.streams?.find(s => s.codec_type === "video") || {}, audio = raw.streams?.find(s => s.codec_type === "audio") || null;
   const duration = Number(raw.format?.duration || video.duration || audio?.duration || 0), fpsParts = String(video.avg_frame_rate || video.r_frame_rate || "0/1").split("/").map(Number);
   const pixelFormat = video.pix_fmt || "";
+  const rotation = Number(video.side_data_list?.find(item => Number.isFinite(Number(item?.rotation)))?.rotation ?? video.tags?.rotate ?? 0) || 0;
+  const quarterTurn = Math.abs(rotation) % 180 === 90;
+  const codedWidth = Number(video.width || 0), codedHeight = Number(video.height || 0);
   return {
     duration,
-    width: Number(video.width || 0),
-    height: Number(video.height || 0),
+    width: codedWidth,
+    height: codedHeight,
+    rotation,
+    displayWidth: quarterTurn ? codedHeight : codedWidth,
+    displayHeight: quarterTurn ? codedWidth : codedHeight,
     fps: Number((fpsParts[1] ? fpsParts[0] / fpsParts[1] : 0).toFixed(3)),
     videoCodec: video.codec_name || "",
     pixelFormat,
@@ -1424,13 +1430,32 @@ function assTime(seconds) {
   return `${Math.floor(cs / 360000)}:${String(Math.floor((cs % 360000) / 6000)).padStart(2, "0")}:${String(Math.floor((cs % 6000) / 100)).padStart(2, "0")}.${String(cs % 100).padStart(2, "0")}`;
 }
 function assEscape(text) { return String(text || "").replace(/[{}]/g, "").replace(/\r?\n/g, "\\N").replace(/,/g, "，").trim(); }
-function captionText(text, script = "") {
-  let result = String(text || "").replace(/codex/gi, "Codex");
-  if (String(script).includes("三七二十一")) result = result.replace(/3721/g, "三七二十一");
-  if (String(script).includes("口播工作台")) result = result.replace(/口婆(?=工作台)/g, "口播");
-  if (String(script).includes("我是三金")) result = result.replace(/我是三斤/g, "我是三金");
-  if (String(script).includes("管他三七二十一")) result = result.replace(/管它(?=三七二十一)/g, "管他");
-  if (String(script).includes("迈出第一步")) result = result.replace(/卖出第一步/g, "迈出第一步");
+const captionSimplifiedCharacters = new Map(Object.entries({
+  頭: "头", 輯: "辑", 現: "现", 後: "后", 發: "发", 佈: "布", 條: "条", 視: "视", 頻: "频",
+  動: "动", 說: "说", 實: "实", 還: "还", 給: "给", 層: "层", 這: "这", 驗: "验", 證: "证",
+  會: "会", 線: "线", 來: "来", 規: "规", 庫: "库", 學: "学", 裡: "里", 補: "补", 錄: "录",
+  轉: "转", 間: "间", 畫: "画", 聲: "声", 變: "变", 對: "对", 話: "话", 應: "应", 鍵: "键",
+  辦: "办", 內: "内", 讓: "让", 個: "个", 時: "时", 嗎: "吗",
+}));
+function simplifiedCaptionText(value) {
+  return [...String(value || "")].map(char => captionSimplifiedCharacters.get(char) || char).join("");
+}
+export function captionText(text, script = "") {
+  const scriptText = String(script || "");
+  let result = simplifiedCaptionText(String(text || "").replace(/codex/gi, "Codex"));
+  if (scriptText.includes("三七二十一")) result = result.replace(/3721/g, "三七二十一");
+  if (scriptText.includes("口播工作台")) result = result.replace(/口婆(?=工作台)/g, "口播");
+  if (scriptText.includes("我是三金")) result = result.replace(/我是三斤/g, "我是三金");
+  if (scriptText.includes("管他三七二十一")) result = result.replace(/管它(?=三七二十一)/g, "管他");
+  if (scriptText.includes("迈出第一步")) result = result.replace(/卖出第一步/g, "迈出第一步");
+  if (scriptText.includes("一版一版")) result = result.replace(/一板一板/g, "一版一版");
+  if (scriptText.includes("我只交原片，看结果")) result = result.replace(/我只教原片看结果/g, "我只交原片，看结果");
+  if (scriptText.includes("就剪出了")) result = result.replace(/就剪除了/g, "就剪出了");
+  if (scriptText.includes("给它一条")) result = result.replace(/给他一条/g, "给它一条");
+  if (scriptText.includes("看它能不能")) result = result.replace(/看他能不能/g, "看它能不能");
+  if (scriptText.includes("照搬内容")) result = result.replace(/照办内容/g, "照搬内容");
+  if (scriptText.includes("让它学哪个视频")) result = result.replace(/让他学哪个视频/g, "让它学哪个视频");
+  if (/[㐀-鿿]/u.test(result)) result = result.replace(/,/g, "，").replace(/\?/g, "？");
   return result;
 }
 const captionSegmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
@@ -1532,6 +1557,7 @@ async function renderHyperframesCaptions(jobDir, job, timeline, version) {
   const cues = dynamicCaptionCues(job, timeline);
   if (!cues.length) throw new Error("没有可渲染的字幕时间轴");
   const style = normalizeCaptionStyle(job.options.captionStyle);
+  const dimensions = masterDimensions(job);
   const outputDir = path.join(jobDir, "overlays", `v${version}`);
   await fsp.mkdir(outputDir, { recursive: true });
   const storyboard = path.join(jobDir, `captions-v${version}.json`);
@@ -1547,9 +1573,10 @@ async function renderHyperframesCaptions(jobDir, job, timeline, version) {
       const metadata = await probe(output);
       metadata.alpha = candidate.captionPackaging.metadata?.alpha === true;
       metadata.alphaAverage = candidate.captionPackaging.metadata?.alphaAverage;
-      if (metadata.width !== 1080 || metadata.height !== 1920 || Math.abs(metadata.duration - timeline.outputDuration) > 0.45 || metadata.alpha !== true) continue;
+      metadata.alphaBounds = candidate.captionPackaging.metadata?.alphaBounds || null;
+      if (Math.abs(metadata.duration - timeline.outputDuration) > 0.45 || !hyperframesTrackVisible(metadata, dimensions)) continue;
       await writeJson(storyboard, { version, engine: "hyperframes", style, duration: timeline.outputDuration, cues, reusedFromVersion: candidate.version, generatedAt: new Date().toISOString() });
-      return { requested: style, engine: "hyperframes", style, cues: cues.length, path: output, url: `/video-jobs/${path.basename(jobDir)}/overlays/v${version}/captions.webm`, metadata, reusedFromVersion: candidate.version, fallbackReason: null };
+      return { requested: style, engine: "hyperframes", style, cues: cues.length, path: output, url: `/video-jobs/${path.basename(jobDir)}/overlays/v${version}/captions.webm`, metadata, reusedFromVersion: candidate.version, integrated: true, safeArea: true, fallbackReason: null };
     } catch {}
   }
   const projectDir = path.join(outputDir, "captions-project");
@@ -1557,7 +1584,9 @@ async function renderHyperframesCaptions(jobDir, job, timeline, version) {
   const templatePath = path.join(here, "hyperframes-captions", "index.html");
   let template = await fsp.readFile(templatePath, "utf8");
   if (!template.includes('data-duration="3"')) throw new Error("动态字幕模板缺少可替换的时长声明");
-  template = template.replace('data-duration="3"', `data-duration="${timeline.outputDuration.toFixed(3)}"`).replace("../hyperframes-overlay/gsap.min.js", "./gsap.min.js");
+  template = materializeHyperframesTemplate(template, dimensions)
+    .replace('data-duration="3"', `data-duration="${timeline.outputDuration.toFixed(3)}"`)
+    .replace("../hyperframes-overlay/gsap.min.js", "./gsap.min.js");
   await fsp.writeFile(path.join(projectDir, "index.html"), template, "utf8");
   await fsp.copyFile(path.join(here, "hyperframes-overlay", "gsap.min.js"), path.join(projectDir, "gsap.min.js"));
   await writeJson(storyboard, { version, engine: "hyperframes", style, duration: timeline.outputDuration, cues, generatedAt: new Date().toISOString() });
@@ -1565,15 +1594,17 @@ async function renderHyperframesCaptions(jobDir, job, timeline, version) {
   await writeJson(variablesFile, { captionsJson: JSON.stringify(cues), duration: timeline.outputDuration, style });
   await run("npx", ["-y", "hyperframes", "render", projectDir, "--output", output, "--format", "webm", "--variables-file", variablesFile, "--workers", "1", "--quiet", "--sdr"], { cwd: root, shell: true });
   const metadata = await probe(output);
-  if (!metadata.videoCodec || Math.abs(metadata.duration - timeline.outputDuration) > 0.45 || metadata.width !== 1080 || metadata.height !== 1920) throw new Error("HyperFrames 动态字幕轨的时长或画幅无效");
+  if (!metadata.videoCodec || Math.abs(metadata.duration - timeline.outputDuration) > 0.45 || metadata.width !== dimensions.width || metadata.height !== dimensions.height) throw new Error("HyperFrames 动态字幕轨的时长或画幅无效");
   const firstCue = cues[0];
   const sampleTime = Math.min(firstCue.end - 0.05, firstCue.start + Math.max(0.2, Math.min(0.5, (firstCue.end - firstCue.start) / 2)));
-  const alpha = await run("ffmpeg", ["-hide_banner", "-c:v", "libvpx-vp9", "-ss", sampleTime.toFixed(3), "-i", output, "-vf", "alphaextract,signalstats,metadata=print", "-frames:v", "1", "-f", "null", "-"]);
+  const alpha = await run("ffmpeg", ["-hide_banner", "-c:v", "libvpx-vp9", "-ss", sampleTime.toFixed(3), "-i", output, "-vf", "alphaextract,bbox=min_val=1,signalstats,metadata=print", "-frames:v", "1", "-f", "null", "-"]);
   const alphaAverage = Number(alpha.stderr.match(/lavfi\.signalstats\.YAVG=([0-9.]+)/)?.[1]);
   if (!Number.isFinite(alphaAverage) || alphaAverage <= 0 || alphaAverage >= 254.5) throw new Error("HyperFrames 动态字幕轨透明像素检查失败");
   metadata.alpha = true;
   metadata.alphaAverage = alphaAverage;
-  return { requested: style, engine: "hyperframes", style, cues: cues.length, path: output, url: `/video-jobs/${path.basename(jobDir)}/overlays/v${version}/captions.webm`, metadata, fallbackReason: null };
+  metadata.alphaBounds = alphaBoundsFromStderr(alpha.stderr);
+  if (!hyperframesTrackVisible(metadata, dimensions)) throw new Error("HyperFrames 动态字幕轨未完整落入成片安全区");
+  return { requested: style, engine: "hyperframes", style, cues: cues.length, path: output, url: `/video-jobs/${path.basename(jobDir)}/overlays/v${version}/captions.webm`, metadata, integrated: true, safeArea: true, fallbackReason: null };
 }
 async function writeAss(jobDir, transcript, keeps, overlays, version, script = "", dimensions = { width: 1080, height: 1920 }) {
   const landscape = dimensions.width > dimensions.height;
@@ -2413,11 +2444,54 @@ async function ensureMediaManifest(job, version) {
   await writeJson(path.join(jobDir, `media-manifest-v${version}.json`), manifest);
   return manifest;
 }
-function masterDimensions(job) {
+export function masterDimensions(job) {
   if (job.options?.layout === "landscape-tech") return { width: 1280, height: 720 };
   if (job.options?.layout === "square") return { width: 1080, height: 1080 };
-  if (job.options?.layout === "original") return { width: Math.max(2, Math.floor(Number(job.source?.width || 1080) / 2) * 2), height: Math.max(2, Math.floor(Number(job.source?.height || 1920) / 2) * 2) };
+  if (job.options?.layout === "original") {
+    const rotation = Number(job.source?.rotation || 0);
+    const quarterTurn = Math.abs(rotation) % 180 === 90;
+    const width = Number(job.source?.displayWidth || (quarterTurn ? job.source?.height : job.source?.width) || 1080);
+    const height = Number(job.source?.displayHeight || (quarterTurn ? job.source?.width : job.source?.height) || 1920);
+    return { width: Math.max(2, Math.floor(width / 2) * 2), height: Math.max(2, Math.floor(height / 2) * 2) };
+  }
   return { width: 1080, height: 1920 };
+}
+
+function hyperframesLayout(dimensions) {
+  if (dimensions.width > dimensions.height) return "landscape";
+  if (dimensions.width === dimensions.height) return "square";
+  return "portrait";
+}
+
+export function materializeHyperframesTemplate(template, dimensions) {
+  const width = Math.max(2, Math.floor(Number(dimensions?.width || 1080) / 2) * 2);
+  const height = Math.max(2, Math.floor(Number(dimensions?.height || 1920) / 2) * 2);
+  return String(template)
+    .replace("<html ", `<html data-koubo-layout="${hyperframesLayout({ width, height })}" `)
+    .replace(/width=1080, height=1920/g, `width=${width}, height=${height}`)
+    .replace(/width: 1080px; height: 1920px/g, `width: ${width}px; height: ${height}px`)
+    .replace(/data-width="1080"/g, `data-width="${width}"`)
+    .replace(/data-height="1920"/g, `data-height="${height}"`);
+}
+
+function alphaBoundsFromStderr(stderr) {
+  const matches = [...String(stderr || "").matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
+  const match = matches.at(-1);
+  if (!match) return null;
+  const width = Number(match[1]), height = Number(match[2]), x = Number(match[3]), y = Number(match[4]);
+  return { x, y, width, height, x2: x + width - 1, y2: y + height - 1 };
+}
+
+export function hyperframesTrackVisible(metadata, dimensions) {
+  const bounds = metadata?.alphaBounds;
+  return metadata?.alpha === true
+    && Number(metadata.width) === Number(dimensions?.width)
+    && Number(metadata.height) === Number(dimensions?.height)
+    && bounds
+    && bounds.x >= 0 && bounds.y >= 0
+    && bounds.width > 0 && bounds.height > 0
+    && bounds.x2 < Number(dimensions.width)
+    && bounds.y2 < Number(dimensions.height);
 }
 async function buildMediaRenderPlan(job, version, manifest, firstInputIndex) {
   const renderable = manifest.assets.filter(asset => asset.eligibleForRender);
@@ -2486,10 +2560,17 @@ function informationPanelItems(card) {
   if (/口播工作台/i.test(text)) return ["写口播稿", "剪辑视频", "添加字幕"];
   return [];
 }
-async function renderHyperframesCards(jobDir, timeline, version, options = {}) {
+async function renderHyperframesCards(jobDir, timeline, version, job = {}) {
   if (!timeline.cards.length) return { engine: "none", clips: [] };
+  const options = job.options || {};
+  const dimensions = masterDimensions(job);
   const outputDir = path.join(jobDir, "overlays", `v${version}`);
   await fsp.mkdir(outputDir, { recursive: true });
+  const projectDir = path.join(outputDir, "cards-project");
+  await fsp.mkdir(projectDir, { recursive: true });
+  const template = materializeHyperframesTemplate(await fsp.readFile(path.join(here, "hyperframes-overlay", "index.html"), "utf8"), dimensions);
+  await fsp.writeFile(path.join(projectDir, "index.html"), template, "utf8");
+  await fsp.copyFile(path.join(here, "hyperframes-overlay", "gsap.min.js"), path.join(projectDir, "gsap.min.js"));
   const clips = [];
   for (const [index, card] of timeline.cards.entries()) {
     const variablesFile = path.join(outputDir, `card-${index + 1}.json`);
@@ -2497,16 +2578,17 @@ async function renderHyperframesCards(jobDir, timeline, version, options = {}) {
     const items = informationPanelItems(card);
     const mode = options.informationPanels !== false && items.length >= 2 ? "side-panel" : "banner";
     await writeJson(variablesFile, { text: card.text, kind: card.kind, itemsJson: JSON.stringify(items), mode });
-    await run("npx", ["-y", "hyperframes", "render", path.join(here, "hyperframes-overlay"), "--output", output, "--format", "webm", "--variables-file", variablesFile, "--workers", "1", "--quiet", "--sdr"], { cwd: root, shell: true });
+    await run("npx", ["-y", "hyperframes", "render", projectDir, "--output", output, "--format", "webm", "--variables-file", variablesFile, "--workers", "1", "--quiet", "--sdr"], { cwd: root, shell: true });
     const metadata = await probe(output);
-    if (!metadata.videoCodec || metadata.duration < 2.8) throw new Error(`HyperFrames 卡片 ${index + 1} 输出无效`);
-    const alpha = await run("ffmpeg", ["-hide_banner", "-c:v", "libvpx-vp9", "-ss", "0.5", "-i", output, "-vf", "alphaextract,signalstats,metadata=print", "-frames:v", "1", "-f", "null", "-"]);
+    if (!metadata.videoCodec || metadata.duration < 2.8 || metadata.width !== dimensions.width || metadata.height !== dimensions.height) throw new Error(`HyperFrames 卡片 ${index + 1} 输出无效`);
+    const alpha = await run("ffmpeg", ["-hide_banner", "-c:v", "libvpx-vp9", "-ss", "0.5", "-i", output, "-vf", "alphaextract,bbox=min_val=1,signalstats,metadata=print", "-frames:v", "1", "-f", "null", "-"]);
     const alphaAverage = Number(alpha.stderr.match(/lavfi\.signalstats\.YAVG=([0-9.]+)/)?.[1]);
     if (!Number.isFinite(alphaAverage) || alphaAverage <= 0 || alphaAverage >= 254.5) throw new Error(`HyperFrames 卡片 ${index + 1} 透明像素检查失败`);
-    metadata.alpha = true; metadata.alphaAverage = alphaAverage;
+    metadata.alpha = true; metadata.alphaAverage = alphaAverage; metadata.alphaBounds = alphaBoundsFromStderr(alpha.stderr);
+    if (!hyperframesTrackVisible(metadata, dimensions)) throw new Error(`HyperFrames 卡片 ${index + 1} 未完整落入成片安全区`);
     clips.push({ ...card, mode, items, path: output, url: `/video-jobs/${path.basename(jobDir)}/overlays/v${version}/card-${index + 1}.webm`, metadata });
   }
-  return { engine: "hyperframes", clips };
+  return { engine: "hyperframes", clips, dimensions, safeArea: clips.every(clip => hyperframesTrackVisible(clip.metadata, dimensions)) };
 }
 function variantFilter(layout) {
   if (layout === "vertical") return "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black";
@@ -2564,6 +2646,7 @@ function parseQaDetection(stderr) {
 }
 async function runQa(job, version, outputPath, expectedDuration, timeline, variants, packaging, captionPackaging, coverPackaging, mediaManifest, colorManagement, audioTargetOverride = null) {
   const metadata = await probe(outputPath);
+  const dimensions = masterDimensions(job);
   await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
   const scan = await run("ffmpeg", ["-hide_banner", "-i", outputPath, "-vf", "blackdetect=d=0.4:pix_th=0.02,freezedetect=n=-55dB:d=2", ...(metadata.hasAudio ? ["-af", "ebur128=peak=true"] : []), "-f", "null", "-"]);
   const detection = parseQaDetection(scan.stderr);
@@ -2583,8 +2666,8 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
   const sdrBt709 = metadata.colorPrimaries === "bt709" && metadata.colorTransfer === "bt709" && metadata.colorSpace === "bt709";
   const captionSafeArea = job.options.captions === false
     || ["ass-static", "ass-fallback"].includes(captionPackaging.engine)
-    || (captionPackaging.engine === "hyperframes" && captionPackaging.integrated === true && captionPackaging.safeArea === true)
-    || (captionPackaging.engine === "hyperframes" && captionPackaging.metadata?.width === 1080 && captionPackaging.metadata?.height === 1920 && captionPackaging.metadata?.alpha === true);
+    || (captionPackaging.engine === "hyperframes" && captionPackaging.integrated === true && captionPackaging.safeArea === true && hyperframesTrackVisible(captionPackaging.metadata, dimensions));
+  const cardSafeArea = timeline.cards.every(card => card.text.length <= 24) && (timeline.cards.length === 0 || packaging.safeArea === true);
   const variantDimensions = Object.fromEntries(Object.entries(variants).map(([name, item]) => [name, item.available === false ? { available: false, reason: item.reason } : {
     available: true,
     width: item.metadata.width,
@@ -2611,7 +2694,7 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
   const mediaPass = Object.values(mediaCompliance).every(Boolean);
   const report = {
     version,
-    pass: metadata.videoCodec === "h264" && aacAudio && audioPresent && metadata.pixelFormat === "yuv420p" && Math.abs(metadata.duration - expectedDuration) < 1.6 && sdrBt709 && integratedLoudnessTarget && truePeakTarget && captionSafeArea && coverDimensions && mediaPass,
+    pass: metadata.videoCodec === "h264" && aacAudio && audioPresent && metadata.pixelFormat === "yuv420p" && Math.abs(metadata.duration - expectedDuration) < 1.6 && sdrBt709 && integratedLoudnessTarget && truePeakTarget && captionSafeArea && cardSafeArea && coverDimensions && mediaPass,
     checks: {
       decodes: true,
       h264: metadata.videoCodec === "h264",
@@ -2626,8 +2709,8 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
       integratedLoudnessTarget,
       truePeakTarget,
       captionSafeArea,
-      dynamicCaptionTrack: captionPackaging.engine === "hyperframes",
-      cardSafeArea: timeline.cards.every(card => card.text.length <= 24),
+      dynamicCaptionTrack: captionPackaging.engine === "hyperframes" ? hyperframesTrackVisible(captionPackaging.metadata, dimensions) : true,
+      cardSafeArea,
       minimumSegmentDuration: minimumSegment >= 0.35,
       cutDensityPerMinute: Number((timeline.clips.length / Math.max(metadata.duration / 60, 0.01)).toFixed(2)),
       transcriptBoundaryCrossings: 0,
@@ -4035,6 +4118,7 @@ async function rejectVisualGate(job, stageId, body = {}) {
 
 async function renderVersion(job, version) {
   const jobDir = confined(jobsRoot, job.id), plan = job.currentPlan, segments = plan.keepSegments;
+  job.source = { ...(job.source || {}), ...(await probe(job.sourcePath)) };
   job.status = version > 1 ? "revising" : "rendering"; job.progress = 2; await saveJob(job);
   const timeline = buildTimeline(job, plan, version);
   const duration = timeline.outputDuration, filters = [];
@@ -4046,9 +4130,11 @@ async function renderVersion(job, version) {
   let hyperframes = { engine: "none", clips: [] };
   if (timeline.cards.length && job.options?.layout !== "landscape-tech") {
     try {
-      hyperframes = await renderHyperframesCards(jobDir, timeline, version, job.options);
+      hyperframes = await renderHyperframesCards(jobDir, timeline, version, job);
       packaging.engine = "hyperframes";
       packaging.panels = hyperframes.clips.filter(card => card.mode === "side-panel").length;
+      packaging.safeArea = hyperframes.safeArea === true;
+      packaging.dimensions = hyperframes.dimensions;
     } catch (error) {
       packaging = { ...packaging, engine: "ass-fallback", fallbackReason: error.message };
       job.degraded = [...(job.degraded || []), `HyperFrames 动态包装失败，已用 ASS 卡片继续：${error.message}`];

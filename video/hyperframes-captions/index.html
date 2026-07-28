@@ -50,6 +50,19 @@
         -webkit-text-stroke: 0 transparent;
         box-shadow: 0 14px 34px rgba(0, 0, 0, .24);
       }
+      html[data-koubo-layout="landscape"] .caption-cue {
+        left: 110px; right: 110px; bottom: 42px; font-size: 36px; line-height: 1.16;
+        filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .32));
+      }
+      html[data-koubo-layout="landscape"] .caption-cue.compact { font-size: 32px; }
+      html[data-koubo-layout="landscape"] .caption-line {
+        max-width: 1080px; padding: 3px 8px 5px; -webkit-text-stroke: 3px rgba(8, 10, 14, .96);
+      }
+      html[data-koubo-layout="square"] .caption-cue {
+        left: 82px; right: 82px; bottom: 82px; font-size: 48px;
+      }
+      html[data-koubo-layout="square"] .caption-cue.compact { font-size: 42px; }
+      html[data-koubo-layout="square"] .caption-line { max-width: 900px; -webkit-text-stroke-width: 4px; }
     </style>
   </head>
   <body>
