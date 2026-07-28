@@ -195,6 +195,35 @@ function assertNoClientAuthorityFields(body, keys, label) {
   }
 }
 
+function normalizedRequestWorkspaceId(req, resolver) {
+  const value = typeof resolver === "function"
+    ? resolver(req)
+    : req?.kouboWorkspaceId;
+  return String(value || "local-default").trim().toLowerCase() || "local-default";
+}
+
+function assertArtifactWorkspace(artifact, workspaceId, label) {
+  const artifactWorkspaceId = String(artifact?.workspaceId || "").trim().toLowerCase();
+  if (artifactWorkspaceId && artifactWorkspaceId !== workspaceId) {
+    throw httpError(404, `${label} not found`);
+  }
+}
+
+function clientProvidedEvidence(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw httpError(400, "evidence must be an array");
+  return value.map((item, index) => ({
+    id: item?.id,
+    kind: item?.kind,
+    summary: item?.summary,
+    sourceId: `user-provided-${index + 1}`,
+    provenance: "user_provided",
+    ...(Number.isFinite(item?.start) && Number.isFinite(item?.end)
+      ? { start: item.start, end: item.end }
+      : {}),
+  }));
+}
+
 function contentScript(content, variant = "full") {
   if (variant !== "full" && variant !== "short") throw httpError(400, "variant must be full or short");
   if (variant === "short") {
@@ -308,6 +337,8 @@ export function createMultiAgentApi({
   contentPrinciples = [],
   ordinaryViewerCritic,
   buildBlindReviewBundle,
+  createWorkspaceEvidence,
+  workspaceIdForRequest,
   clock = () => new Date().toISOString(),
 } = {}) {
   const idempotency = new Map();
@@ -327,7 +358,8 @@ export function createMultiAgentApi({
     }
     const body = await readJsonBody(req);
     const bodyHash = crypto.createHash("sha256").update(canonicalJson(body)).digest("hex");
-    const cacheKey = `${req.method}:${pathname}:${key}`;
+    const workspaceId = normalizedRequestWorkspaceId(req, workspaceIdForRequest);
+    const cacheKey = `${workspaceId}:${req.method}:${pathname}:${key}`;
     const cached = idempotency.get(cacheKey);
     if (cached) {
       if (cached.bodyHash !== bodyHash) throw httpError(409, "idempotency key was reused with a different body");
@@ -360,6 +392,43 @@ export function createMultiAgentApi({
   async function writeIndependentArtifact(kind, id, value) {
     const writer = requireDependency(writeArtifact, "writeArtifact");
     return writer(kind, id, sanitize(value));
+  }
+
+  async function verifiedWorkspaceEvidence(body, req) {
+    const ids = body.evidenceArtifactIds;
+    if (ids === undefined || ids === null) return [];
+    if (!Array.isArray(ids) || ids.length === 0 || ids.length > 6) {
+      throw httpError(400, "evidenceArtifactIds must contain 1 to 6 artifact ids");
+    }
+    const workspaceId = normalizedRequestWorkspaceId(req, workspaceIdForRequest);
+    const artifactReader = requireDependency(readArtifact, "readArtifact");
+    const output = [];
+    const seen = new Set();
+    for (const rawId of ids) {
+      const id = String(rawId || "").trim();
+      if (!/^[A-Za-z0-9._-]{8,160}$/u.test(id) || seen.has(id)) {
+        throw httpError(400, "evidenceArtifactIds contains an invalid or duplicate id");
+      }
+      seen.add(id);
+      const artifact = await artifactReader("workspace-evidence", id);
+      if (!artifact) throw httpError(404, "workspace evidence artifact not found");
+      if (artifact.schemaVersion !== 1 || artifact.kind !== "workspace_evidence_snapshot") {
+        throw httpError(409, "workspace evidence artifact has an invalid contract");
+      }
+      assertArtifactWorkspace(artifact, workspaceId, "workspace evidence artifact");
+      assertRecordContentHash(artifact, "workspace evidence artifact");
+      if (!Array.isArray(artifact.evidence) || artifact.evidence.length === 0) {
+        throw httpError(409, "workspace evidence artifact is empty");
+      }
+      output.push(...artifact.evidence.map((item, index) => ({
+        id: String(item?.id || `${id}.item-${index + 1}`),
+        kind: String(item?.kind || "workspace-file"),
+        summary: String(item?.summary || ""),
+        sourceId: String(item?.sourceId || `${id}.source-${index + 1}`),
+        provenance: "workspace_verified",
+      })));
+    }
+    return output;
   }
 
   async function confirmedDirection(artifactId, fallbackRecord, { expectedLockedDirection = "" } = {}) {
@@ -511,7 +580,44 @@ export function createMultiAgentApi({
         ? await readArtifact(artifactMatch[1], artifactMatch[2])
         : null;
       if (!artifact) throw httpError(404, "multi-agent artifact not found");
+      assertArtifactWorkspace(
+        artifact,
+        normalizedRequestWorkspaceId(req, workspaceIdForRequest),
+        "multi-agent artifact"
+      );
       return { status: 200, body: { artifact: sanitize(artifact) } };
+    }
+
+    if (req.method === "POST" && pathname === "/api/multi-agent/evidence/snapshot") {
+      requireAdvisoryEnabled();
+      return idempotentMutation(req, pathname, async (body, key) => {
+        assertNoClientAuthorityFields(body, [
+          "workspaceId", "provenance", "verified", "contentHash", "sha256", "evidence",
+        ], "workspace evidence snapshot");
+        const producer = requireDependency(createWorkspaceEvidence, "createWorkspaceEvidence");
+        const workspaceId = normalizedRequestWorkspaceId(req, workspaceIdForRequest);
+        const snapshot = await producer({ paths: body.paths }, { workspaceId });
+        if (!snapshot || !Array.isArray(snapshot.evidence) || snapshot.evidence.length === 0) {
+          throw httpError(409, "workspace evidence snapshot produced no verified evidence");
+        }
+        const id = artifactId("workspace-evidence", `${workspaceId}:${key}`);
+        const record = withRecordContentHash({
+          schemaVersion: 1,
+          kind: "workspace_evidence_snapshot",
+          workspaceId,
+          files: Array.isArray(snapshot.files) ? snapshot.files : [],
+          evidence: snapshot.evidence,
+          capturedAt: clock(),
+          authority: {
+            createdBy: "server",
+            clientMaySetProvenance: false,
+            mutatesSourceFiles: false,
+            grantsApproval: false,
+          },
+        });
+        const artifact = await writeIndependentArtifact("workspace-evidence", id, record);
+        return { status: 201, body: { evidenceArtifactId: id, artifact, evidence: record.evidence } };
+      });
     }
 
     if (req.method === "POST" && pathname === "/api/multi-agent/content-strategy/analyze") {
@@ -524,12 +630,16 @@ export function createMultiAgentApi({
         let input;
         let request;
         try {
+          const evidence = [
+            ...clientProvidedEvidence(body.evidence),
+            ...await verifiedWorkspaceEvidence(body, req),
+          ];
           input = buildContentStrategistInput({
             direction: body.direction,
             directionSource: "user",
             audienceContext: body.audienceContext,
             userFacts: body.userFacts,
-            evidence: body.evidence,
+            evidence,
             constraints: body.constraints,
             interviewAnswers: body.interviewAnswers,
           });
@@ -548,10 +658,12 @@ export function createMultiAgentApi({
         } catch (error) {
           throw httpError(502, `content strategist returned invalid output: ${error.message}`);
         }
-        const id = artifactId("content-strategy", key);
+        const workspaceId = normalizedRequestWorkspaceId(req, workspaceIdForRequest);
+        const id = artifactId("content-strategy", `${workspaceId}:${key}`);
         const record = withRecordContentHash({
           schemaVersion: 1,
           kind: "content_strategy_analysis",
+          workspaceId,
           input,
           analysis,
           principleIds: request.candidatePrinciples.map(item => item.id),
@@ -592,6 +704,8 @@ export function createMultiAgentApi({
         const source = await artifactReader("content-strategy-analyses", analysisArtifactId);
         if (!source) throw httpError(404, "content strategy analysis artifact not found");
         if (!source.input || !source.analysis) throw httpError(409, "content strategy analysis artifact is incomplete");
+        const workspaceId = normalizedRequestWorkspaceId(req, workspaceIdForRequest);
+        assertArtifactWorkspace(source, workspaceId, "content strategy analysis artifact");
         const analysisContentHash = assertRecordContentHash(source, "content strategy analysis");
 
         const confirmedInput = structuredClone(source.input);
@@ -607,10 +721,11 @@ export function createMultiAgentApi({
           coreQuestion: source.analysis.testableQuestion,
           constraints: source.input.constraints || [],
         };
-        const id = artifactId("content-strategy-confirmation", key);
+        const id = artifactId("content-strategy-confirmation", `${workspaceId}:${key}`);
         const record = withRecordContentHash({
           schemaVersion: 1,
           kind: "content_strategy_human_confirmation",
+          workspaceId,
           analysisArtifactId,
           analysisContentHash,
           lockedDirection: source.input.lockedDirection,

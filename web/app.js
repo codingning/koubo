@@ -61,11 +61,12 @@
     if (!persisted.workspaces[id]) {
       persisted.workspaces[id] = {
         contentProfile: { ...persisted.contentProfile },
-        contentDraft: { direction: "", evidenceSummary: "" },
+        contentDraft: { direction: "", evidenceSummary: "", evidencePaths: "" },
       };
     }
     persisted.workspaces[id].contentProfile ||= { ...persisted.contentProfile };
-    persisted.workspaces[id].contentDraft ||= { direction: "", evidenceSummary: "" };
+    persisted.workspaces[id].contentDraft ||= { direction: "", evidenceSummary: "", evidencePaths: "" };
+    persisted.workspaces[id].contentDraft.evidencePaths ||= "";
     return persisted.workspaces[id];
   }
 
@@ -163,6 +164,7 @@
   let contentStrategyDraft = {
     direction: "",
     evidenceSummary: "",
+    evidencePaths: "",
     contentProfile: null,
     analysisArtifactId: "",
     analysis: null,
@@ -486,6 +488,7 @@
     byId("content-duration").value = String(profile.durationSeconds || 120);
     byId("content-direction").value = draft.direction || "";
     byId("content-evidence-summary").value = draft.evidenceSummary || "";
+    byId("content-evidence-paths").value = draft.evidencePaths || "";
     byId("save-workspace-settings").onclick = async () => {
       const workspaceId = byId("workspace-id").value.trim().toLowerCase();
       if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(workspaceId)) return toast("工作区 ID 格式无效");
@@ -891,6 +894,7 @@
     return {
       direction: byId("content-direction").value.trim(),
       evidenceSummary: byId("content-evidence-summary").value.trim(),
+      evidencePaths: byId("content-evidence-paths").value.trim(),
       contentProfile: {
         mode: "universal",
         domain: byId("content-domain").value,
@@ -916,6 +920,7 @@
       && !!contentStrategyDraft.analysisArtifactId
       && current.direction === contentStrategyDraft.direction
       && current.evidenceSummary === contentStrategyDraft.evidenceSummary
+      && current.evidencePaths === contentStrategyDraft.evidencePaths
       && JSON.stringify(current.contentProfile) === JSON.stringify(contentStrategyDraft.contentProfile)
       && analysis.lockedDirection === current.direction
       && analysis.status === "ready_for_script"
@@ -926,7 +931,7 @@
   }
 
   function updateContentStrategyControls() {
-    const { direction, evidenceSummary, contentProfile } = contentStrategyInputs();
+    const { direction, evidenceSummary, evidencePaths, contentProfile } = contentStrategyInputs();
     const busy = contentStrategyAnalyzing || contentGenerating;
     const ready = contentStrategyReadyForConfirmation();
     const generated = !!contentStrategyDraft.generatedContentId;
@@ -935,6 +940,7 @@
     const generate = byId("generate-content");
     byId("content-direction").disabled = busy;
     byId("content-evidence-summary").disabled = busy;
+    byId("content-evidence-paths").disabled = busy;
     ["content-domain", "content-audience", "content-goal", "content-tone", "content-duration"].forEach(id => { byId(id).disabled = busy; });
     analyze.disabled = !(contentAdvisoryReady() && direction && evidenceSummary && contentProfile.audience && contentProfile.goal && !busy);
     confirmation.disabled = !(contentAdvisoryReady() && ready && !busy && !generated);
@@ -1004,6 +1010,7 @@
     contentStrategyDraft = {
       direction: "",
       evidenceSummary: "",
+      evidencePaths: "",
       contentProfile: null,
       analysisArtifactId: "",
       analysis: null,
@@ -1017,12 +1024,13 @@
   }
 
   async function analyzeContentDirection() {
-    const { direction, evidenceSummary, contentProfile } = contentStrategyInputs();
+    const { direction, evidenceSummary, evidencePaths, contentProfile } = contentStrategyInputs();
     if (!contentAdvisoryReady() || !direction || !evidenceSummary || !contentProfile.audience || !contentProfile.goal || contentStrategyAnalyzing || contentGenerating) return;
     contentStrategyAnalyzing = true;
     contentStrategyDraft = {
       direction,
       evidenceSummary,
+      evidencePaths,
       contentProfile,
       analysisArtifactId: "",
       analysis: null,
@@ -1035,6 +1043,16 @@
     byId("generation-status").textContent = "正在分析你锁定的方向，不会自动换题或写稿。";
     updateContentStrategyControls();
     try {
+      const paths = evidencePaths.split(/\r?\n/u).map(item => item.trim()).filter(Boolean);
+      let evidenceArtifactIds = [];
+      if (paths.length) {
+        const snapshot = await multiAgentRequest("/api/multi-agent/evidence/snapshot", {
+          method: "POST",
+          body: { paths },
+          idempotencyPrefix: "workspace-evidence-snapshot",
+        });
+        evidenceArtifactIds = [snapshot.evidenceArtifactId];
+      }
       const payload = await multiAgentRequest("/api/multi-agent/content-strategy/analyze", {
         method: "POST",
         body: {
@@ -1047,6 +1065,7 @@
             sourceId: "user-provided-summary",
             provenance: "user_provided",
           }],
+          evidenceArtifactIds,
           constraints: [
             "只分析用户锁定的方向，不得换题或直接写稿",
             "只使用真实经历和可追溯证据，不虚构结果",
@@ -2666,11 +2685,12 @@
 
   // One-click content generation and automatic video workflow
   byId("analyze-content-direction").addEventListener("click", analyzeContentDirection);
-  for (const id of ["content-direction", "content-evidence-summary"]) {
+  for (const id of ["content-direction", "content-evidence-summary", "content-evidence-paths"]) {
     byId(id).addEventListener("input", () => {
       const draft = currentWorkspaceState().contentDraft;
       draft.direction = byId("content-direction").value;
       draft.evidenceSummary = byId("content-evidence-summary").value;
+      draft.evidencePaths = byId("content-evidence-paths").value;
       saveState();
       resetContentStrategyAnalysis();
     });

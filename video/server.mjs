@@ -749,6 +749,9 @@ export async function validateContentGenerationStrategy(options = {}, dependenci
   }
 
   const lockedDirection = requiredLockedDirection(options.lockedDirection);
+  const requestedWorkspaceId = options.workspaceId
+    ? normalizeWorkspaceId(options.workspaceId)
+    : "";
   const expectedDirectionHash = hashLockedDirection(lockedDirection);
   const declaredDirectionHash = String(options.lockedDirectionHash || "").trim();
   if (declaredDirectionHash !== expectedDirectionHash) {
@@ -775,6 +778,14 @@ export async function validateContentGenerationStrategy(options = {}, dependenci
     confirmationArtifactId,
     "content strategy confirmation"
   );
+  if (requestedWorkspaceId && confirmation.workspaceId
+    && normalizeWorkspaceId(confirmation.workspaceId) !== requestedWorkspaceId) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_WORKSPACE_MISMATCH",
+      "content strategy confirmation belongs to a different workspace",
+      404
+    );
+  }
   if (confirmation.schemaVersion !== 1 || confirmation.kind !== "content_strategy_human_confirmation") {
     throw contentStrategyError("CONTENT_STRATEGY_CONFIRMATION_INVALID", "confirmation artifact has an invalid contract", 409);
   }
@@ -814,6 +825,14 @@ export async function validateContentGenerationStrategy(options = {}, dependenci
     analysisArtifactId,
     "content strategy analysis"
   );
+  if (requestedWorkspaceId && analysisArtifact.workspaceId
+    && normalizeWorkspaceId(analysisArtifact.workspaceId) !== requestedWorkspaceId) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_WORKSPACE_MISMATCH",
+      "content strategy analysis belongs to a different workspace",
+      404
+    );
+  }
   if (analysisArtifact.schemaVersion !== 1 || analysisArtifact.kind !== "content_strategy_analysis") {
     throw contentStrategyError("CONTENT_STRATEGY_ANALYSIS_INVALID", "analysis artifact has an invalid contract", 409);
   }
@@ -4635,6 +4654,76 @@ async function readMultiAgentArtifact(kind, id) {
   }
 }
 
+const workspaceEvidenceExtensions = new Set([
+  ".css", ".csv", ".html", ".js", ".json", ".jsonl", ".jsx", ".md",
+  ".mjs", ".py", ".srt", ".ts", ".tsx", ".txt", ".yaml", ".yml",
+]);
+
+function scrubWorkspaceEvidenceText(value) {
+  return String(value || "")
+    .replace(/(?:file:\/\/\/?)?(?:[A-Za-z]:[\\/]|\\\\)[^\s"'<>]+/giu, "<workspace-path>")
+    .replace(/(?:sk|gsk|ghp|github_pat)_[A-Za-z0-9_-]{8,}/giu, "<redacted-secret>")
+    .replace(/(["']?(?:api[_-]?key|access[_-]?token|authorization|cookie|password|private[_-]?key|secret|token)["']?\s*[:=]\s*)(?:["'][^"'\r\n]*["']|[^\s,}\r\n]+)/gimu, "$1<redacted-secret>")
+    .replace(/(^|\n)\s*(?:api[_-]?key|token|password|secret)\s*=.*$/gimu, "$1<redacted-secret-line>")
+    .replace(/\u0000/g, "")
+    .trim();
+}
+
+async function createWorkspaceEvidenceSnapshot({ paths } = {}, { workspaceId = defaultWorkspaceId } = {}) {
+  if (!Array.isArray(paths) || paths.length === 0 || paths.length > 6) {
+    throw Object.assign(new Error("paths must contain 1 to 6 workspace-relative text files"), { statusCode: 400 });
+  }
+  const seen = new Set();
+  const files = [];
+  const evidence = [];
+  let totalBytes = 0;
+  const realRoot = await fsp.realpath(root);
+  for (const rawPath of paths) {
+    const requested = String(rawPath || "").trim().replace(/\\/g, "/");
+    if (!requested || path.isAbsolute(requested) || requested.split("/").some(part => !part || part === ".." || part.startsWith("."))) {
+      throw Object.assign(new Error("evidence paths must be non-hidden workspace-relative files"), { statusCode: 400 });
+    }
+    const relativePath = path.normalize(requested).replace(/\\/g, "/");
+    if (seen.has(relativePath.toLowerCase())) {
+      throw Object.assign(new Error("evidence paths must not contain duplicates"), { statusCode: 400 });
+    }
+    seen.add(relativePath.toLowerCase());
+    const extension = path.extname(relativePath).toLowerCase();
+    if (!workspaceEvidenceExtensions.has(extension)) {
+      throw Object.assign(new Error(`unsupported evidence file type: ${extension || "none"}`), { statusCode: 400 });
+    }
+    const requestedFile = confined(root, relativePath);
+    const file = await fsp.realpath(requestedFile).catch(error => {
+      if (error.code === "ENOENT") throw Object.assign(new Error("workspace evidence file not found"), { statusCode: 404 });
+      throw error;
+    });
+    const normalizedRoot = realRoot.toLowerCase();
+    const normalizedFile = file.toLowerCase();
+    if (normalizedFile !== normalizedRoot && !normalizedFile.startsWith(`${normalizedRoot}${path.sep}`)) {
+      throw Object.assign(new Error("workspace evidence symlink escapes the workspace"), { statusCode: 400 });
+    }
+    const stat = await fsp.stat(file);
+    if (!stat.isFile() || stat.size > 128 * 1024 || totalBytes + stat.size > 256 * 1024) {
+      throw Object.assign(new Error("workspace evidence files must be text files up to 128 KiB each and 256 KiB total"), { statusCode: 413 });
+    }
+    totalBytes += stat.size;
+    const raw = await fsp.readFile(file, "utf8");
+    const sha256 = crypto.createHash("sha256").update(raw, "utf8").digest("hex");
+    const excerpt = scrubWorkspaceEvidenceText(raw).slice(0, 7000);
+    if (!excerpt) throw Object.assign(new Error("workspace evidence file is empty after safety filtering"), { statusCode: 409 });
+    const index = files.length + 1;
+    files.push({ relativePath, sizeBytes: stat.size, sha256 });
+    evidence.push({
+      id: `workspace.file.${index}.${sha256.slice(0, 12)}`,
+      kind: "workspace-file",
+      summary: `服务器已读取并校验工作区文件 ${relativePath}；SHA-256 ${sha256}。内容摘录：\n${excerpt}`,
+      sourceId: `workspace-file-${sha256.slice(0, 20)}`,
+      provenance: "workspace_verified",
+    });
+  }
+  return { workspaceId, files, evidence };
+}
+
 async function listMultiAgentMemory({ kind, status } = {}) {
   const conditions = [];
   const values = [];
@@ -4738,6 +4827,8 @@ const multiAgentApi = createMultiAgentApi({
   contentPrinciples: multiAgentContentPrinciples,
   ordinaryViewerCritic: multiAgentOrdinaryViewerCritic,
   buildBlindReviewBundle,
+  createWorkspaceEvidence: createWorkspaceEvidenceSnapshot,
+  workspaceIdForRequest: req => req.kouboWorkspaceId,
 });
 
 const server = http.createServer(async (req, res) => {
@@ -5370,6 +5461,7 @@ export {
   finalReviewEvidenceHash,
   finalReviewRecordHash,
   createOrReadVersionedFinalReview,
+  createWorkspaceEvidenceSnapshot,
   withJobMutation,
   writeMultiAgentArtifact,
 };

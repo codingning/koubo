@@ -101,6 +101,9 @@
                 <input id="content-direction" type="text" maxlength="240" placeholder="例如：家庭咖啡新手怎样选择第一套器具">
                 <label for="content-evidence-summary">事实、素材或可引用信息</label>
                 <textarea id="content-evidence-summary" rows="5" maxlength="1600" placeholder="写下真实经历、产品资料、研究结论、案例或你准备展示的素材；没有的不要补。"></textarea>
+                <label for="content-evidence-paths">工作区证据文件（可选，每行一个相对路径）</label>
+                <textarea id="content-evidence-paths" rows="3" maxlength="1200" spellcheck="false" placeholder="例如：docs/acceptance-report.md&#10;tests/workflow.test.mjs"></textarea>
+                <small>服务器会读取文件、计算 SHA-256 并生成不可变证据快照；网页不能自行伪造“已核验”来源。</small>
                 <button id="analyze-content-direction" class="btn btn-secondary" disabled>第 1 步：分析方向</button>
               </div>
               <div id="content-strategy-analysis" class="strategy-analysis is-empty" aria-live="polite">

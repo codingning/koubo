@@ -15,6 +15,7 @@ const {
   auditGeneratedContentScript,
   buildGeneratedContentScriptAuditInput,
   closeServerResourcesForTests,
+  createWorkspaceEvidenceSnapshot,
   generateContent,
   hashLockedDirection,
   normalizeRequiredReferenceSourceIds,
@@ -22,6 +23,26 @@ const {
   validateContentGenerationStrategy,
   writeMultiAgentArtifact,
 } = serverModule;
+
+test("workspace evidence snapshot reads only safe relative text files and derives provenance server-side", async () => {
+  const snapshot = await createWorkspaceEvidenceSnapshot({
+    paths: ["tests/server-content-strategy.test.mjs"],
+  }, { workspaceId: "acceptance-workspace" });
+  assert.equal(snapshot.workspaceId, "acceptance-workspace");
+  assert.equal(snapshot.files[0].relativePath, "tests/server-content-strategy.test.mjs");
+  assert.match(snapshot.files[0].sha256, /^[a-f0-9]{64}$/u);
+  assert.equal(snapshot.evidence[0].provenance, "workspace_verified");
+  assert.equal(snapshot.evidence[0].summary.includes(process.cwd()), false);
+
+  await assert.rejects(
+    () => createWorkspaceEvidenceSnapshot({ paths: [".env"] }),
+    /non-hidden workspace-relative files/i
+  );
+  await assert.rejects(
+    () => createWorkspaceEvidenceSnapshot({ paths: ["../outside.txt"] }),
+    /workspace-relative files/i
+  );
+});
 
 test("required reference ids are normalized separately from content evidence ids", () => {
   assert.deepEqual(normalizeRequiredReferenceSourceIds({
@@ -86,6 +107,7 @@ function strategyArtifacts(direction, options = {}) {
   const analysisArtifactCore = {
     schemaVersion: 1,
     kind: "content_strategy_analysis",
+    ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
     input,
     analysis,
     principleIds: [],
@@ -104,6 +126,7 @@ function strategyArtifacts(direction, options = {}) {
   const confirmationCore = {
     schemaVersion: 1,
     kind: "content_strategy_human_confirmation",
+    ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
     analysisArtifactId,
     analysisContentHash: options.analysisContentHash || analysisArtifact.contentHash,
     lockedDirection: options.confirmationDirection || direction,
@@ -261,6 +284,18 @@ test("request direction hash and authoritative confirmation direction must match
       lockedDirectionHash: hashLockedDirection("另一个方向"),
     }, { readArtifactFn: artifacts.readArtifactFn }),
     /confirmation artifact direction/i
+  );
+});
+
+test("content generation cannot reuse strategy artifacts from another workspace", async () => {
+  const direction = "解释本地工具的写接口安全边界";
+  const artifacts = strategyArtifacts(direction, { workspaceId: "workspace-a" });
+  await assert.rejects(
+    () => validateContentGenerationStrategy({
+      ...lockedOptions(direction, artifacts),
+      workspaceId: "workspace-b",
+    }, { readArtifactFn: artifacts.readArtifactFn }),
+    error => error.statusCode === 404 && /different workspace/i.test(error.message)
   );
 });
 

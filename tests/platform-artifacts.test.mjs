@@ -17,7 +17,7 @@ test("workbench keeps universal drafts isolated per workspace", () => {
   const source = fs.readFileSync(path.join(root, "web", "app.js"), "utf8");
   assert.match(source, /persisted\.workspaces/);
   assert.match(source, /function currentWorkspaceState/);
-  assert.match(source, /contentDraft: \{ direction: "", evidenceSummary: "" \}/);
+  assert.match(source, /contentDraft: \{ direction: "", evidenceSummary: "", evidencePaths: "" \}/);
   assert.match(source, /workspace\.contentProfile = \{ \.\.\.workspace\.contentProfile, \.\.\.profile \}/);
 });
 

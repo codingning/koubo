@@ -394,6 +394,7 @@ for (const id of [
 for (const id of [
   "content-direction",
   "content-evidence-summary",
+  "content-evidence-paths",
   "analyze-content-direction",
   "content-strategy-analysis",
   "confirm-content-strategy",
@@ -408,10 +409,13 @@ for (const route of [
   "/api/multi-agent/memory",
 ]) assert(app.includes(route), `Missing multi-agent client route: ${route}`);
 for (const route of [
+  "/api/multi-agent/evidence/snapshot",
   "/api/multi-agent/content-strategy/analyze",
   "/api/multi-agent/content-strategy/confirm",
   "/api/contents/generate",
 ]) assert(app.includes(route), `Missing content strategy client route: ${route}`);
+assert(app.includes("evidenceArtifactIds") && app.includes("workspace-evidence-snapshot"), "网页没有把服务器证据快照绑定到内容分析请求");
+assert(serverSource.includes('provenance: "workspace_verified"') && serverSource.includes("createWorkspaceEvidenceSnapshot"), "服务端没有从工作区文件派生已核验证据");
 const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
 const referenced = new Set([...app.matchAll(/byId\("([^"]+)"\)/g)].map(match => match[1]));
 for (const id of referenced) assert(ids.has(id), `app.js 引用了不存在的 #${id}`);

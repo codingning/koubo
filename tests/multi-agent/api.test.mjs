@@ -136,6 +136,22 @@ async function apiFixture(t, overrides = {}) {
       const artifact = artifacts.find(item => item.kind === kind && item.id === id);
       return artifact?.value ?? null;
     },
+    workspaceIdForRequest: req => String(req.headers["x-koubo-workspace"] || "local-default"),
+    createWorkspaceEvidence: async ({ paths }, { workspaceId }) => ({
+      files: paths.map((relativePath, index) => ({
+        relativePath,
+        sizeBytes: 100 + index,
+        sha256: String(index + 1).repeat(64),
+      })),
+      evidence: paths.map((relativePath, index) => ({
+        id: `workspace.file.${index + 1}`,
+        kind: "workspace-file",
+        summary: `服务器核验文件 ${relativePath}`,
+        sourceId: `workspace-source-${index + 1}`,
+        provenance: "workspace_verified",
+      })),
+      workspaceId,
+    }),
     listMemory: async () => [{
       id: "caption.pop.v1",
       status: "recreated",
@@ -428,6 +444,69 @@ test("content strategy analysis is idempotent and writes only an independent art
   assert.equal(artifacts[0].value.authority.promotesMemory, false);
   assert.deepEqual(job, beforeJob);
   assert.deepEqual(content, beforeContent);
+});
+
+test("workspace evidence snapshots are server-authored, workspace-scoped, and unlock verified provenance", async t => {
+  const { request, artifacts, contentStrategyCalls } = await apiFixture(t);
+  const snapshot = await request(
+    "POST",
+    "/api/multi-agent/evidence/snapshot",
+    { paths: ["docs/acceptance.md"] },
+    {
+      idempotencyKey: "workspace-evidence-shared-key",
+      headers: { "X-Koubo-Workspace": "workspace-a" },
+    }
+  );
+  assert.equal(snapshot.status, 201, JSON.stringify(snapshot.data));
+  assert.equal(snapshot.data.evidence[0].provenance, "workspace_verified");
+  const evidenceRecord = artifacts.find(item => item.kind === "workspace-evidence").value;
+  assert.equal(evidenceRecord.workspaceId, "workspace-a");
+  assert.equal(evidenceRecord.authority.clientMaySetProvenance, false);
+  assert.match(evidenceRecord.contentHash, /^[a-f0-9]{64}$/u);
+
+  const analyzed = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/analyze",
+    {
+      direction: "解释一份真实的本地验收报告",
+      evidence: [{
+        id: "client.claim",
+        kind: "claim",
+        summary: "客户端摘要只能算用户提供",
+        provenance: "workspace_verified",
+      }],
+      evidenceArtifactIds: [snapshot.data.evidenceArtifactId],
+    },
+    {
+      idempotencyKey: "analyze-with-workspace-evidence",
+      headers: { "X-Koubo-Workspace": "workspace-a" },
+    }
+  );
+  assert.equal(analyzed.status, 201, JSON.stringify(analyzed.data));
+  assert.deepEqual(
+    contentStrategyCalls.at(-1).minimalInput.evidence.map(item => item.provenance),
+    ["user_provided", "workspace_verified"]
+  );
+
+  const crossWorkspaceRead = await request(
+    "GET",
+    `/api/multi-agent/artifacts/workspace-evidence/${snapshot.data.evidenceArtifactId}`,
+    undefined,
+    { headers: { "X-Koubo-Workspace": "workspace-b" } }
+  );
+  assert.equal(crossWorkspaceRead.status, 404);
+
+  const otherWorkspace = await request(
+    "POST",
+    "/api/multi-agent/evidence/snapshot",
+    { paths: ["docs/acceptance.md"] },
+    {
+      idempotencyKey: "workspace-evidence-shared-key",
+      headers: { "X-Koubo-Workspace": "workspace-b" },
+    }
+  );
+  assert.equal(otherWorkspace.status, 201, JSON.stringify(otherWorkspace.data));
+  assert.notEqual(otherWorkspace.data.evidenceArtifactId, snapshot.data.evidenceArtifactId);
 });
 
 test("human confirmation creates a separate artifact and only unlocks Script Agent handoff", async t => {
@@ -825,6 +904,7 @@ test("job ordinary review rejects client-provided frame evidence", async t => {
 test("every new mutation route requires Idempotency-Key", async t => {
   const { request } = await apiFixture(t);
   const routes = [
+    ["/api/multi-agent/evidence/snapshot", { paths: ["docs/evidence.md"] }],
     ["/api/multi-agent/content-strategy/analyze", { direction: "测试方向" }],
     ["/api/multi-agent/content-strategy/confirm", { analysisArtifactId: "missing", decision: "approved", actor: { type: "human", id: "owner" } }],
     ["/api/contents/content.fixture/multi-agent/ordinary-review", {}],

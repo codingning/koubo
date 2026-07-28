@@ -8,7 +8,7 @@ Koubo 是一个本地优先的通用口播稿生成、真人视频剪辑和人�
 
 1. 双击 `打开AI口播工作台.vbs`。
 2. 选择内容领域、目标受众、视频目标、表达语气和目标时长。
-3. 填写明确方向以及真实事实、素材或可引用信息。
+3. 填写明确方向以及真实事实、素材或可引用信息；需要严格证据时，可附工作区相对文件路径，由服务器读取并生成 SHA-256 证据快照。
 4. Content Strategist 只分析方向、受众价值和证据缺口；用户明确确认后才生成稿件。
 5. 阅读 Ordinary Viewer Critic 的独立稿件意见，决定修改或拍摄。
 6. 上传真人原片，进入本地 `faster-whisper + keepSegments + visual-director-v4` 主链。
@@ -48,6 +48,7 @@ Koubo 是一个本地优先的通用口播稿生成、真人视频剪辑和人�
 - CORS 只允许当前 `127.0.0.1/localhost` 工作台和显式配置的可信 Origin。
 - 正常启动时，所有写操作都要求进程生命周期随机会话令牌；同源 UI 通过 `/api/session` 自动获取。
 - 内容和视频任务带 `workspaceId`，列表与任务访问按工作区隔离。
+- 客户端摘要始终视为 `user_provided`；只有服务器实际读取工作区文本文件后才能派生 `workspace_verified`，且证据、分析、确认 artifact 均绑定工作区。
 - `config/runtime-lock.json` 固定 Node、Python、HyperFrames 和 FFmpeg 版本/哈希。
 - `scripts/setup_runtime.ps1` 从锁文件建立独立 `.runtime`、`.runtime-exporters` 和可选 `.runtime-multi-agent`。
 - `scripts/verify_runtime_lock.mjs` 检查版本、二进制哈希、Python 包、HyperFrames 固定版本、项目 Skill 路由以及 P3 默认关闭状态。
