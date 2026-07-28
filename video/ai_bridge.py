@@ -463,6 +463,8 @@ def reference_issues(data: dict[str, Any], research: dict[str, Any], topic_plan:
 def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
     evidence = payload.get("evidence", {})
     content_style = payload.get("content_style", {})
+    platform_profile = payload.get("platform_profile", {}) if isinstance(payload.get("platform_profile"), dict) else {}
+    universal_mode = platform_profile.get("mode") == "universal"
     locked_direction = str(payload.get("locked_direction") or "").strip()
     locked_direction_hash = str(payload.get("locked_direction_hash") or "").strip()
     direction_source = str(payload.get("direction_source") or "").strip()
@@ -494,14 +496,23 @@ def plan_topic(payload: dict[str, Any]) -> dict[str, Any]:
     )
     system = f"""你是AI使用案例内容编辑。{lock_instruction} 选题必须回答“普通人怎样使用AI得到一个具体结果”，而不是“创作者怎样开发了一套软件”。优先选择能展示使用前、使用后、给AI的输入、第一版问题、具体返修和最终边界的案例。个人项目只承担真实试验场和证据角色；代码、文件名、Git、接口、安装过程默认不进入主题。不要选纯生活感悟、泛成长、职业自由或项目进度汇报。Content Strategist 的分析只用于理解受众、收益、证据、弱点和风险，不能授权换题、编造事实或提前写稿。输出单个JSON对象，不要Markdown。"""
     user = f"""服务端锁定方向：\n{locked_direction or '本次由用户显式允许 Agent 找题'}\n\nContent Strategist 已确认的分析上下文：\n{json.dumps(strategy_artifact, ensure_ascii=False, indent=2)}\n\n真实证据：\n{json.dumps(evidence, ensure_ascii=False, indent=2)}\n\n用户本次明确要求：\n{json.dumps(payload.get('editorial_brief', {}), ensure_ascii=False, indent=2)}\n\n内容定位：\n{json.dumps(content_style, ensure_ascii=False, indent=2)}\n\n已有标题：\n{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n要求：{lock_instruction} viewerUseCase 必须落实 Strategist 已确认的 audience 与 viewerBenefit；coreQuestion 必须服务其 testableQuestion；同时诚实保留 weaknesses、uncertainties 和证据边界。topic、shortTopic和aiAngle都要让普通观众一眼看出在讲AI；viewerUseCase必须描述观众可复用的AI用法；visibleTransformation和proofOpening必须能拍成画面；methodPromise给2—4步人话方法。searchQueries写2—3个适合抖音检索的具体同题词；keywords写5—10个可用于匹配参考视频的短词；不要把Day编号、代码量、文件名、安装命令或Git状态当成选题。"""
+    if universal_mode:
+        schema.update({
+            "topic": "用户锁定的主选题",
+            "shortTopic": "12字以内且能看出内容方向",
+            "aiAngle": "兼容字段：填写本集的具体内容角度，不要求属于AI",
+            "viewerUseCase": "目标观众看完后可以采用的判断、方法或行动",
+        })
+        system = f"""你是通用口播平台的内容编辑。{lock_instruction} 主题可以属于知识、产品、职场、教育、生活、商业、技术或用户指定的任何合法方向。必须服务用户给出的目标受众、内容目标、语气、语言和时长，不得强行改成AI成长内容。只使用真实证据，不编造经历、数据、结果、用户反馈或热点。输出单个JSON对象，不要Markdown。"""
+        user = f"""服务端锁定方向：\n{locked_direction or '本次由用户显式允许 Agent 找题'}\n\n本次通用内容配置：\n{json.dumps(platform_profile, ensure_ascii=False, indent=2)}\n\nContent Strategist 已确认的分析：\n{json.dumps(strategy_artifact, ensure_ascii=False, indent=2)}\n\n真实证据：\n{json.dumps(evidence, ensure_ascii=False, indent=2)}\n\n用户明确要求：\n{json.dumps(payload.get('editorial_brief', {}), ensure_ascii=False, indent=2)}\n\n已有标题：\n{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n要求：{lock_instruction} topic 必须保持锁定方向；viewerUseCase、coreQuestion、proofOpening 和 methodPromise 必须服务指定受众与目标。提供2—3个可用于查找同题参考内容的搜索词和5—10个关键词。不要把内部工程、文件名、Git或系统状态当作主题，除非用户明确要求技术教程。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.2, max_tokens=3000)
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
-    if not AI_TOPIC_PATTERN.search(str(data.get("topic") or "") + str(data.get("aiAngle") or "")):
+    if not universal_mode and not AI_TOPIC_PATTERN.search(str(data.get("topic") or "") + str(data.get("aiAngle") or "")):
         raise RuntimeError("选题规划偏离AI主线")
     if not 2 <= len(data.get("searchQueries") or []) <= 3:
         raise RuntimeError("选题规划没有给出2—3个同题视频搜索词")
     if len(str(data.get("viewerUseCase") or "").strip()) < 10 or len(str(data.get("proofOpening") or "").strip()) < 8:
-        raise RuntimeError("选题规划没有锁定观众可复用的AI用法和结果先行开场")
+        raise RuntimeError("选题规划没有锁定观众可复用的内容价值和结果先行开场")
     if locked_direction and str(data.get("topic") or "").strip() != locked_direction:
         raise RuntimeError("选题规划更改了用户锁定方向")
     if locked_direction:
@@ -540,7 +551,7 @@ def analyze_reference(payload: dict[str, Any]) -> dict[str, Any]:
         "limits": ["视频未证明或仍需核验的边界"],
         "copyBoundary": "不得复制的措辞、案例、人设与素材边界",
     }
-    system = """你负责分析一条公开AI视频的内容结构。只能根据逐字转录、标题和公开评论概括；不得补写视频没有的知识，不得输出长段原文，不得复制创作者措辞、案例或人设。输出单个JSON对象，不要Markdown。"""
+    system = """你负责分析一条公开参考视频的内容结构。只能根据逐字转录、标题和公开评论概括；不得补写视频没有的知识，不得输出长段原文，不得复制创作者措辞、案例或人设。输出单个JSON对象，不要Markdown。"""
     user = f"""本次目标选题：\n{json.dumps(payload.get('topic_plan', {}), ensure_ascii=False, indent=2)}\n\n视频信息：\n{json.dumps(source, ensure_ascii=False, indent=2)}\n\n逐字转录：\n{transcript}\n\n公开评论（仅用于判断观众真实问题，不引用用户名和原句）：\n{json.dumps(comments, ensure_ascii=False, indent=2)}\n\n输出结构：\n{json.dumps(schema, ensure_ascii=False, indent=2)}"""
     return call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.1, max_tokens=6000)
 
@@ -549,6 +560,10 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
     evidence = payload.get("evidence", {})
     topic_plan = payload.get("topic_plan", {}) if isinstance(payload.get("topic_plan"), dict) else {}
     reference_research = payload.get("reference_research", {}) if isinstance(payload.get("reference_research"), dict) else {}
+    reference_distillation = payload.get("reference_distillation", {}) if isinstance(payload.get("reference_distillation"), dict) else {}
+    platform_profile = payload.get("platform_profile", {}) if isinstance(payload.get("platform_profile"), dict) else {}
+    universal_mode = platform_profile.get("mode") == "universal"
+    target_duration = max(30, min(600, int(platform_profile.get("durationSeconds") or 120)))
     day_number = int(payload.get("day_number") or 1)
     today = str(payload.get("date") or "")
     style_path = ROOT / "config" / "content_style.json"
@@ -575,9 +590,9 @@ def generate_content(payload: dict[str, Any]) -> dict[str, Any]:
     schema = {
         "mainTopic": "主选题",
         "shortTopic": "12字以内短标题",
-        "column": f"普通人学AI第{day_number}天",
-        "durationFull": "约2—3分钟",
-        "durationShort": "约60—90秒衍生版",
+        "column": "通用口播" if universal_mode else f"普通人学AI第{day_number}天",
+        "durationFull": f"约{target_duration}秒" if universal_mode else "约2—3分钟",
+        "durationShort": f"约{max(30, round(target_duration * 0.55))}秒衍生版" if universal_mode else "约60—90秒衍生版",
         "hook": "0-3秒开场",
         "audienceBenefit": "观众能带走的一句话",
         "resultFirstProof": {
@@ -699,6 +714,43 @@ Content Strategist 已确认的分析上下文：
 15. 只能使用 reference_research.fullContentSources 中完成全文核验的来源来概括视频结构和知识。metadataOnlySources 只能用于发现选题和评论问题，不能假装看过完整视频。
 16. referenceResearch.sourceIds 至少记录1条实际使用的完整来源，并必须包含 topic_plan.requiredReferenceSourceIds 中用户明确指定的来源；至少提炼2条知识、2个结构选择和1个互动/收藏设计。全部用自己的话重组，并用本人的真实进度、证据和限制形成原创版本。
 """
+    if universal_mode:
+        system = f"""你是通用口播平台的总编和视频编导。{lock_instruction} 内容可以属于用户指定的任何合法方向，不得强行改成AI、个人成长或开发过程。面向指定受众，用指定语气和语言，把一个核心问题讲清楚，并给出可信、可执行、可拍摄的内容。只根据真实证据写作，不得虚构完成项、数据、案例、用户反馈、评论、热点或授权。参考内容只借鉴结构、问题顺序、证据位置和视听节奏，不复制措辞、案例、人设或素材。输出单个JSON对象，不要Markdown。"""
+        user = f"""日期：{today}
+
+通用内容配置：
+{json.dumps(platform_profile, ensure_ascii=False, indent=2)}
+
+真实证据：
+{json.dumps(evidence, ensure_ascii=False, indent=2)}
+
+Content Strategist 已确认的分析：
+{json.dumps(strategy_artifact, ensure_ascii=False, indent=2)}
+
+锁定的选题规划：
+{json.dumps(topic_plan, ensure_ascii=False, indent=2)}
+
+证据化参考视频拉片：
+{json.dumps(reference_distillation, ensure_ascii=False, indent=2)}
+
+已有标题：
+{json.dumps(payload.get('existing_topics', []), ensure_ascii=False)}
+
+输出结构：
+{json.dumps(schema, ensure_ascii=False, indent=2)}
+
+硬性要求：
+1. {lock_instruction} mainTopic 必须逐字等于锁定方向，不得换题。
+2. 目标受众为“{platform_profile.get('audience', '普通观众')}”，内容目标为“{platform_profile.get('goal', '讲清一个明确问题')}”，语气为“{platform_profile.get('tone', '自然、清楚、可信')}”。
+3. 完整稿目标约 {target_duration} 秒，按自然语速拆成5—12段；shortScript 是更短但信息闭环的衍生稿。
+4. 开头0—8秒给出具体冲突、结果、问题代价或可见证据，不能从无关自我介绍开始。
+5. 只讲一个核心问题。每个方法项必须包含可执行动作和可观察信号，禁止空泛口号。
+6. shooting.visualBeats 至少4项，并与当前口播含义对齐；没有真实证据时明确标为建议画面，不伪装为已完成结果。
+7. 参考来源只能使用完成全文核验的内容；所有知识和结构必须重新组织，并保留不可照抄与不确定性边界。
+8. engagement 只选择一个主要结尾动作，自然进入完整版和短版，不连续念多个CTA。
+9. titles 3个、covers 3个、candidates 最多5个；不自动发布。
+10. 字段名为兼容现有工作流而保留；aiAngle 在通用模式中表示“具体内容角度”，不要求属于AI。
+"""
     messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     result = call_json(messages, temperature=0.4, max_tokens=10000)
     def direction_issues(data: dict[str, Any]) -> list[str]:
@@ -715,16 +767,19 @@ Content Strategist 已确认的分析上下文：
             output.append("directionSource 更改了方向权限来源")
         return output
 
-    issues = (
-        structure_issues(result.get("data", {}))
-        + duration_issues(result.get("data", {}))
-        + ai_relevance_issues(result.get("data", {}), topic_plan)
-        + viewer_use_case_issues(result.get("data", {}), topic_plan)
-        + reference_issues(result.get("data", {}), reference_research, topic_plan)
-        + engagement_issues(result.get("data", {}), content_style)
-        + factual_issues(result.get("data", {}), evidence)
-        + direction_issues(result.get("data", {}))
-    )
+    def quality_issues(data: dict[str, Any]) -> list[str]:
+        common = (
+            structure_issues(data)
+            + reference_issues(data, reference_research, topic_plan)
+            + engagement_issues(data, content_style)
+            + factual_issues(data, evidence)
+            + direction_issues(data)
+        )
+        if universal_mode:
+            return common
+        return duration_issues(data) + ai_relevance_issues(data, topic_plan) + viewer_use_case_issues(data, topic_plan) + common
+
+    issues = quality_issues(result.get("data", {}))
     initial_issues = list(issues)
     repair_attempts = 0
     while issues and repair_attempts < 2:
@@ -739,17 +794,22 @@ Content Strategist 已确认的分析上下文：
 {json.dumps(result.get('data', {}), ensure_ascii=False, indent=2)}
 
         请在不增加任何新事实的前提下重写完整JSON。{lock_instruction} mainTopic 必须逐字等于服务端锁定方向；Content Strategist 已确认的受众、观众收益、核心问题、弱点、不确定性和证据边界必须被保留。主线必须是普通观众如何使用AI得到具体结果，开头0—8秒先展示成片效果或前后对比，然后再解释输入、第一版、具体返修、结果和边界；删除文件名、Git、代码量和内部实现汇报。若topic_plan.productionMode为self-demonstrating-final-video，让最终Day 2成片本身承担结果证据，不要用“测试素材、真人待验证”拆掉开头钩子；改为填写严格的publicationCondition，只有最终渲染和人工审核确认画面真实具备所述效果时才允许发布。完整版必须达到2—3分钟、550—950个有效字符并拆成7—12段。证据写着尚未拍摄或发布时，不能虚构拍摄遍数、耗时或发布结果。只能把reference_research.fullContentSources中的全文核验来源写入referenceResearch.sourceIds，并包含topic_plan.requiredReferenceSourceIds；外部知识和结构全部重新组织，不复制原句或画面。resultFirstProof与shooting.openingProof必须具体，shooting.visualBeats至少4项。保持一个核心问题和一种主结构，让每个框架项都有动作与可观察信号。engagement.commentPrompt、followPromise、viewerTask 只作为策划意图，从中选一个主动作改写为 primaryClose，自然放进两个版本结尾，不要把三句逐字连念。creativeTone.humorBeat 至少自然进入一个口播版本；如选择热梗，也要让 creativeTone.trendMeme.adaptedLine 自然进入正文，并修复所有门禁问题。"""
+        if universal_mode:
+            repair = f"""上一版没有通过通用口播内容门禁：
+- {chr(10).join(issues)}
+
+通用内容配置：
+{json.dumps(platform_profile, ensure_ascii=False, indent=2)}
+
+真实证据：
+{json.dumps(evidence, ensure_ascii=False, indent=2)}
+
+上一版JSON：
+{json.dumps(result.get('data', {}), ensure_ascii=False, indent=2)}
+
+请在不增加新事实的前提下重写完整JSON。{lock_instruction} mainTopic 必须逐字等于锁定方向；保留 Content Strategist 确认的受众、收益、核心问题、弱点、不确定性和证据边界。围绕一个核心问题组织约 {target_duration} 秒的自然口播，开头先给冲突、结果或问题代价，方法必须可执行，画面建议必须可拍摄，参考来源只借鉴结构和知识，不复制原句、案例、人设或素材。"""
         result = call_json(messages + [{"role": "assistant", "content": json.dumps(result.get("data", {}), ensure_ascii=False)}, {"role": "user", "content": repair}], temperature=0.15, max_tokens=10000)
-        issues = (
-            structure_issues(result.get("data", {}))
-            + duration_issues(result.get("data", {}))
-            + ai_relevance_issues(result.get("data", {}), topic_plan)
-            + viewer_use_case_issues(result.get("data", {}), topic_plan)
-            + reference_issues(result.get("data", {}), reference_research, topic_plan)
-            + engagement_issues(result.get("data", {}), content_style)
-            + factual_issues(result.get("data", {}), evidence)
-            + direction_issues(result.get("data", {}))
-        )
+        issues = quality_issues(result.get("data", {}))
     if issues:
         raise RuntimeError("内容质量与事实一致性门禁未通过：" + "；".join(issues))
     data = result.get("data") if isinstance(result.get("data"), dict) else {}

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>AI口播成长工作台</title>
+  <title>Koubo 通用口播工作台</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,8 +13,8 @@
       <div class="brand">
         <div class="brand-mark">口</div>
         <div>
-          <strong>AI口播工作台</strong>
-          <span>从知道到做到</span>
+          <strong>Koubo 口播工作台</strong>
+          <span>任意方向 · 从稿件到成片</span>
         </div>
       </div>
 
@@ -27,8 +27,8 @@
         <button class="nav-item" data-view="edit"><span class="nav-icon">剪</span><span>拍完AI剪辑</span></button>
         <button class="nav-item" data-view="publish"><span class="nav-icon">发</span><span>发布文案</span></button>
         <button class="nav-item" data-view="evidence"><span class="nav-icon">证</span><span>证据和风险</span></button>
-        <button class="nav-item" data-view="roadmap"><span class="nav-icon">30</span><span>成长路线</span></button>
-        <button class="nav-item" data-view="library"><span class="nav-icon">库</span><span>历史内容</span></button>
+        <button class="nav-item" data-view="roadmap"><span class="nav-icon">设</span><span>工作区设置</span></button>
+        <button class="nav-item" data-view="library"><span class="nav-icon">库</span><span>内容库</span></button>
       </nav>
 
       <div class="sidebar-bottom">
@@ -36,7 +36,7 @@
           <span class="safe-dot"></span>
           <div><strong>人工审核中</strong><small>不会自动发布或评论</small></div>
         </div>
-        <button id="export-review" class="sidebar-action">导出我的审核结果</button>
+          <button id="export-review" class="sidebar-action">导出审核结果</button>
       </div>
     </aside>
 
@@ -58,14 +58,14 @@
         <section id="view-today" class="view is-active" data-title="当前拍摄包" data-eyebrow="打开网页就能直接拍">
           <div class="start-banner">
             <div>
-              <span class="start-kicker">不用找文件 · 不用运行脚本</span>
-              <h2>别再继续准备，第一条先做起来</h2>
-              <p>以后只要双击项目根目录的 <strong>打开AI口播工作台.vbs</strong>，先锁定方向、阅读分析并确认，再生成口播、上传原片，最后审核成片。</p>
+              <span class="start-kicker">任意方向 · 本地媒体处理 · 人工审核</span>
+              <h2>从一个明确方向，生成可拍、可剪、可修改的口播</h2>
+              <p>选择内容领域、目标受众、视频目标和语气，确认真实事实后生成稿件；上传真人原片，再依次审核素材、关键帧、动态样片和最终成片。</p>
             </div>
             <div class="entry-path">
               <span>固定入口</span>
               <code>项目根目录\打开AI口播工作台.vbs</code>
-              <small>新口播先由你锁定方向，再由内容顾问分析；系统不会自动替你选题或确认。</small>
+              <small>每个本地工作区相互隔离；系统不会自动替用户确认、发布或上传真人媒体到云端。</small>
             </div>
           </div>
 
@@ -74,15 +74,33 @@
               <div>
                 <span class="step-tag">写稿前两步门</span>
                 <h3 id="content-strategy-title">先确认这次到底要讲什么</h3>
-                <p>填写一个明确方向和一段真实经历。分析只帮助你看清价值与证据，不会写稿、换题或自动确认。</p>
+                <p>填写一个明确方向以及真实事实、素材或可引用信息。分析只帮助你看清价值与证据，不会写稿、换题或自动确认。</p>
               </div>
             </div>
             <div class="strategy-gate-grid">
               <div class="strategy-form">
+                <label for="content-domain">内容领域</label>
+                <select id="content-domain">
+                  <option value="general">通用知识 / 经验</option>
+                  <option value="business">商业 / 产品</option>
+                  <option value="education">教育 / 科普</option>
+                  <option value="career">职场 / 求职</option>
+                  <option value="technology">科技 / AI / 开发</option>
+                  <option value="lifestyle">生活 / 兴趣</option>
+                  <option value="custom">其他自定义方向</option>
+                </select>
+                <label for="content-audience">目标受众</label>
+                <input id="content-audience" type="text" maxlength="240" placeholder="例如：第一次了解家庭咖啡的新手">
+                <label for="content-goal">这条视频希望观众获得什么</label>
+                <input id="content-goal" type="text" maxlength="320" placeholder="例如：能判断自己适合哪种入门器具">
+                <div class="strategy-inline-fields">
+                  <label>表达语气<input id="content-tone" type="text" maxlength="160" placeholder="自然、清楚、可信"></label>
+                  <label>目标时长（秒）<input id="content-duration" type="number" min="30" max="600" step="10" value="120"></label>
+                </div>
                 <label for="content-direction">本次方向</label>
-                <input id="content-direction" type="text" maxlength="240" placeholder="例如：分享我如何审计并试用一个开源 Skill">
-                <label for="content-evidence-summary">真实经历 / 证据摘要</label>
-                <textarea id="content-evidence-summary" rows="5" maxlength="1600" placeholder="只写真实发生过的过程、输入、失败、修改和结果；没有的不要补。"></textarea>
+                <input id="content-direction" type="text" maxlength="240" placeholder="例如：家庭咖啡新手怎样选择第一套器具">
+                <label for="content-evidence-summary">事实、素材或可引用信息</label>
+                <textarea id="content-evidence-summary" rows="5" maxlength="1600" placeholder="写下真实经历、产品资料、研究结论、案例或你准备展示的素材；没有的不要补。"></textarea>
                 <button id="analyze-content-direction" class="btn btn-secondary" disabled>第 1 步：分析方向</button>
               </div>
               <div id="content-strategy-analysis" class="strategy-analysis is-empty" aria-live="polite">
@@ -124,14 +142,14 @@
             <div class="hero-actions">
               <button class="btn btn-primary" data-go="script">查看完整口播稿</button>
               <button id="start-teleprompter" class="btn btn-dark">开始提词器</button>
-              <button id="copy-short-hero" class="btn btn-secondary">复制2—3分钟完整版</button>
+              <button id="copy-short-hero" class="btn btn-secondary">复制完整版</button>
             </div>
           </div>
 
           <div class="focus-grid">
             <article class="panel quick-script-panel">
               <div class="panel-head">
-                <div><span class="step-tag">默认拍2—3分钟完整版</span><h3>打开相机后，直接念这一版</h3></div>
+                <div><span class="step-tag">按目标时长生成完整版</span><h3>打开相机后，直接念这一版</h3></div>
                 <span id="home-script-duration" class="mini-label"></span>
               </div>
               <p id="home-script-preview" class="home-script-preview"></p>
@@ -591,18 +609,20 @@
           </article>
         </section>
 
-        <section id="view-roadmap" class="view" data-title="30天成长路线" data-eyebrow="计划不等于完成">
-          <div class="roadmap-head">
-            <div><strong>当前进度</strong><span>Day 1 / 30</span></div>
-            <div class="progress-track"><div class="progress-fill" style="width:3.33%"></div></div>
+        <section id="view-roadmap" class="view" data-title="工作区设置" data-eyebrow="本地优先 · 可迁移到多用户部署">
+          <div id="roadmap-grid" class="roadmap-grid">
+            <article class="panel workspace-settings">
+              <div class="panel-head"><div><span class="step-tag">本地工作区</span><h3>用户和任务隔离</h3></div><span class="mini-label">公网版未来由登录身份替换</span></div>
+              <div class="workspace-settings-grid">
+                <label>工作区 ID<input id="workspace-id" maxlength="64"></label>
+                <label>默认语言<input id="workspace-language" maxlength="24"></label>
+                <label>默认受众<input id="workspace-audience" maxlength="240"></label>
+                <label>默认内容目标<input id="workspace-goal" maxlength="320"></label>
+              </div>
+              <div class="settings-actions"><button id="save-workspace-settings" class="btn btn-primary">保存工作区设置</button><small>切换后只显示该工作区生成的稿件和视频任务。</small></div>
+            </article>
+            <div id="platform-stage-grid" class="roadmap-grid workspace-settings"></div>
           </div>
-          <div class="phase-legend">
-            <span><i class="legend-dot phase-1"></i>建立记录系统</span>
-            <span><i class="legend-dot phase-2"></i>第一个真实项目</span>
-            <span><i class="legend-dot phase-3"></i>提高判断能力</span>
-            <span><i class="legend-dot phase-4"></i>稳定与作品集</span>
-          </div>
-          <div id="roadmap-grid" class="roadmap-grid"></div>
         </section>
 
         <section id="view-library" class="view" data-title="历史内容" data-eyebrow="成长版和旧基线都保留">
@@ -610,8 +630,8 @@
             <input id="library-search" type="search" placeholder="搜索标题、栏目或日期">
             <div class="library-filters">
               <button class="filter-btn is-active" data-filter="all">全部</button>
-              <button class="filter-btn" data-filter="growth">成长版</button>
-              <button class="filter-btn" data-filter="legacy">旧基线</button>
+              <button class="filter-btn" data-filter="starter">通用示例</button>
+              <button class="filter-btn" data-filter="growth">原个人内容</button>
             </div>
           </div>
           <div id="library-list" class="library-list"></div>

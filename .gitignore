@@ -10,7 +10,9 @@ node_modules/
 video-jobs/*
 !video-jobs/.gitkeep
 outputs/qa-ai-edit/
+outputs/pagecam/
 outputs/thread-019f68f7-video-frame.jpg
+outputs/server-*.log
 
 # OS/editor
 Thumbs.db
@@ -24,6 +26,10 @@ content-items/
 .runtime/
 .runtime-downloads/
 .runtime-multi-agent/
+.runtime-exporters/
+requirements-runtime.resolved.local.txt
+requirements-exporters.resolved.local.txt
+requirements-multi-agent.resolved.local.txt
 __pycache__/
 *.pyc
 

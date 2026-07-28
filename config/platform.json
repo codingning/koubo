@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "product": {
+    "name": "Koubo 通用口播工作台",
+    "shortName": "Koubo",
+    "subtitle": "任意方向口播稿生成、真人剪辑与人工审核",
+    "mode": "local-first",
+    "supportedDeploymentModes": ["local-single-user", "self-hosted-multi-user", "public-saas"]
+  },
+  "defaults": {
+    "workspaceId": "local-default",
+    "language": "zh-CN",
+    "domain": "general",
+    "audience": "希望快速理解并采取行动的普通观众",
+    "goal": "让观众理解一个明确问题，并获得可执行的下一步",
+    "tone": "自然、清楚、可信",
+    "durationSeconds": 120
+  },
+  "security": {
+    "localOnly": true,
+    "writeSessionToken": true,
+    "trustedOrigins": ["http://127.0.0.1:{port}", "http://localhost:{port}"]
+  },
+  "governance": {
+    "autoPublish": false,
+    "humanApprovalRequired": true,
+    "authoritativePipeline": "visual-director-v4",
+    "authoritativeState": "job.json"
+  }
+}

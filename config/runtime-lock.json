@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "node": "22.20.0",
+  "python": "3.11.15",
+  "hyperframes": "0.7.71",
+  "ffmpeg": {
+    "versionContains": "N-125573-g90436de5e1-20260713",
+    "sha256": "f76c17e3efa3c28e99ac796e1ae1ada502c897832d76a703d87cc6c89def036a"
+  },
+  "exporterPythonRequirements": "requirements-exporters.lock.txt",
+  "multiAgentPythonRequirements": "requirements-multi-agent.lock.txt"
+}

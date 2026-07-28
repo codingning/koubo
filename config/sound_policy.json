@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "productionEnabled": false,
+  "status": "trial",
+  "defaultBackgroundMusic": false,
+  "speechAwareDucking": {
+    "supported": true,
+    "threshold": 0.08,
+    "ratio": 8,
+    "attackMs": 20,
+    "releaseMs": 320,
+    "requiresHumanApproval": true
+  },
+  "semanticSfx": {
+    "supported": true,
+    "maxCues": 12,
+    "requiresLocalFile": true,
+    "requiresLicenseBasis": true,
+    "requiresHumanApproval": true
+  }
+}

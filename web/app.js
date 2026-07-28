@@ -7,11 +7,100 @@
     return;
   }
 
-  const storageKey = "koubo-workbench-state-v1";
+  const genericStarter = {
+    id: "universal-starter",
+    kind: "starter",
+    date: "示例",
+    day: "新项目",
+    column: "通用口播示例",
+    status: "示例",
+    badge: "从任意方向开始",
+    durationFull: "约120秒",
+    durationShort: "约60秒",
+    mainTopic: "把一个复杂问题讲成普通人能听懂的口播",
+    shortTopic: "复杂问题讲清楚",
+    hook: "很多口播不是信息不够，而是观众前三秒还不知道这件事和自己有什么关系。",
+    audienceBenefit: "选择任意方向、受众和目标，生成可拍摄、可剪辑、可审核的口播包。",
+    audience: "任何需要制作真人口播的人",
+    contentProfile: { mode: "universal", domain: "general", audience: "普通观众", goal: "讲清一个明确问题", tone: "自然、清楚、可信", durationSeconds: 120 },
+    sourcePackagePath: "README.md",
+    sourcePackageHref: "../README.md",
+    engagement: { audienceMirror: "你可能有很多信息，却不知道怎样把它组织成观众愿意听完的一条口播。", viewerTask: "先写下本条视频只解决的一个问题。", followPromise: "上传真人原片后，继续完成字幕、画面包装和人工审核。" },
+    storyPosition: { yesterday: "方向和素材还没有被组织成可拍摄的内容。", today: "明确受众、目标和事实，生成第一版口播。", tomorrow: "上传原片并依次审核剪辑结果。" },
+    progress: ["通用内容配置已就绪，可以从任意合法方向开始。"],
+    candidates: [{ type: "通用示例", topic: "把一个复杂问题讲成普通人能听懂的口播", score: null, result: "示例" }],
+    structureDesign: { coreQuestion: "如何让目标观众快速理解并采取下一步？", archetype: "evidence-story" },
+    fullSegments: [
+      { time: "0—8秒", label: "问题代价", tone: "直接", text: "很多口播不是内容不够，而是观众前三秒还不知道这件事和自己有什么关系。" },
+      { time: "8—35秒", label: "明确对象", tone: "清楚", text: "先选定一个具体受众，再写清楚这条视频只帮助他解决什么问题。" },
+      { time: "35—75秒", label: "给出方法", tone: "可执行", text: "把信息整理成问题、判断、动作和可观察结果，避免堆概念，也不要把没有发生的结果包装成证据。" },
+      { time: "75—110秒", label: "准备画面", tone: "具体", text: "每个关键步骤都对应一张真实页面、一次操作、一个前后对比或一条数据变化，字幕只负责说了什么。" },
+      { time: "结尾", label: "下一步", tone: "自然", text: "现在输入你的方向、受众和真实素材，先生成第一版，再用自然语言继续修改。" }
+    ],
+    shortScript: "先确定这条口播只服务谁、只解决什么问题，再把内容整理成问题、判断、动作和结果。每个关键步骤准备一张真实画面，生成第一版后再用自然语言修改。",
+    titles: [{ type: "结果型", text: "任何方向，都能先生成一版可拍口播" }, { type: "问题型", text: "为什么你的口播信息很多却没人听完" }, { type: "方法型", text: "把复杂问题讲清楚的四步口播法" }],
+    covers: [{ id: "starter-a", name: "通用示例", copy: "复杂问题讲清楚", expression: "自然", composition: "人物与信息并列", color: "深色高对比", reason: "只作为新用户示例，不代表固定品牌风格。" }],
+    shooting: { broll: ["输入方向与受众", "生成口播稿", "上传真人原片", "关键帧与动态样片审核"], highlights: ["一个受众", "一个问题", "可执行动作", "真实画面"], guide: { 机位: "正面半身", 语速: "自然" } },
+    evidence: [{ name: "平台能力示例", proof: "说明通用输入和人工审核流程", path: "", public: true }],
+    risks: [{ text: "示例内容不能冒充真实结果", done: true }],
+    sourceFiles: [{ label: "查看通用平台说明", path: "../README.md" }],
+  };
+  if (!data.contentItems.some(item => item.id === genericStarter.id)) data.contentItems.unshift(genericStarter);
+
+  const storageKey = "koubo-workbench-state-v2";
   let persisted = {};
   try { persisted = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch (_) { persisted = {}; }
   if (!persisted.items) persisted.items = {};
   if (!persisted.currentId) persisted.currentId = data.contentItems[0].id;
+  if (!persisted.workspaceId) persisted.workspaceId = "local-default";
+  if (!persisted.contentProfile) persisted.contentProfile = { domain: "general", audience: "希望快速理解并采取行动的普通观众", goal: "让观众理解一个明确问题，并获得可执行的下一步", tone: "自然、清楚、可信", language: "zh-CN", durationSeconds: 120 };
+  if (!persisted.workspaces || typeof persisted.workspaces !== "object") persisted.workspaces = {};
+
+  function currentWorkspaceState(workspaceId = persisted.workspaceId) {
+    const id = String(workspaceId || "local-default").trim().toLowerCase() || "local-default";
+    if (!persisted.workspaces[id]) {
+      persisted.workspaces[id] = {
+        contentProfile: { ...persisted.contentProfile },
+        contentDraft: { direction: "", evidenceSummary: "" },
+      };
+    }
+    persisted.workspaces[id].contentProfile ||= { ...persisted.contentProfile };
+    persisted.workspaces[id].contentDraft ||= { direction: "", evidenceSummary: "" };
+    return persisted.workspaces[id];
+  }
+
+  currentWorkspaceState();
+
+  const nativeFetch = window.fetch.bind(window);
+  let localSessionToken = "";
+  let localSessionPromise = null;
+
+  async function ensureLocalSession() {
+    if (localSessionToken) return localSessionToken;
+    if (!localSessionPromise) {
+      localSessionPromise = nativeFetch(`${videoApiBase}/api/session`, {
+        cache: "no-store",
+        headers: { "X-Koubo-Workspace": persisted.workspaceId },
+      }).then(async response => {
+        if (!response.ok) throw new Error(`本地会话建立失败：${response.status}`);
+        const payload = await response.json();
+        localSessionToken = payload.session?.token || "";
+        return localSessionToken;
+      }).finally(() => { localSessionPromise = null; });
+    }
+    return localSessionPromise;
+  }
+
+  async function fetch(input, init = {}) {
+    const url = new URL(typeof input === "string" ? input : input.url, window.location.href);
+    const isLocalApi = url.origin === videoApiBase || url.origin === window.location.origin;
+    if (!isLocalApi) return nativeFetch(input, init);
+    const method = String(init.method || "GET").toUpperCase();
+    const headers = new Headers(init.headers || {});
+    headers.set("X-Koubo-Workspace", persisted.workspaceId);
+    if (!["GET", "HEAD", "OPTIONS"].includes(method)) headers.set("X-Koubo-Session", await ensureLocalSession());
+    return nativeFetch(input, { ...init, headers });
+  }
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -28,8 +117,8 @@
     edit: ["视频只在本机处理", "拍完AI剪辑"],
     publish: ["审核后再手动发布", "发布文案"],
     evidence: ["只讲能证明的事实", "证据和风险"],
-    roadmap: ["计划不等于完成", "30天成长路线"],
-    library: ["成长版和旧基线都保留", "历史内容"]
+    roadmap: ["本地优先 · 可迁移到多用户部署", "工作区设置"],
+    library: ["示例和历史内容都保留", "内容库"]
   };
 
   const defaultShootChecks = [
@@ -74,6 +163,7 @@
   let contentStrategyDraft = {
     direction: "",
     evidenceSummary: "",
+    contentProfile: null,
     analysisArtifactId: "",
     analysis: null,
     confirmationArtifactId: "",
@@ -378,12 +468,42 @@
   }
 
   function renderRoadmap() {
-    byId("roadmap-grid").innerHTML = data.roadmap.map(([day, phase, challenge, status]) => {
-      const phaseIndex = day <= 7 ? 1 : day <= 14 ? 2 : day <= 21 ? 3 : 4;
-      return `<article class="roadmap-day phase-index-${phaseIndex} ${status === "已完成" ? "is-done" : ""} ${status === "下一步" ? "is-next" : ""}">
-        <div class="day-number">Day ${day}</div><span class="day-phase">${htmlEscape(phase)}</span><p>${htmlEscape(challenge)}</p><span class="day-status">${htmlEscape(status)}</span>
-      </article>`;
-    }).join("");
+    const workspace = currentWorkspaceState();
+    const profile = workspace.contentProfile;
+    const draft = workspace.contentDraft;
+    byId("platform-stage-grid").innerHTML = `<article class="roadmap-day is-done"><div class="day-number">P0</div><span class="day-phase">本地安全</span><p>可信 Origin、写操作会话令牌、工作区隔离。</p><span class="day-status">已接入</span></article>
+    <article class="roadmap-day is-next"><div class="day-number">P1</div><span class="day-phase">可编辑交付</span><p>证据化拉片、语义素材锚点、剪映草稿和真实 UI 镜头。</p><span class="day-status">当前阶段</span></article>
+    <article class="roadmap-day"><div class="day-number">P2</div><span class="day-phase">生产资产</span><p>Storyboard、镜头注册表、声音设计和单期复盘。</p><span class="day-status">受控接入</span></article>
+    <article class="roadmap-day"><div class="day-number">P3</div><span class="day-phase">按需插件</span><p>Collage、WhisperX、Manim 默认关闭。</p><span class="day-status">默认关闭</span></article>`;
+    byId("workspace-id").value = persisted.workspaceId;
+    byId("workspace-language").value = profile.language || "zh-CN";
+    byId("workspace-audience").value = profile.audience || "";
+    byId("workspace-goal").value = profile.goal || "";
+    byId("content-domain").value = profile.domain || "general";
+    byId("content-audience").value = profile.audience || "";
+    byId("content-goal").value = profile.goal || "";
+    byId("content-tone").value = profile.tone || "";
+    byId("content-duration").value = String(profile.durationSeconds || 120);
+    byId("content-direction").value = draft.direction || "";
+    byId("content-evidence-summary").value = draft.evidenceSummary || "";
+    byId("save-workspace-settings").onclick = async () => {
+      const workspaceId = byId("workspace-id").value.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(workspaceId)) return toast("工作区 ID 格式无效");
+      persisted.workspaceId = workspaceId;
+      const nextWorkspace = currentWorkspaceState(workspaceId);
+      nextWorkspace.contentProfile = {
+        ...nextWorkspace.contentProfile,
+        language: byId("workspace-language").value.trim() || "zh-CN",
+        audience: byId("workspace-audience").value.trim(),
+        goal: byId("workspace-goal").value.trim(),
+      };
+      localSessionToken = "";
+      persisted.currentId = genericStarter.id;
+      saveState();
+      await refreshGeneratedContents(genericStarter.id);
+      await refreshVideoJobs({ selectId: null });
+      toast("工作区设置已保存");
+    };
   }
 
   function renderLibrary() {
@@ -767,9 +887,19 @@
   }
 
   function contentStrategyInputs() {
+    const profile = currentWorkspaceState().contentProfile;
     return {
       direction: byId("content-direction").value.trim(),
       evidenceSummary: byId("content-evidence-summary").value.trim(),
+      contentProfile: {
+        mode: "universal",
+        domain: byId("content-domain").value,
+        audience: byId("content-audience").value.trim(),
+        goal: byId("content-goal").value.trim(),
+        tone: byId("content-tone").value.trim(),
+        language: profile.language || "zh-CN",
+        durationSeconds: Math.max(30, Math.min(600, Number(byId("content-duration").value || 120))),
+      },
     };
   }
 
@@ -786,6 +916,7 @@
       && !!contentStrategyDraft.analysisArtifactId
       && current.direction === contentStrategyDraft.direction
       && current.evidenceSummary === contentStrategyDraft.evidenceSummary
+      && JSON.stringify(current.contentProfile) === JSON.stringify(contentStrategyDraft.contentProfile)
       && analysis.lockedDirection === current.direction
       && analysis.status === "ready_for_script"
       && Array.isArray(analysis.evidence?.available)
@@ -795,7 +926,7 @@
   }
 
   function updateContentStrategyControls() {
-    const { direction, evidenceSummary } = contentStrategyInputs();
+    const { direction, evidenceSummary, contentProfile } = contentStrategyInputs();
     const busy = contentStrategyAnalyzing || contentGenerating;
     const ready = contentStrategyReadyForConfirmation();
     const generated = !!contentStrategyDraft.generatedContentId;
@@ -804,7 +935,8 @@
     const generate = byId("generate-content");
     byId("content-direction").disabled = busy;
     byId("content-evidence-summary").disabled = busy;
-    analyze.disabled = !(contentAdvisoryReady() && direction && evidenceSummary && !busy);
+    ["content-domain", "content-audience", "content-goal", "content-tone", "content-duration"].forEach(id => { byId(id).disabled = busy; });
+    analyze.disabled = !(contentAdvisoryReady() && direction && evidenceSummary && contentProfile.audience && contentProfile.goal && !busy);
     confirmation.disabled = !(contentAdvisoryReady() && ready && !busy && !generated);
     if (confirmation.disabled && (!ready || generated)) confirmation.checked = false;
     generate.disabled = !(contentAdvisoryReady() && ready && confirmation.checked && !busy && !generated);
@@ -823,7 +955,7 @@
     const analysis = contentStrategyDraft.analysis;
     if (!analysis) {
       host.className = "strategy-analysis is-empty";
-      host.innerHTML = htmlEscape(message || "填写左侧两项后点击“分析方向”，这里会展示观众收益、优缺点、证据缺口和最多三个追问。");
+      host.innerHTML = htmlEscape(message || "填写方向、受众、目标和事实后点击“分析方向”，这里会展示观众收益、优缺点、证据缺口和最多三个追问。");
       return;
     }
     const statusLabels = {
@@ -872,6 +1004,7 @@
     contentStrategyDraft = {
       direction: "",
       evidenceSummary: "",
+      contentProfile: null,
       analysisArtifactId: "",
       analysis: null,
       confirmationArtifactId: "",
@@ -884,12 +1017,13 @@
   }
 
   async function analyzeContentDirection() {
-    const { direction, evidenceSummary } = contentStrategyInputs();
-    if (!contentAdvisoryReady() || !direction || !evidenceSummary || contentStrategyAnalyzing || contentGenerating) return;
+    const { direction, evidenceSummary, contentProfile } = contentStrategyInputs();
+    if (!contentAdvisoryReady() || !direction || !evidenceSummary || !contentProfile.audience || !contentProfile.goal || contentStrategyAnalyzing || contentGenerating) return;
     contentStrategyAnalyzing = true;
     contentStrategyDraft = {
       direction,
       evidenceSummary,
+      contentProfile,
       analysisArtifactId: "",
       analysis: null,
       confirmationArtifactId: "",
@@ -916,6 +1050,11 @@
           constraints: [
             "只分析用户锁定的方向，不得换题或直接写稿",
             "只使用真实经历和可追溯证据，不虚构结果",
+            `内容领域：${contentProfile.domain}`,
+            `目标受众：${contentProfile.audience}`,
+            `内容目标：${contentProfile.goal}`,
+            `语气：${contentProfile.tone}`,
+            `目标时长：${contentProfile.durationSeconds}秒`,
           ],
         },
         idempotencyPrefix: "content-strategy-analysis",
@@ -1085,6 +1224,13 @@
           lockedDirection: direction,
           lockedDirectionHash: directionHash,
           strategyConfirmationArtifactId: contentStrategyDraft.confirmationArtifactId,
+          contentProfile: contentStrategyDraft.contentProfile,
+          editorialBrief: {
+            audience: contentStrategyDraft.contentProfile.audience,
+            goal: contentStrategyDraft.contentProfile.goal,
+            tone: contentStrategyDraft.contentProfile.tone,
+            domain: contentStrategyDraft.contentProfile.domain,
+          },
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -2520,8 +2666,24 @@
 
   // One-click content generation and automatic video workflow
   byId("analyze-content-direction").addEventListener("click", analyzeContentDirection);
-  byId("content-direction").addEventListener("input", () => resetContentStrategyAnalysis());
-  byId("content-evidence-summary").addEventListener("input", () => resetContentStrategyAnalysis());
+  for (const id of ["content-direction", "content-evidence-summary"]) {
+    byId(id).addEventListener("input", () => {
+      const draft = currentWorkspaceState().contentDraft;
+      draft.direction = byId("content-direction").value;
+      draft.evidenceSummary = byId("content-evidence-summary").value;
+      saveState();
+      resetContentStrategyAnalysis();
+    });
+  }
+  for (const id of ["content-domain", "content-audience", "content-goal", "content-tone", "content-duration"]) {
+    byId(id).addEventListener("input", () => {
+      const profile = contentStrategyInputs().contentProfile;
+      const workspace = currentWorkspaceState();
+      workspace.contentProfile = { ...workspace.contentProfile, ...profile };
+      saveState();
+      resetContentStrategyAnalysis();
+    });
+  }
   byId("confirm-content-strategy").addEventListener("change", updateContentStrategyControls);
   byId("generate-content").addEventListener("click", generateNewContent);
   byId("video-file").addEventListener("change", event => handleVideoSelection(event.target.files?.[0]));

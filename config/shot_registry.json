@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "shots": [
+    { "id": "pagecam-overview", "label": "真实页面总览", "kind": "pagecam", "renderer": "hyperframes", "status": "trial", "inputs": ["screenshot", "layout.json"], "fallback": "static-screenshot" },
+    { "id": "pagecam-element-focus", "label": "页面元素 2.5D 特写", "kind": "pagecam", "renderer": "remotion-optional", "status": "trial", "inputs": ["element-cutout", "layout.json"], "fallback": "pagecam-overview" },
+    { "id": "ai-stream-response", "label": "AI 流式回答", "kind": "ui-proof", "renderer": "hyperframes", "status": "trial", "inputs": ["screen-recording"], "fallback": "pagecam-overview" },
+    { "id": "command-palette", "label": "命令面板操作", "kind": "ui-proof", "renderer": "hyperframes", "status": "trial", "inputs": ["screen-recording"], "fallback": "pagecam-overview" },
+    { "id": "before-after", "label": "前后对比", "kind": "evidence", "renderer": "hyperframes", "status": "trial", "inputs": ["before", "after"], "fallback": "split-right" },
+    { "id": "metric-change", "label": "数据变化", "kind": "evidence", "renderer": "hyperframes", "status": "trial", "inputs": ["before", "after", "metric"], "fallback": "information-card" }
+  ]
+}

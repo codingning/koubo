@@ -33,6 +33,16 @@ import { auditRenderedJobOrdinaryViewer } from "./multi-agent/rendered-ordinary-
 import { createMemoryService } from "./multi-agent/memory.mjs";
 import { createOrchestrator } from "./multi-agent/orchestrator.mjs";
 import { openDomainStore } from "./multi-agent/store.mjs";
+import { authorizeLocalRequest, corsHeaders, createLocalSecurity, publicSession } from "./platform/security.mjs";
+import { assertWorkspaceAccess, bindWorkspace, belongsToWorkspace, normalizeWorkspaceId, workspaceIdFromRequest } from "./platform/workspaces.mjs";
+import { loadPluginRegistry, pluginStatus } from "./platform/plugins.mjs";
+import { normalizeAssetAnchor, resolveAssetAnchor } from "./assets/anchors.mjs";
+import { createReferenceDistillation, validateReferenceDistillation } from "./research/reference_distillation.mjs";
+import { buildStoryboard, storyboardMarkdown } from "./storyboard.mjs";
+import { buildVideoRetro, retroMarkdown } from "./retro.mjs";
+import { exporterRequest } from "./exporters/contracts.mjs";
+import { runJianyingExporter } from "./exporters/jianying.mjs";
+import { loadShotRegistry } from "./shots/registry.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -42,15 +52,28 @@ if (typeof process.loadEnvFile === "function" && fs.existsSync(envFile)) process
 const webRoot = path.join(root, "web");
 const jobsRoot = path.join(root, "video-jobs");
 const contentRoot = path.join(root, "content-items");
-const runtimePython = path.join(root, ".runtime", "Scripts", "python.exe");
+const runtimePython = process.env.KOUBO_RUNTIME_PYTHON
+  ? path.resolve(process.env.KOUBO_RUNTIME_PYTHON)
+  : path.join(root, ".runtime", "Scripts", "python.exe");
 const runtimeFfmpeg = path.join(root, ".runtime", "ffmpeg", "bin");
 const aiBridge = path.join(here, "ai_bridge.py");
 const referenceCollector = path.join(root, "scripts", "collect_douyin_references.mjs");
 const referenceLibraryFile = path.join(root, "config", "reference_video_library.json");
 const referenceCreatorsFile = path.join(root, "config", "reference_creators.json");
+const platformConfig = await readJsonFile(path.join(root, "config", "platform.json"));
+const pluginRegistry = loadPluginRegistry(path.join(root, "config", "plugins.json"));
+const shotRegistry = loadShotRegistry(path.join(root, "config", "shot_registry.json"));
 const visualWorkflowDefaults = await loadVisualWorkflowDefaults(root);
 const host = "127.0.0.1";
 const port = Number(requestedPort || process.env.KOUBO_PORT || 8787);
+const defaultWorkspaceId = normalizeWorkspaceId(platformConfig.defaults?.workspaceId);
+const localSecurity = createLocalSecurity({
+  host,
+  port,
+  configured: platformConfig.security?.trustedOrigins || [],
+  extra: process.env.KOUBO_TRUSTED_ORIGINS,
+  token: process.env.KOUBO_SESSION_TOKEN,
+});
 if (fs.existsSync(runtimeFfmpeg)) process.env.PATH = `${runtimeFfmpeg}${path.delimiter}${process.env.PATH || ""}`;
 const running = new Map();
 const jobMutations = new Set();
@@ -66,11 +89,8 @@ const mime = {
 
 await Promise.all([fsp.mkdir(jobsRoot, { recursive: true }), fsp.mkdir(contentRoot, { recursive: true })]);
 
-function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Idempotency-Key,X-File-Name,X-Content-Id,X-Options,X-Workflow-Draft");
-  res.setHeader("Access-Control-Expose-Headers", "Content-Length,Idempotency-Replayed");
+function cors(res, origin = res.kouboOrigin || "") {
+  for (const [name, value] of Object.entries(corsHeaders(origin, localSecurity))) res.setHeader(name, value);
 }
 function json(res, status, value) {
   cors(res);
@@ -118,6 +138,18 @@ function normalizedAssetEvidencePlacement(value) {
     mode: placement.mode,
   };
 }
+function normalizedAssetEvidenceAnchor(value) {
+  const anchor = normalizeAssetAnchor(value);
+  if (!anchor) return null;
+  return {
+    type: anchor.type,
+    segmentId: anchor.segmentId,
+    start: optionalAssetEvidenceNumber(anchor.start),
+    end: optionalAssetEvidenceNumber(anchor.end),
+    offsetStart: optionalAssetEvidenceNumber(anchor.offsetStart) ?? 0,
+    offsetEnd: optionalAssetEvidenceNumber(anchor.offsetEnd),
+  };
+}
 function optionalAssetEvidenceNumber(value) {
   if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
@@ -131,6 +163,7 @@ function assetDecisionStateHashInput(value = {}) {
     sourceType: String(value.sourceType || ""),
     fileSha256: value.fileSha256 ? String(value.fileSha256).toLowerCase() : null,
     placement: normalizedAssetEvidencePlacement(value.placement),
+    anchor: normalizedAssetEvidenceAnchor(value.anchor),
     clipStart: optionalAssetEvidenceNumber(value.clipStart) ?? 0,
     clipEnd: optionalAssetEvidenceNumber(value.clipEnd),
     clipDuration: optionalAssetEvidenceNumber(value.clipDuration),
@@ -181,6 +214,7 @@ function assetReviewDecisionFingerprint(rawAsset = {}) {
     clipDuration: optionalAssetEvidenceNumber(asset.clipDuration),
     paymentConfirmed: asset.paymentConfirmed === true,
     placement: normalizedAssetEvidencePlacement(asset.placement),
+    anchor: normalizedAssetEvidenceAnchor(asset.anchor),
   });
 }
 function emptyAssetCatalogAuditEntry() {
@@ -461,32 +495,42 @@ async function listGeneratedContents() {
     .filter(item => !replacedIds.has(String(item.id || "")))
     .sort((a, b) => String(b.generatedAt || b.date).localeCompare(String(a.generatedAt || a.date)));
 }
-async function contentDirectionFor(contentId) {
+async function contentDirectionFor(contentId, workspaceId = defaultWorkspaceId) {
   if (!contentId) return null;
   const id = safeName(contentId);
-  try {
-    const content = await readJsonFile(path.join(confined(contentRoot, id), "content.json"));
-    return {
-      id,
-      lockedDirection: String(content.lockedDirection || ""),
-      lockedDirectionHash: String(content.lockedDirectionHash || content.generation?.lockedDirectionHash || ""),
-      directionSource: String(content.directionSource || ""),
-      strategyConfirmationArtifactId: String(content.generation?.strategyConfirmationArtifactId || ""),
-      strategyAnalysisArtifactId: String(content.generation?.strategyAnalysisArtifactId || ""),
-      approvedDirection: content.approvedDirection || null,
-      audience: String(content.audience || ""),
-      viewerBenefit: String(content.viewerBenefit || content.audienceBenefit || ""),
-      coreQuestion: String(content.coreQuestion || content.structureDesign?.coreQuestion || ""),
-      mainTopic: String(content.mainTopic || ""),
-      hook: String(content.hook || ""),
-      audienceBenefit: String(content.audienceBenefit || ""),
-      resultFirstProof: content.resultFirstProof || {},
-      shooting: content.shooting || {},
-      structureDesign: content.structureDesign || {},
-      referenceResearch: content.referenceResearch || {},
-      fullSegments: Array.isArray(content.fullSegments) ? content.fullSegments : []
-    };
-  } catch { return null; }
+  const content = await readContent(id);
+  if (!content) return null;
+  assertWorkspaceAccess(content, workspaceId);
+  return {
+    id,
+    lockedDirection: String(content.lockedDirection || ""),
+    lockedDirectionHash: String(content.lockedDirectionHash || content.generation?.lockedDirectionHash || ""),
+    directionSource: String(content.directionSource || ""),
+    strategyConfirmationArtifactId: String(content.generation?.strategyConfirmationArtifactId || ""),
+    strategyAnalysisArtifactId: String(content.generation?.strategyAnalysisArtifactId || ""),
+    approvedDirection: content.approvedDirection || null,
+    audience: String(content.audience || ""),
+    viewerBenefit: String(content.viewerBenefit || content.audienceBenefit || ""),
+    coreQuestion: String(content.coreQuestion || content.structureDesign?.coreQuestion || ""),
+    mainTopic: String(content.mainTopic || ""),
+    hook: String(content.hook || ""),
+    audienceBenefit: String(content.audienceBenefit || ""),
+    resultFirstProof: content.resultFirstProof || {},
+    shooting: content.shooting || {},
+    structureDesign: content.structureDesign || {},
+    referenceResearch: content.referenceResearch || {},
+    fullSegments: Array.isArray(content.fullSegments) ? content.fullSegments : []
+  };
+}
+
+async function assertStaticArtifactWorkspace(pathname, prefix, workspaceId, readOwner) {
+  const relative = pathname.slice(prefix.length);
+  const ownerId = relative.split("/").filter(Boolean)[0];
+  if (!ownerId) throw Object.assign(new Error("产物不存在"), { statusCode: 404 });
+  const owner = await readOwner(ownerId);
+  if (!owner) throw Object.assign(new Error("产物不存在"), { statusCode: 404 });
+  assertWorkspaceAccess(owner, workspaceId);
+  return relative;
 }
 
 async function referenceCatalog() {
@@ -1111,6 +1155,15 @@ export async function generateContent(options = {}, dependencies = {}) {
     let contentStyle = {};
     try { contentStyle = await readJsonFile(path.join(root, "config", "content_style.json")); } catch {}
     const editorialBrief = options.editorialBrief && typeof options.editorialBrief === "object" ? options.editorialBrief : {};
+    const contentProfile = {
+      mode: "universal",
+      language: String(options.contentProfile?.language || platformConfig.defaults?.language || "zh-CN"),
+      domain: String(options.contentProfile?.domain || platformConfig.defaults?.domain || "general"),
+      audience: String(options.contentProfile?.audience || platformConfig.defaults?.audience || "普通观众"),
+      goal: String(options.contentProfile?.goal || platformConfig.defaults?.goal || "解释一个明确问题"),
+      tone: String(options.contentProfile?.tone || platformConfig.defaults?.tone || "自然、清楚、可信"),
+      durationSeconds: Math.max(30, Math.min(600, Number(options.contentProfile?.durationSeconds || platformConfig.defaults?.durationSeconds || 120))),
+    };
     const requiredReferenceSourceIds = normalizeRequiredReferenceSourceIds(editorialBrief);
     const planLock = generationLockPayload(generationContext);
     const topicResult = await runAiFn({
@@ -1119,6 +1172,7 @@ export async function generateContent(options = {}, dependencies = {}) {
       day_number: dayNumber,
       evidence,
       content_style: contentStyle,
+      platform_profile: contentProfile,
       editorial_brief: {
         ...editorialBrief,
         ...(generationContext.lockedDirection ? {
@@ -1146,6 +1200,10 @@ export async function generateContent(options = {}, dependencies = {}) {
     }
     const referenceResearch = await readJsonFile(referenceFile);
     if (!Array.isArray(referenceResearch.fullContentSources) || !referenceResearch.fullContentSources.length) throw new Error("同题视频研究没有完成至少一条全文核验来源");
+    const referenceDistillation = createReferenceDistillation({ topicPlan, research: referenceResearch });
+    const distillationValidation = validateReferenceDistillation(referenceDistillation);
+    if (!distillationValidation.ok) throw new Error(`参考视频拉片合同无效：${distillationValidation.issues.join("、")}`);
+    await writeJson(path.join(dir, "reference-distillation-v1.json"), referenceDistillation);
     const result = await runAiFn({
       operation: "generate_content",
       date: shanghaiDate(),
@@ -1153,11 +1211,16 @@ export async function generateContent(options = {}, dependencies = {}) {
       evidence,
       topic_plan: topicPlan,
       reference_research: referenceResearch,
+      reference_distillation: referenceDistillation,
+      platform_profile: contentProfile,
       existing_topics: existingTopics,
       ...generationLockPayload(generationContext),
     }, dir, "generate-content");
     const lockedResult = preserveLockedDirection(result.data, generationContext, "generate_content");
-    const content = preserveLockedDirection(normalizeContent(lockedResult, dayNumber, id, result), generationContext, "content");
+    const content = bindWorkspace(
+      preserveLockedDirection(normalizeContent(lockedResult, dayNumber, id, result), generationContext, "content"),
+      options.workspaceId || defaultWorkspaceId,
+    );
     const strategyAnalysis = generationContext.strategyArtifact?.analysis || {};
     content.audience = String(strategyAnalysis.audience || topicPlan.viewerUseCase || content.engagement?.audienceMirror || "").trim();
     content.viewerBenefit = String(strategyAnalysis.viewerBenefit || topicPlan.methodPromise || content.audienceBenefit || "").trim();
@@ -1182,6 +1245,12 @@ export async function generateContent(options = {}, dependencies = {}) {
       lockedDirectionHash: generationContext.lockedDirectionHash,
       ordinaryViewerAuditRequired: true,
     };
+    content.referenceDistillation = {
+      schemaVersion: referenceDistillation.schemaVersion,
+      sourceCount: referenceDistillation.sourceCount,
+      url: `/content-items/${id}/reference-distillation-v1.json`,
+    };
+    content.contentProfile = contentProfile;
     if (options.replacesContentId) content.replacesContentId = safeName(options.replacesContentId);
     await auditGeneratedContentScript({
       content,
@@ -1780,6 +1849,7 @@ function normalizeAssetRecord(asset = {}) {
   const sourceType = String(asset.sourceType || (asset.source === "local-upload" ? "local-upload" : "local-upload"));
   const clipStart = Number(asset.clipStart), clipEnd = Number(asset.clipEnd);
   const placement = normalizePlacement(asset.placement);
+  const anchor = normalizeAssetAnchor(asset.anchor, placement);
   return {
     ...asset,
     sourceType,
@@ -1787,6 +1857,7 @@ function normalizeAssetRecord(asset = {}) {
     reviewStatus,
     approved: reviewStatus === "approved",
     placement,
+    anchor,
     creatorName: String(asset.creatorName || "").trim(),
     workTitle: String(asset.workTitle || "").trim(),
     sourceUrl: String(asset.sourceUrl || "").trim(),
@@ -2167,6 +2238,8 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
   const visualNodes = (beats.length ? beats : (job.currentPlan?.overlayCards || []).map(card => ({ segment: card.text, asset: card.text, purpose: "强化当前口播重点" }))).slice(0, job.options?.layout === "landscape-tech" ? 10 : 6);
   if (!visualNodes.length) visualNodes.push({ segment: "开头结果", asset: "本次口播的核心结果信息卡", purpose: "让观众先看到本条视频要交付的结果" });
   for (const [index, beat] of visualNodes.entries()) {
+    const placement = job.options?.layout === "landscape-tech" ? candidatePlacementForBeat(beat, index, visualNodes.length, duration) : candidatePlacement(index, visualNodes.length, duration);
+    const segmentId = String(beat.segmentId || job.contentBreakdown?.segments?.[index]?.segmentId || "").trim();
     const asset = {
       id: `generated-${crypto.randomBytes(4).toString("hex")}`,
       sourceType: "local-derived",
@@ -2182,7 +2255,10 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
       discoveredAutomatically: true,
       paymentRequired: false,
       paymentConfirmed: true,
-      placement: job.options?.layout === "landscape-tech" ? candidatePlacementForBeat(beat, index, visualNodes.length, duration) : candidatePlacement(index, visualNodes.length, duration),
+      placement,
+      anchor: segmentId
+        ? { type: "hybrid", segmentId, start: placement.start, end: placement.end, offsetStart: 0, offsetEnd: null }
+        : { type: "exact", segmentId: null, start: placement.start, end: placement.end, offsetStart: 0, offsetEnd: null },
       createdAt: new Date().toISOString()
     };
     try {
@@ -2922,6 +2998,11 @@ async function runContentBreakdownStage(job, version, stageConfig) {
   const breakdownName = `content-breakdown-v${version}.json`;
   await writeJson(path.join(jobDir, transcriptName), job.transcript);
   await writeJson(path.join(jobDir, breakdownName), breakdown);
+  const storyboard = buildStoryboard({ jobId: job.id, version, breakdown, timeline, style: job.visualStyleReport || {} });
+  const storyboardJsonName = `storyboard-v${version}.json`;
+  const storyboardMarkdownName = `storyboard-v${version}.md`;
+  await writeJson(path.join(jobDir, storyboardJsonName), storyboard);
+  await fsp.writeFile(path.join(jobDir, storyboardMarkdownName), storyboardMarkdown(storyboard), "utf8");
   job.contentBreakdown = breakdown;
   await prepareAssetCandidates(job, { force: version > 1, reason: "视觉导演内容拆解完成，按信息段发现素材" });
   return {
@@ -2930,6 +3011,8 @@ async function runContentBreakdownStage(job, version, stageConfig) {
     transcriptUrl: workflowUrl(job, transcriptName),
     editPlanUrl: workflowUrl(job, `edit-plan-v${editVersion}.json`),
     timelineUrl: workflowUrl(job, `timeline-v${editVersion}.json`),
+    storyboardJsonUrl: workflowUrl(job, storyboardJsonName),
+    storyboardMarkdownUrl: workflowUrl(job, storyboardMarkdownName),
     segmentCount: breakdown.segments.length,
     outputDuration: timeline.outputDuration,
     model: breakdownResult?.model || null,
@@ -4659,13 +4742,32 @@ const multiAgentApi = createMultiAgentApi({
 
 const server = http.createServer(async (req, res) => {
   try {
-    cors(res); if (req.method === "OPTIONS") return res.writeHead(204).end();
     const url = new URL(req.url, `http://${host}:${port}`), pathname = decodeURIComponent(url.pathname);
+    res.kouboOrigin = String(req.headers.origin || "");
+    cors(res);
+    authorizeLocalRequest(req, pathname, localSecurity, { enforceWriteToken: process.env.KOUBO_NO_LISTEN !== "1" });
+    req.kouboWorkspaceId = workspaceIdFromRequest(req, defaultWorkspaceId);
+    if (req.method === "OPTIONS") return res.writeHead(204).end();
+    if (req.method === "GET" && pathname === "/api/session") {
+      return json(res, 200, { session: publicSession(localSecurity, req.kouboWorkspaceId) });
+    }
+    if (req.method === "GET" && pathname === "/api/platform") {
+      return json(res, 200, {
+        platform: platformConfig,
+        workspaceId: req.kouboWorkspaceId,
+        plugins: pluginStatus(pluginRegistry),
+      });
+    }
+    if (req.method === "GET" && pathname === "/api/shots") {
+      return json(res, 200, { registry: shotRegistry });
+    }
+    const protectedJobMatch = pathname.match(/^\/api\/jobs\/([^/]+)/);
+    if (protectedJobMatch) assertWorkspaceAccess(await readJob(protectedJobMatch[1]), req.kouboWorkspaceId);
     if (await multiAgentApi.handle(req, res, url)) return;
     if (req.method === "GET" && pathname === "/api/health") {
       let ffmpeg = false, hyperframes = false, ai = null;
       try { await run("ffmpeg", ["-version"]); ffmpeg = true; } catch {}
-      try { await run("npx", ["-y", "hyperframes", "--version"], { shell: true }); hyperframes = true; } catch {}
+      try { await run("npx", ["-y", "hyperframes@0.7.71", "--version"], { shell: true }); hyperframes = true; } catch {}
       try { ai = await runAi({ operation: "config" }, contentRoot, "model-config"); } catch (error) { ai = { success: false, error: error.message }; }
       return json(res, 200, {
         ok: true,
@@ -4692,8 +4794,8 @@ const server = http.createServer(async (req, res) => {
           humanApprovalRequired: true,
           autoPublish: false,
         },
-        jobsRoot,
-        contentRoot,
+        storage: { localOnly: true, workspaceScoped: true },
+        plugins: pluginStatus(pluginRegistry),
       });
     }
     if (req.method === "GET" && pathname === "/api/video-workflow/defaults") {
@@ -4706,15 +4808,24 @@ const server = http.createServer(async (req, res) => {
       for (const [id, draft] of workflowDrafts) if (Date.now() - draft.createdAt > 30 * 60 * 1000) workflowDrafts.delete(id);
       return json(res, 201, { draftId, expiresInSeconds: 1800 });
     }
-    if (req.method === "GET" && pathname === "/api/contents") return json(res, 200, { items: await listGeneratedContents() });
+    if (req.method === "GET" && pathname === "/api/contents") {
+      const items = (await listGeneratedContents()).filter(item => belongsToWorkspace(item, req.kouboWorkspaceId));
+      return json(res, 200, { items });
+    }
     if (req.method === "POST" && pathname === "/api/contents/generate") {
       const hasBody = Number(req.headers["content-length"] || 0) > 0 || String(req.headers["transfer-encoding"] || "").toLowerCase() === "chunked";
       const options = hasBody ? await readBodyJson(req, 64 * 1024) : {};
-      return json(res, 201, { item: await generateContent(options) });
+      return json(res, 201, { item: await generateContent({ ...options, workspaceId: req.kouboWorkspaceId }) });
     }
     if (req.method === "GET" && pathname === "/api/jobs") {
       const entries = await fsp.readdir(jobsRoot, { withFileTypes: true }), jobs = [];
-      for (const e of entries.filter(x => x.isDirectory()).sort((a, b) => b.name.localeCompare(a.name)).slice(0, 30)) try { jobs.push(await readJob(e.name)); } catch {}
+      for (const e of entries.filter(x => x.isDirectory()).sort((a, b) => b.name.localeCompare(a.name))) {
+        try {
+          const job = await readJob(e.name);
+          if (belongsToWorkspace(job, req.kouboWorkspaceId)) jobs.push(job);
+          if (jobs.length >= 30) break;
+        } catch {}
+      }
       return json(res, 200, { jobs });
     }
     if (req.method === "POST" && pathname === "/api/jobs") {
@@ -4736,7 +4847,8 @@ const server = http.createServer(async (req, res) => {
       const job = {
         id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "uploaded", progress: 0,
         pipeline,
-        fileName, sizeBytes, sourcePath, contentId, contentDirection: await contentDirectionFor(contentId), script: String(options.script || ""),
+        workspaceId: req.kouboWorkspaceId,
+        fileName, sizeBytes, sourcePath, contentId, contentDirection: await contentDirectionFor(contentId, req.kouboWorkspaceId), script: String(options.script || ""),
         options: {
           removeSilence: contentSettings.removeSilence === undefined ? options.removeSilence !== false : contentSettings.removeSilence !== false,
           captions: options.captions !== false,
@@ -4762,6 +4874,75 @@ const server = http.createServer(async (req, res) => {
     }
     const jobMatch = pathname.match(/^\/api\/jobs\/([^/]+)$/);
     if (req.method === "GET" && jobMatch) return json(res, 200, { job: await readJob(jobMatch[1]) });
+    const jianyingExportMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/exports\/jianying$/);
+    if (req.method === "POST" && jianyingExportMatch) {
+      const body = await readBodyJson(req, 128 * 1024);
+      const jobId = jianyingExportMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (job.status !== "approved" || job.output?.finalReview?.status !== "approved") {
+          return json(res, 409, { error: "只有最终人工批准的时间线才能导出剪映草稿" });
+        }
+        const timelineVersion = Number(body.timelineVersion || job.output.version);
+        if (timelineVersion !== Number(job.output.version) || timelineVersion !== Number(job.output.finalReview.version)) {
+          return json(res, 409, { error: "剪映导出版本必须与当前批准成片一致" });
+        }
+        const jobDir = confined(jobsRoot, job.id);
+        const timeline = await readJsonFile(path.join(jobDir, `timeline-v${timelineVersion}.json`));
+        const outputRoot = path.resolve(process.env.KOUBO_JIANYING_DRAFT_ROOT || path.join(jobDir, "exports", "jianying"));
+        const request = exporterRequest({
+          job,
+          timeline,
+          exporter: "jianying",
+          outputRoot,
+          draftName: safeName(body.draftName || `${job.id}-v${timelineVersion}`),
+        });
+        const result = await runJianyingExporter(request, { cwd: root });
+        const record = {
+          exporter: "jianying",
+          timelineVersion,
+          result,
+          createdAt: new Date().toISOString(),
+          authoritativeStateChanged: false,
+        };
+        const recordName = `export-jianying-v${timelineVersion}-${Date.now()}.json`;
+        await writeJson(path.join(jobDir, recordName), record);
+        job.exports = [...(job.exports || []), { ...record, recordUrl: workflowUrl(job, recordName) }];
+        await saveJob(job);
+        return json(res, 201, { job, export: job.exports.at(-1) });
+      });
+    }
+    const retroMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/retro$/);
+    if (req.method === "POST" && retroMatch) {
+      const body = await readBodyJson(req, 256 * 1024);
+      const jobId = retroMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (!job.output?.version) return json(res, 409, { error: "没有可复盘的成片版本" });
+        const retroVersion = Number(job.retros?.length || 0) + 1;
+        const retro = buildVideoRetro({
+          job,
+          version: job.output.version,
+          observations: Array.isArray(body.observations) ? body.observations.slice(0, 50) : [],
+          userFeedback: String(body.userFeedback || "").slice(0, 10000),
+        });
+        const jsonName = `video-retro-v${retroVersion}.json`;
+        const markdownName = `video-retro-v${retroVersion}.md`;
+        const jobDir = confined(jobsRoot, job.id);
+        await writeJson(path.join(jobDir, jsonName), retro);
+        await fsp.writeFile(path.join(jobDir, markdownName), retroMarkdown(retro), "utf8");
+        job.retros = [...(job.retros || []), {
+          version: retroVersion,
+          outputVersion: retro.outputVersion,
+          jsonUrl: workflowUrl(job, jsonName),
+          markdownUrl: workflowUrl(job, markdownName),
+          autoPromote: false,
+          createdAt: retro.generatedAt,
+        }];
+        await saveJob(job);
+        return json(res, 201, { job, retro, artifact: job.retros.at(-1) });
+      });
+    }
     const workflowStageMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/workflow\/stages\/([^/]+)\/(config|run|approve|reject)$/);
     if (req.method === "POST" && workflowStageMatch) {
       const [, jobId, requestedStageId, action] = workflowStageMatch;
@@ -4994,6 +5175,15 @@ const server = http.createServer(async (req, res) => {
         const before = JSON.parse(JSON.stringify(asset));
         const reviewStatus = body.reviewStatus === "rejected" || body.approved === false ? "rejected" : body.approved === true ? "approved" : "pending";
         const nextSourceType = String(body.sourceType || asset.sourceType || "local-upload").slice(0, 80);
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        const requestedPlacement = body.placement ? normalizePlacement(body.placement) : asset.placement;
+        const requestedAnchor = body.anchor
+          ? normalizeAssetAnchor(body.anchor, requestedPlacement)
+          : normalizeAssetAnchor(asset.anchor, requestedPlacement);
+        if (body.anchor && !requestedAnchor) return json(res, 400, { error: "素材锚点无效" });
+        const resolvedAnchorPlacement = requestedAnchor
+          ? resolveAssetAnchor(requestedAnchor, job.contentBreakdown?.segments || [], duration)
+          : null;
         const candidate = normalizeAssetRecord({
           ...asset,
           reviewStatus,
@@ -5010,10 +5200,12 @@ const server = http.createServer(async (req, res) => {
           clipEnd: Number.isFinite(Number(body.clipEnd)) && Number(body.clipEnd) > 0 ? Number(body.clipEnd) : asset.clipEnd,
           clipDuration: Number.isFinite(Number(body.clipDuration)) && Number(body.clipDuration) > 0 ? Number(body.clipDuration) : asset.clipDuration,
           paymentConfirmed: PAID_SOURCE_TYPES.has(nextSourceType) ? body.paymentConfirmed === true : body.paymentConfirmed === undefined ? asset.paymentConfirmed === true : body.paymentConfirmed === true,
-          placement: body.placement ? normalizePlacement(body.placement) : asset.placement,
+          placement: resolvedAnchorPlacement
+            ? { start: resolvedAnchorPlacement.start, end: resolvedAnchorPlacement.end, mode: requestedPlacement?.mode || asset.placement?.mode || "broll" }
+            : requestedPlacement,
+          anchor: requestedAnchor,
           updatedAt: asset.updatedAt,
         });
-        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
         const issues = assetComplianceIssues(candidate, job, duration);
         if (reviewStatus === "approved" && issues.length) {
           return json(res, 409, { error: issues.join("；"), issues });
@@ -5125,8 +5317,14 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { job, finalReview, replayed: persisted.replayed });
       });
     }
-    if (pathname.startsWith("/video-jobs/")) return await serveFile(req, res, confined(jobsRoot, pathname.slice("/video-jobs/".length)));
-    if (pathname.startsWith("/content-items/")) return await serveFile(req, res, confined(contentRoot, pathname.slice("/content-items/".length)));
+    if (pathname.startsWith("/video-jobs/")) {
+      const relative = await assertStaticArtifactWorkspace(pathname, "/video-jobs/", req.kouboWorkspaceId, readJob);
+      return await serveFile(req, res, confined(jobsRoot, relative));
+    }
+    if (pathname.startsWith("/content-items/")) {
+      const relative = await assertStaticArtifactWorkspace(pathname, "/content-items/", req.kouboWorkspaceId, readContent);
+      return await serveFile(req, res, confined(contentRoot, relative));
+    }
     for (const [prefix, base] of [["/runs/", path.join(root, "runs")], ["/docs/", path.join(root, "docs")], ["/config/", path.join(root, "config")]]) {
       if (pathname.startsWith(prefix)) return await serveFile(req, res, confined(base, pathname.slice(prefix.length)));
     }

@@ -1,16 +1,16 @@
 ---
 name: koubo-ai-video-editor
-description: Edit and package talking-head口播 videos created through F:\code\koubo. Use when the user asks to剪辑口播、删除停顿或错句、加字幕、做动态标题/B-roll、生成竖屏或多平台版本、检查已完成的video-jobs任务，或继续处理网页“拍完AI剪辑”创建的 job.json / edit-plan.json / MP4 素材。
+description: Generate, edit, review, and package talking-head口播 videos in the current Koubo project. Use for any content direction when the user asks to生成口播稿、剪辑口播、删除停顿或错句、加字幕、做动态标题/B-roll、生成多平台版本、导出剪映草稿、检查video-jobs任务，或继续处理工作台创建的 job.json / timeline.json / MP4 素材。
 ---
 
 # 口播 AI 视频剪辑
 
-把网页创建的本地剪辑任务变成可审查、可复现的成片。默认使用本机 FFmpeg；需要语义转写、动态包装或云服务时按门禁升级。
+把网页创建的通用口播稿和本地剪辑任务变成可审查、可复现的成片。默认主链是本地 `faster-whisper + keepSegments + visual-director-v4 + HyperFrames/FFmpeg`；云服务和付费能力继续按门禁升级。
 
 ## 入口
 
 1. 若用户给出任务目录，使用该目录。
-2. 否则在 `F:\code\koubo\video-jobs\` 中选择 `updatedAt` 最新且包含 `job.json` 的目录。
+2. 否则在当前项目的 `video-jobs\` 中选择当前工作区内 `updatedAt` 最新且包含 `job.json` 的目录。
 3. 先运行：
 
 ```powershell
@@ -23,10 +23,12 @@ node .agents\skills\koubo-ai-video-editor\scripts\inspect_job.mjs "<任务目录
 ## 路由
 
 - **只删长停顿、加字幕、调响度、转9:16**：复用网页本地服务生成的 `final.mp4`，检查后交付。
-- **有错句、假启动、多条 take 需要语义选择**：优先用 `video-use`。只有检测到 `ELEVENLABS_API_KEY` 或其 `.env` 已配置时才运行；未配置时不要索要或猜测密钥，改用 HyperFrames 本地 Whisper 或当前口播稿进行 best-effort 方案。
+- **有错句、假启动、多条 take 需要语义选择**：使用当前批准的本地 `faster-whisper` 转录和 `keepSegments`；不得为导出或返修引入第二套 ASR、时间戳或剪辑状态源。
 - **需要逐字字幕**：使用 HyperFrames `embedded-captions` 或 `npx -y hyperframes transcribe`；中文本地转写明确提示模型下载和耗时。
 - **需要动态标题、证据卡片、数字重点、画中画**：使用 HyperFrames `talking-head-recut`，先写 storyboard，再渲染。
-- **需要从脚本生成动态图形/B-roll**：采用富媒体优先，先找真实工作台/项目证据和同片前后对比，再补动态流程与必要AI视觉；纯文字卡片只作标题、重点或转场，不能成为主要B-roll。
+- **需要从脚本生成动态图形/B-roll**：采用富媒体优先，先找当前主题的真实页面、操作、产品、资料或前后对比，再补动态流程与必要视觉；纯文字卡片只作标题、重点或转场，不能成为主要B-roll。
+- **需要剪映继续编辑**：只从最终人工批准的 `timeline-vN.json` 调用 JianyingExporter，生成新草稿目录并验证独立片段、源范围、时长和30ms淡化；不得重跑 ASR、覆盖旧草稿或修改 `job.json`。
+- **需要真实页面镜头**：使用 PageCam 本地捕获生成 `page.png + elements/*.png + layout.json`，完成脱敏、来源和 trial 审核后才可进入镜头注册表。
 - **需要抖音、小红书、微博多版本**：从批准的主成片派生 9:16、1:1、原比例版本，保持同一事实、字幕和色彩基线。
 
 详细映射见 `references/skill-map.md`。
@@ -87,6 +89,6 @@ ffmpeg -v error -i "<成片>" -f null -
 ## 隐私与费用门禁
 
 - 本地 FFmpeg、ffprobe、HyperFrames 本地渲染可直接运行。
-- 上传原视频、音频、照片或字幕到 ElevenLabs、HeyGen、Hedra、OpenAI 或其他云服务前，必须说明目标服务、文件、用途和费用，并获得当前任务的明确确认。
+- 上传原视频、音频、照片或字幕到任何云服务前，必须说明目标服务、文件、用途和费用，并获得当前任务的明确确认。文本模型默认只接收脱敏后的文字和技术参数。
 - 不把 API Key、Cookie、令牌写入项目或提交 Git。
 - 不自动发布，不替用户上传平台。

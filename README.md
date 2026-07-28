@@ -1,130 +1,181 @@
-# AI实践成长账号工作流
+# Koubo 通用口播工作台
 
-这是一个以**真实、连续、可验证的个人 AI 实践**为主线的口播内容系统。用户日常只需：
+Koubo 是一个本地优先的通用口播稿生成、真人视频剪辑和人工审核平台。它不再绑定某个个人账号、固定领域或“AI 成长”主题：用户可以选择任意合法内容方向、目标受众、视频目标、语气、语言和时长，然后完成从稿件到成片的完整流程。
 
-1. 双击 `打开AI口播工作台.vbs`；
-2. 先填写本次方向和真实经历，由 Content Strategist 分析受众、价值、优缺点与证据缺口；
-3. 只有证据完整且用户勾选确认后，才生成口播，并先阅读 Ordinary Viewer Critic 的尖锐点评；
-4. 决定修改或拍摄后上传原视频；
-5. 先审核 3—5 张关键帧，再审核 15—25 秒动态样片；两者通过后观看 2K 全片并最终审核。
+当前交付首先面向本地自托管使用；数据模型已经带稳定 `workspaceId`，未来可以把本地工作区替换为登录用户和团队，而不重写内容、视频任务和审核领域模型。
 
-默认由用户提供方向，Agent 不再从上一条内容自动推导下一题。Content Strategist 只访谈与分析，不能换题或写稿；至少一条真实证据、无未解决缺口和独立人工确认同时成立后，系统才只读调研用户指定参考账号和抖音同题视频，并生成默认 2—3 分钟完整版。生成后 Ordinary Viewer Critic 最多给三个阻断点，允许整体否决，但无权改题、整篇重写、批准或发布。拍后默认进入 `visual-director-v4`，最终成片点评绑定输出版本、媒体哈希和转录哈希。**不会自动发布、评论或连接平台账号。**
+## 用户流程
 
-## 固定入口
+1. 双击 `打开AI口播工作台.vbs`。
+2. 选择内容领域、目标受众、视频目标、表达语气和目标时长。
+3. 填写明确方向以及真实事实、素材或可引用信息。
+4. Content Strategist 只分析方向、受众价值和证据缺口；用户明确确认后才生成稿件。
+5. 阅读 Ordinary Viewer Critic 的独立稿件意见，决定修改或拍摄。
+6. 上传真人原片，进入本地 `faster-whisper + keepSegments + visual-director-v4` 主链。
+7. 依次审核素材、关键帧、15—25 秒动态样片和完整成片。
+8. 最终人工批准后，可以下载视频、派生平台版本或生成新的剪映草稿。
 
-项目根目录下的 `打开AI口播工作台.vbs`
+平台不会自动发布、评论、连接社交账号、批准素材或把真人媒体上传到云服务。
 
-旧的 `打开口播工作台.html` 仍可作为无服务时的只读入口，但完整功能以 VBS 入口为准。
-
-## 观众优先的内容规则
-
-- 核心受众是“知道很多、收藏很多，但迟迟没有真正开始的人”，主线统一为“从知道到做到”；
-- 每条内容按“旧状态 → 当前冲突 → 真实行动 → 结果证据 → 得出的认识 → 观众最小任务”推进；
-- 首条内容允许自然问候和自我介绍，后续优先在0—8秒直接展示最终效果、前后对比或真实结果证据；
-- 观众的真实问题是叙事主线，个人经历只作为真实证据；
-- 互动邀请观众提交AI开发、工作或生活中的一个具体问题，不逐字念A/B/C或编号选项；
-- 结尾说明下一条将验证的具体结果，不把内部30天规划念成固定承诺；
-- 语气轻松、口语化，允许1—2个自然自嘲或反差点；相关时可用1个来源已核对的近期热梗；
-- 热梗池保存在 `config/meme_pool.json`，第一条已加入抖音“学姐先做起来”；
-- 禁止虚构粉丝反馈，也不使用“你怎么看”“记得点赞关注”等空泛互动话术；
-- 规则集中在 `config/content_style.json`，生成结果不通过行动、互动和轻松度门禁时会自动重写一次。
-
-## 2—3分钟 AI 中视频规则
-
-- 完整版固定目标为 120—180 秒、约 550—950 个有效字符，网页默认展示和复制完整版；
-- 主选题必须明确属于 AI 工具、AI方法、AI项目、AI工作流、AI学习或AI能力边界；
-- 个人进度、职业和项目只承担案例、证据和差异化角色，不再独立成为主题；
-- 每次生成先形成 `topic-plan.json`，再生成 `reference-research.json`；
-- 参考研究优先读取 `config/reference_creators.json` 中用户指定的抖音账号，并补充同题搜索；
-- 完整视频在本地用 faster-whisper 转录，文本模型只接收公开文字内容做结构摘要；临时视频和逐字稿分析后删除；
-- 标题、简介和评论只能用于发现选题与观众问题，不能冒充完整视频内容；
-- 外部视频只借鉴知识、章节结构、证据位置和互动机制，不复制原句、案例、人设或素材。
-- 默认不讲软件怎样开发，而讲观众怎样给 AI 素材和目标、怎样检查第一版、怎样具体返修；关键步骤至少对应4个真实画面。
-- 允许最终发布的视频本身作为效果证据，但只有真实渲染出稿件所述效果并经人工审核后才能发布；否则必须返修、改稿或停发。
-
-## 自动化流程
+## 唯一生产主链
 
 ```text
-用户填写方向和真实证据
-  → Content Strategist 复述意图并分析受众、收益、优缺点、证据缺口与最多三个追问
-  → 证据未齐：停在分析阶段，不允许确认或写稿
-  → 证据齐全：用户勾选确认，生成独立 confirmation artifact
-  → 读取参考账号与同题抖音视频，本地转录并生成研究包
-  → 使用项目 `.env` 配置的 OpenAI 兼容文本模型生成拍摄包
-  → Ordinary Viewer Critic 审稿；用户先决定修改或拍摄
-  → 网页展示口播稿、提词器、B-roll、标题、封面和发布文案
-
-上传拍摄原片
-  → 搜索抖音同题高质量视频，并提炼构图、人物位置、信息层级、颜色和动效顺序
-  → ffprobe / silencedetect / faster-whisper 本地分析，文本模型做保守语义剪辑与5—12段内容拆解
-  → 每段生成“大意、标题、重点句、摘要、三张事实卡、右侧视觉和参考包装方式”
-  → HyperFrames 先生成3—5张1920×1080真人关键帧
-  → 用户审核关键帧；未批准不会进入下一步
-  → HyperFrames 生成15—25秒、1920×1080动态样片，按“标题→摘要→事实卡→证据”有序推进
-  → 用户审核动态样片；未批准不会生成全片
-  → 将批准的设计扩展到全片，只合成已批准素材
-  → 输出2560×1440、30fps 2K母版和1920×1080审核版，并派生平台画幅与四画幅封面
-  → 执行H.264、AAC、yuv420p、BT.709、时长、字幕安全区、素材实际合成与来源署名QA
-  → Ordinary Viewer Critic 自动生成绑定版本与哈希的只读成片点评
-  → 用户最终审核；自然语言反馈生成 v2/v3…，保留所有版本与审核记录
+工作区 + 通用内容配置
+  → 方向与证据分析
+  → 人工确认
+  → 同题研究 + reference-distillation-v1.json
+  → 通用口播稿 + Ordinary Viewer 审稿
+  → 本地 faster-whisper
+  → keepSegments（唯一语义剪辑决策）
+  → content-breakdown + timeline + 派生 storyboard
+  → exact / semantic / hybrid 素材锚点
+  → Visual Director 选择 HyperFrames / FFmpeg / 可选镜头后端
+  → 关键帧审核
+  → 动态样片审核
+  → 全片渲染 + QA + 普通观众审查
+  → 最终人工批准
+       ├─ MP4 / 平台画幅
+       ├─ CMX 3600 EDL
+       ├─ 剪映草稿
+       └─ per-video retro
 ```
 
-旧 `ffmpeg-v3` 路径保留给历史任务和故障回退，不再是新任务默认值。完整规格见 `docs/VISUAL_DIRECTOR_WORKFLOW_V4.md`。
+`visual-director-v4`、`job.json`、版本化审核和 `trial → approved → promoted` 是唯一总控。TouGe、video-shotcraft、Remotion、WhisperX、Manim 等第三方能力只能通过窄适配器、派生 artifact 或镜头资产接入，不得建立第二套 ASR、时间线、任务状态或审核系统。
 
-## 隐私和费用边界
+## P0：安全与可重建运行时
 
-- 原视频、音频、成片和逐字转录默认只在本机 `video-jobs/` 中处理。
-- 文本模型只接收脱敏后的文字证据、口播稿、逐字转录和技术参数，不接收原视频。
-- OpenAI Agents SDK tracing 默认关闭；只有显式设置 `KOUBO_AGENT_TRACING_ENABLED=1` 才允许额外追踪上报。
-- 任何把视频、音频、照片上传到第三方云服务的动作，仍需用户当次明确确认。
-- 外部创作者视频只有在创作者、作品、链接、用途、授权/必要引用依据、片段时长和画面署名完整，且稿件自然说明创作者后才可批准；标注来源不等于授权。
-- 付费素材或付费AI生成调用前必须展示用途和预计费用并取得确认；当前默认关闭付费生成。
-- 不把 API Key、Token、Cookie 或密码写入本项目。
-- 不自动发布、不自动评论。
+- 服务只监听 `127.0.0.1`。
+- CORS 只允许当前 `127.0.0.1/localhost` 工作台和显式配置的可信 Origin。
+- 正常启动时，所有写操作都要求进程生命周期随机会话令牌；同源 UI 通过 `/api/session` 自动获取。
+- 内容和视频任务带 `workspaceId`，列表与任务访问按工作区隔离。
+- `config/runtime-lock.json` 固定 Node、Python、HyperFrames 和 FFmpeg 版本/哈希。
+- `scripts/setup_runtime.ps1` 从锁文件建立独立 `.runtime`、`.runtime-exporters` 和可选 `.runtime-multi-agent`。
+- `scripts/verify_runtime_lock.mjs` 检查版本、二进制哈希、Python 包、HyperFrames 固定版本、项目 Skill 路由以及 P3 默认关闭状态。
+
+初始化：
+
+```powershell
+.\scripts\setup_runtime.ps1 -FfmpegBin "包含 ffmpeg.exe 和 ffprobe.exe 的目录" -IncludeMultiAgent
+node .\scripts\verify_runtime_lock.mjs
+```
+
+当前锁定基线：
+
+- Node `22.20.0`
+- Python `3.11.15`
+- faster-whisper `1.2.1`
+- OpenAI Python `2.45.0`
+- HyperFrames `0.7.71`
+- FFmpeg `N-125573-g90436de5e1-20260713`，SHA-256 见 `config/runtime-lock.json`
+- 剪映导出器 `pyJianYingDraft 0.3.0`
+
+## P1：可编辑交付与真实证据
+
+### 剪映导出
+
+只有最终人工批准且与当前输出版本一致的 `timeline-vN.json` 才能调用：
+
+```text
+POST /api/jobs/{jobId}/exports/jianying
+```
+
+导出器只读批准时间线，生成新草稿目录，不覆盖旧草稿，不重跑 ASR，也不修改 `job.json`、批准状态或原时间线。它会验证独立片段数、源范围、目标时长、连续性、源路径和每段 30ms 淡入淡出。
+
+默认输出到任务目录的 `exports/jianying/`。如需直接写入用户选择的剪映草稿根目录，使用本机环境变量 `KOUBO_JIANYING_DRAFT_ROOT`。
+
+### 证据化拉片
+
+每次完成同题研究后生成 `reference-distillation-v1.json`，记录来源、完整媒体证据、时间线、Hook、镜头、节奏、视觉、音频、可借鉴项、禁止复制项和不确定性。未经完整核验的目录条目或 metadata 不能冒充已分析视频。
+
+### 语义素材锚点
+
+素材兼容三种锚点：
+
+- `exact`：严格绑定输出时间。
+- `semantic`：绑定稳定 `segmentId` 和段内偏移。
+- `hybrid`：先绑定语义段，再用精确范围收紧。
+
+旧任务的 `placement.start/end/mode` 保持兼容。
+
+### PageCam
+
+使用本机 Chrome/Edge 的 DevTools 协议捕获真实页面，不依赖 Puppeteer：
+
+```powershell
+node .\scripts\capture_pagecam.mjs `
+  --url http://127.0.0.1:8787 `
+  --output outputs/pagecam/demo `
+  --selector=hero=#hero-topic
+```
+
+输出 `page.png`、`elements/*.png` 和 `layout.json`。默认只允许 `localhost/127.0.0.1/file`；捕获前需要完成隐私脱敏。产物必须经过镜头注册表 trial 审核后才能成为生产默认。
+
+## P2：派生资产与复盘
+
+- 内容拆解阶段从权威 JSON 派生 `storyboard-vN.json/md`；Markdown 明确禁止反向写回状态。
+- `config/shot_registry.json` 登记真实页面、元素特写、AI 流式回复、命令面板、前后对比和数据变化六类首批镜头。当前均为 `trial`，不会自动进入生产默认。
+- `POST /api/jobs/{jobId}/retro` 生成 `video-retro-vN.json/md`。单期复盘永不自动晋升长期规则。
+- 当前 Sound sandbox 中的 speech-aware ducking 和 semantic SFX 继续遵守 trial 门禁；只有许可清晰、真实片段审核通过后才可进入生产配置，默认不添加 BGM。
+- Director 继续按镜头选择渲染后端并保留 fallback；Remotion 不成为统一默认引擎。
+
+## P3：默认关闭插件
+
+`config/plugins.json` 注册：
+
+- Collage：可能上传已批准素材并产生费用。
+- WhisperX：仅适合多人访谈或当前词级对齐失败。
+- Manim：仅适合数学、算法和技术解释镜头。
+
+三者默认全部关闭，不会自动安装依赖、下载模型或调用云服务。健康接口和 `/api/platform` 会报告启用状态、隐私与成本边界。
+
+## 隐私与权限
+
+- 原视频、音频、成片、逐字稿和剪映草稿默认只在本机处理。
+- 文本模型只接收脱敏文字、稿件、逐字稿和技术参数，不接收真人视频或音频。
+- 上传任何媒体到云服务前，必须说明服务、文件、用途和预计费用，并取得当次明确确认。
+- 来源标注不等于素材授权；外部素材必须保存创作者、作品、链接、片段、用途、许可依据和画面署名。
+- 不自动发布，不把 API Key、Token、Cookie 或密码写入仓库。
 
 ## 关键目录
 
-- `content-items/`：网页生成的新口播与证据包，本地生成、Git 忽略。
-- `config/reference_creators.json`：用户指定的抖音参考账号和研究策略。
-- `config/reference_video_library.json`：已经完成全文核验的参考视频结构摘要，不保存原始视频和全文转录。
-- `config/video_workflow_v4.json`：六阶段默认参数、网页字段和版本化提示词。
-- `scripts/collect_douyin_references.mjs`：每次生成前的只读同题研究、临时转录和来源分级。
-- `video-jobs/`：原片、逐字稿、剪辑计划、版本成片、QA 和审核记录，Git 忽略。
-- `video/server.mjs`：仅监听 `127.0.0.1:8787` 的 v4 本地服务，同时兼容历史 v3 任务。
-- `video/visual_director.mjs`：工作流状态、结构化输出归一化和 HyperFrames 项目生成器。
-- `video/ai_bridge.py`：OpenAI 兼容文本模型与 faster-whisper 桥接。
-- `web/`：口播、上传、进度、审核和返修界面。
-- `.agents/skills/koubo-ai-video-editor/`：项目级口播剪辑 Skill。
-- `runs/YYYY-MM-DD/growth/`：原有成长记录与人工资料包。
-
-## 本地依赖
-
-当前机器已安装在 `.runtime/`：
-
-- Python 3.12；
-- `faster-whisper`；
-- `openai`；
-- `python-dotenv`；
-- FFmpeg 8.1（位于 `.runtime/ffmpeg/`）。
-
-首次使用某个 Whisper 模型时会下载模型。项目默认使用 `small`；下载不稳定时桥接会使用本机已验证的 Hugging Face 镜像，并禁用 Xet 下载。
+- `config/platform.json`：通用产品、默认内容配置、安全和治理边界。
+- `config/plugins.json`：P3 插件状态。
+- `config/shot_registry.json`：受治理镜头资产。
+- `content-items/`：按工作区生成的稿件和研究 artifact，Git 忽略。
+- `video-jobs/`：原片、时间线、审核、成片、导出和复盘，Git 忽略。
+- `video/platform/`：安全、工作区和插件边界。
+- `video/exporters/`：只读导出器适配层。
+- `video/assets/anchors.mjs`：素材锚点合同。
+- `video/research/reference_distillation.mjs`：证据化拉片合同。
+- `video/shots/`：镜头注册和 PageCam。
+- `video/server.mjs`：本地 API 和生产工作流。
+- `web/`：通用口播工作台 UI。
 
 ## 文本模型配置
 
-复制 `.env.example` 的模型配置到被 Git 忽略的 `.env`，然后填写：
+复制 `.env.example` 为被 Git 忽略的 `.env`：
 
 ```dotenv
-OPENAI_API_KEY=你的密钥
-OPENAI_BASE_URL=你的OpenAI兼容接口地址
-OPENAI_MODEL=你的模型名称
+OPENAI_API_KEY=
+OPENAI_BASE_URL=
+OPENAI_MODEL=
 ```
 
-使用 OpenAI 官方接口时，`OPENAI_BASE_URL` 可以留空。项目不再依赖 OpenMontage，也不会向文本模型上传原视频或音频。
+使用 OpenAI 官方接口时 `OPENAI_BASE_URL` 可留空。不要把密钥提交到 Git。
 
 ## 验证
 
 ```powershell
-node .\scripts\verify_workbench.mjs --url=http://127.0.0.1:8787
+node .\scripts\verify_runtime_lock.mjs
+
+$tests = @()
+$tests += Get-ChildItem tests\baseline\*.test.mjs
+$tests += Get-ChildItem tests\multi-agent\*.test.mjs
+$tests += Get-ChildItem tests\*.test.mjs
+node --test $tests.FullName
+
+.\.runtime-multi-agent\Scripts\python.exe -m unittest discover -s tests/python -v
+node .\scripts\verify_workbench.mjs
 ```
 
-2026-07-22 的 v4 端到端测试已验证：六阶段配置、默认路由、3 张真人关键帧、关键帧/样片双审核门、16 秒 1920×1080 HyperFrames 动态样片、标题→摘要→事实卡→证据的真实入场顺序、H.264/AAC/BT.709 输出、0 项布局错误、2K母版配置、素材QA与历史v3兼容。在线验证命令还会检查 v4 健康接口和默认工作流接口。
+最终验收还必须包括真实浏览器 UI、真实 PageCam 输出、真实媒体完整解码，以及剪映草稿的 JSON 验证；生成文件本身不等于可用交付。

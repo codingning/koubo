@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "plugins": {
+    "collage": {
+      "enabled": false,
+      "tier": "P3",
+      "privacy": "May upload approved assets to a configured cloud provider",
+      "cost": "Provider dependent",
+      "enableEnv": "KOUBO_PLUGIN_COLLAGE"
+    },
+    "whisperx": {
+      "enabled": false,
+      "tier": "P3",
+      "privacy": "Local model by default",
+      "cost": "GPU, model download and maintenance",
+      "enableEnv": "KOUBO_PLUGIN_WHISPERX"
+    },
+    "manim": {
+      "enabled": false,
+      "tier": "P3",
+      "privacy": "Local rendering",
+      "cost": "Render time and authoring effort",
+      "enableEnv": "KOUBO_PLUGIN_MANIM"
+    }
+  }
+}
