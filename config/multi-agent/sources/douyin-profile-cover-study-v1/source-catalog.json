@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "douyin-profile-cover-study-sources.v1",
+  "status": "research_source_catalog",
+  "createdAt": "2026-07-30T00:00:00+08:00",
+  "productionEligible": false,
+  "usageBoundary": "public-profile-grid-research-and-project-human-review-only-no-redistribution",
+  "reviewRule": "Observations may support original abstractions only. Do not copy people, wording, assets, fonts, palettes, or complete compositions.",
+  "sources": [
+    {
+      "id": "douyin-profile-huchuliang",
+      "platform": "douyin",
+      "url": "https://www.douyin.com/user/MS4wLjABAAAArEKjHBZqF5s-Gia8ctxea85CYV45L3EtISsbo_r0tSQ",
+      "author": "胡楚靓",
+      "reviewStatus": "visually_reviewed_live_profile_grid",
+      "reviewedItems": 12,
+      "evidenceScope": ["face-led thumbnails", "short opinion headlines", "high-contrast hierarchy"]
+    },
+    {
+      "id": "douyin-profile-yanlili-ai-diary",
+      "platform": "douyin",
+      "url": "https://www.douyin.com/user/MS4wLjABAAAAo9R8iW5OX-7HRyS-pAVQYu-1UjEe8swxbiyyoUp2uQc",
+      "author": "盐粒粒AI日记",
+      "reviewStatus": "visually_reviewed_live_profile_grid",
+      "reviewedItems": 12,
+      "evidenceScope": ["consistent blue-white world", "single-focus subject", "short grid-readable headline"]
+    },
+    {
+      "id": "douyin-profile-ting-tech-world",
+      "platform": "douyin",
+      "url": "https://www.douyin.com/user/MS4wLjABAAAAyOPi2Ub5dWClPDqnf5Zv7k5zXEGI41GyaLvv1gGIXqwPtsXe2-D_jHY9U4DCRK_0",
+      "author": "婷的科技世界",
+      "reviewStatus": "visually_reviewed_live_profile_grid",
+      "reviewedItems": 12,
+      "evidenceScope": ["tool-name plus benefit", "human or product focus", "bright handwritten hierarchy"]
+    },
+    {
+      "id": "douyin-profile-ayi-editor",
+      "platform": "douyin",
+      "url": "https://www.douyin.com/user/MS4wLjABAAAAwe1ZgPwOOoSPVYgwDbjIodsubqeRiv24TA4oLhbvEwaGFJjaDeO8bG2y1vlddFWD",
+      "author": "阿易剪辑师",
+      "reviewStatus": "visually_reviewed_live_profile_grid",
+      "reviewedItems": 12,
+      "evidenceScope": ["repeated series label", "real footage thumbnail", "series consistency versus weak click reason"]
+    },
+    {
+      "id": "douyin-profile-mediastorm",
+      "platform": "douyin",
+      "url": "https://www.douyin.com/user/MS4wLjABAAAAaCcBHb3Rhc4zxF8YkBOfHfLh6k-IWEK2l3Ne9xOXPnQ",
+      "author": "影视飓风",
+      "reviewStatus": "visually_reviewed_live_profile_grid",
+      "reviewedItems": 12,
+      "evidenceScope": ["strong title hierarchy", "variable real subject image", "two-line high-contrast question"]
+    },
+    {
+      "id": "project-user-cover-review-2026-07-30",
+      "type": "human-visual-review",
+      "reviewStatus": "project-user-reviewed-multiple-candidates",
+      "evidenceScope": [
+        "rejected brand-heavy blue-gold cover",
+        "rejected dark object-only cover",
+        "rejected bright 3D decorative cover",
+        "required real-person background",
+        "accepted face-obscuring huge copy direction",
+        "preferred conflict over feature description",
+        "required independent layouts for four aspect ratios",
+        "exposed same-path image cache failure"
+      ]
+    }
+  ]
+}

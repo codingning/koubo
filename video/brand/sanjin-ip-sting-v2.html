@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  </head>
+  <body>
+    <template>
+      <style>
+        @font-face { font-family:"Noto Sans SC"; src:url("assets/fonts/NotoSansSC-Regular.ttf"); font-weight:400; }
+        @font-face { font-family:"Noto Sans SC"; src:url("assets/fonts/NotoSansSC-Black.ttf"); font-weight:900; }
+        @font-face { font-family:"IBM Plex Mono"; src:url("assets/fonts/IBMPlexMono-Medium.ttf"); font-weight:700; }
+        #sanjin-ip-v2-root { position:absolute; inset:0; width:1080px; height:1920px; overflow:hidden; color:#f6f1e7; font-family:"Noto Sans SC"; }
+        .sip2-stage { position:absolute; inset:0; overflow:hidden; background:radial-gradient(circle at 76% 32%,rgba(36,87,245,.38),transparent 34%),radial-gradient(circle at 12% 80%,rgba(230,180,67,.18),transparent 30%),#070d1b; }
+        .sip2-grid { position:absolute; inset:-150px; opacity:.2; background-image:linear-gradient(rgba(138,166,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(138,166,255,.22) 1px,transparent 1px); background-size:74px 74px; transform:perspective(1100px) rotateX(58deg) translateY(390px) scale(1.35); transform-origin:center 68%; }
+        .sip2-halo { position:absolute; left:120px; top:370px; width:840px; height:840px; border:2px solid rgba(138,166,255,.2); border-radius:50%; box-shadow:0 0 90px rgba(36,87,245,.2),inset 0 0 90px rgba(36,87,245,.12); }
+        .sip2-halo::before,.sip2-halo::after { content:""; position:absolute; border-radius:50%; inset:82px; border:2px solid rgba(230,180,67,.18); }
+        .sip2-halo::after { inset:190px; border-color:rgba(138,166,255,.16); }
+        .sip2-noise { position:absolute; inset:0; opacity:.23; background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(246,241,231,.025) 6px); }
+        .sip2-frame { position:absolute; inset:52px; border:2px solid rgba(138,166,255,.28); }
+        .sip2-frame::before,.sip2-frame::after { content:""; position:absolute; width:132px; height:8px; background:#2457f5; box-shadow:0 0 22px rgba(36,87,245,.9); }
+        .sip2-frame::before { left:-2px; top:-5px; }
+        .sip2-frame::after { right:-2px; bottom:-5px; background:#e6b443; box-shadow:0 0 22px rgba(230,180,67,.78); }
+        .sip2-header { position:absolute; left:76px; right:76px; top:92px; display:flex; justify-content:space-between; align-items:center; color:#8aa6ff; font:700 18px/1.2 "IBM Plex Mono"; letter-spacing:.14em; }
+        .sip2-header strong { color:#e6b443; font-weight:700; }
+        .sip2-meter { position:absolute; left:76px; right:76px; top:146px; height:4px; background:rgba(138,166,255,.16); transform-origin:left center; }
+        .sip2-meter::after { content:""; position:absolute; inset:0 38% 0 0; background:linear-gradient(90deg,#2457f5,#8aa6ff,#e6b443); box-shadow:0 0 22px rgba(36,87,245,.72); }
+        .sip2-story { position:absolute; left:76px; right:76px; top:330px; height:1040px; }
+        .sip2-kicker { color:#e6b443; font:700 22px/1.2 "IBM Plex Mono"; letter-spacing:.18em; }
+        .sip2-hero { margin-top:42px; font-size:130px; line-height:.94; font-weight:900; letter-spacing:-.075em; }
+        .sip2-hero-line { display:block; overflow:hidden; white-space:nowrap; }
+        .sip2-hero-line span { display:block; }
+        .sip2-hero-line:nth-child(2) { margin-top:72px; color:#8aa6ff; }
+        .sip2-hero em { color:#e6b443; font-style:normal; }
+        .sip2-process { position:absolute; left:0; right:0; top:490px; height:280px; }
+        .sip2-rail { position:absolute; left:18px; right:18px; top:116px; height:8px; background:linear-gradient(90deg,#2457f5 0 66%,#e6b443 66% 100%); box-shadow:0 0 28px rgba(36,87,245,.72); transform-origin:left center; }
+        .sip2-node { position:absolute; top:67px; width:190px; text-align:center; }
+        .sip2-node:nth-child(2) { left:0; }
+        .sip2-node:nth-child(3) { left:50%; margin-left:-95px; }
+        .sip2-node:nth-child(4) { right:0; }
+        .sip2-node-dot { width:54px; height:54px; margin:0 auto 20px; border:6px solid #8aa6ff; background:#070d1b; transform:rotate(45deg); box-shadow:0 0 28px rgba(36,87,245,.82); }
+        .sip2-node:last-child .sip2-node-dot { border-color:#e6b443; box-shadow:0 0 32px rgba(230,180,67,.78); }
+        .sip2-node-label { display:block; font-size:34px; line-height:1; font-weight:900; white-space:nowrap; }
+        .sip2-node-code { display:block; margin-top:12px; color:rgba(246,241,231,.55); font:700 16px/1 "IBM Plex Mono"; letter-spacing:.12em; }
+        .sip2-proof { position:absolute; left:0; right:0; top:820px; display:flex; justify-content:space-between; padding-top:26px; border-top:2px solid rgba(138,166,255,.24); color:rgba(246,241,231,.7); font:700 18px/1.2 "IBM Plex Mono"; letter-spacing:.1em; }
+        .sip2-proof strong { color:#f6f1e7; }
+        .sip2-lockup { position:absolute; left:74px; right:74px; top:490px; height:840px; opacity:0; }
+        .sip2-lockup-meta { display:flex; justify-content:space-between; color:#8aa6ff; font:700 18px/1.2 "IBM Plex Mono"; letter-spacing:.14em; }
+        .sip2-mark-row { position:absolute; left:0; right:0; top:145px; height:360px; display:flex; align-items:center; }
+        .sip2-mark { position:relative; width:260px; height:290px; flex:0 0 auto; }
+        .sip2-mark-bar { position:absolute; left:0; height:34px; background:linear-gradient(90deg,#2457f5,#8aa6ff); transform-origin:left center; box-shadow:0 0 32px rgba(36,87,245,.62); }
+        .sip2-mark-bar:nth-child(1) { top:36px; width:190px; }
+        .sip2-mark-bar:nth-child(2) { top:122px; width:250px; }
+        .sip2-mark-bar:nth-child(3) { top:208px; width:158px; }
+        .sip2-mark-gold { position:absolute; right:0; bottom:4px; width:54px; height:54px; background:#e6b443; transform:rotate(45deg); box-shadow:0 0 36px rgba(230,180,67,.82); }
+        .sip2-name-wrap { margin-left:34px; overflow:hidden; padding-right:10px; }
+        .sip2-name { font-size:206px; line-height:.88; font-weight:900; letter-spacing:-.085em; white-space:nowrap; text-shadow:0 0 42px rgba(138,166,255,.18); }
+        .sip2-ai { position:absolute; left:292px; top:500px; display:flex; align-items:center; gap:18px; }
+        .sip2-ai-main { flex:0 0 auto; padding:16px 28px 19px; background:#2457f5; border:3px solid #f6f1e7; box-shadow:11px 11px 0 rgba(230,180,67,.78); font-size:58px; line-height:1; font-weight:900; letter-spacing:.06em; white-space:nowrap; }
+        .sip2-ai-side { max-width:360px; color:#e6b443; font:700 18px/1.45 "IBM Plex Mono"; letter-spacing:.12em; }
+        .sip2-tagline { position:absolute; left:0; right:0; top:650px; height:180px; padding-top:34px; border-top:3px solid rgba(138,166,255,.28); display:flex; align-items:flex-start; justify-content:space-between; }
+        .sip2-tagline-main { font-size:66px; line-height:1; font-weight:900; letter-spacing:-.045em; }
+        .sip2-tagline-main em { color:#e6b443; font-style:normal; }
+        .sip2-tagline-proof { text-align:right; color:rgba(246,241,231,.68); font:700 17px/1.55 "IBM Plex Mono"; letter-spacing:.1em; }
+        .sip2-spark { position:absolute; width:12px; height:12px; background:#e6b443; transform:rotate(45deg); box-shadow:0 0 18px rgba(230,180,67,.9); }
+        .sip2-spark-a { left:132px; top:308px; }
+        .sip2-spark-b { right:120px; top:470px; background:#8aa6ff; box-shadow:0 0 18px rgba(36,87,245,.9); }
+        .sip2-spark-c { right:226px; bottom:280px; }
+        .sip2-streak { position:absolute; left:-300px; width:1480px; height:10px; background:linear-gradient(90deg,transparent,#2457f5 26%,#8aa6ff 58%,transparent); transform:rotate(-12deg); transform-origin:left center; opacity:.72; }
+        .sip2-streak-a { top:360px; }
+        .sip2-streak-b { top:1010px; height:5px; opacity:.42; }
+        .sip2-flash { position:absolute; inset:0; background:#f6f1e7; opacity:0; }
+        .sip2-exit { position:absolute; left:-190px; top:-240px; width:1460px; height:2400px; transform:rotate(12deg); }
+        .sip2-exit-blue { background:#2457f5; }
+        .sip2-exit-gold { background:#e6b443; }
+      </style>
+
+      <div data-hf-id="hf-sanjin-ip-v2-root" id="sanjin-ip-v2-root" data-start="0" data-composition-id="sanjin-ip-sting-v2" data-width="1080" data-height="1920" data-duration="3">
+        <div data-hf-id="hf-sip2-stage" class="sip2-stage" id="sip2-stage">
+          <div data-hf-id="hf-sip2-grid" class="sip2-grid" id="sip2-grid"></div>
+          <div data-hf-id="hf-sip2-halo" class="sip2-halo" id="sip2-halo"></div>
+          <div data-hf-id="hf-sip2-noise" class="sip2-noise"></div>
+          <div data-hf-id="hf-sip2-streak-a" class="sip2-streak sip2-streak-a" id="sip2-streak-a" data-layout-allow-overflow=""></div>
+          <div data-hf-id="hf-sip2-streak-b" class="sip2-streak sip2-streak-b" id="sip2-streak-b" data-layout-allow-overflow=""></div>
+          <div data-hf-id="hf-sip2-frame" class="sip2-frame"></div>
+          <div data-hf-id="hf-sip2-header" class="sip2-header" id="sip2-header"><span data-hf-id="hf-sip2-header-left">SANJIN // AI PRACTICE LAB</span><strong data-hf-id="hf-sip2-header-right">EPISODE IDENTITY 02</strong></div>
+          <div data-hf-id="hf-sip2-meter" class="sip2-meter" id="sip2-meter"></div>
+
+          <div data-hf-id="hf-sip2-story" class="sip2-story" id="sip2-story" data-layout-allow-overlap="">
+            <div data-hf-id="hf-sip2-kicker" class="sip2-kicker" id="sip2-kicker">KNOWLEDGE IS NOT THE RESULT</div>
+            <div data-hf-id="hf-sip2-hero" class="sip2-hero">
+              <div data-hf-id="hf-sip2-hero-line-a" class="sip2-hero-line"><span data-hf-id="hf-sip2-hero-a" id="sip2-hero-a">把 <em data-hf-id="hf-sip2-ai-em">AI</em> 知识</span></div>
+              <div data-hf-id="hf-sip2-hero-line-b" class="sip2-hero-line"><span data-hf-id="hf-sip2-hero-b" id="sip2-hero-b">做成真实结果</span></div>
+            </div>
+            <div data-hf-id="hf-sip2-process" class="sip2-process" id="sip2-process">
+              <div data-hf-id="hf-sip2-rail" class="sip2-rail" id="sip2-rail"></div>
+              <div data-hf-id="hf-sip2-node-a" class="sip2-node" id="sip2-node-a"><span data-hf-id="hf-sip2-dot-a" class="sip2-node-dot"></span><span data-hf-id="hf-sip2-label-a" class="sip2-node-label">知道</span><span data-hf-id="hf-sip2-code-a" class="sip2-node-code">KNOW</span></div>
+              <div data-hf-id="hf-sip2-node-b" class="sip2-node" id="sip2-node-b"><span data-hf-id="hf-sip2-dot-b" class="sip2-node-dot"></span><span data-hf-id="hf-sip2-label-b" class="sip2-node-label">实测</span><span data-hf-id="hf-sip2-code-b" class="sip2-node-code">BUILD</span></div>
+              <div data-hf-id="hf-sip2-node-c" class="sip2-node" id="sip2-node-c"><span data-hf-id="hf-sip2-dot-c" class="sip2-node-dot"></span><span data-hf-id="hf-sip2-label-c" class="sip2-node-label">做到</span><span data-hf-id="hf-sip2-code-c" class="sip2-node-code">RESULT</span></div>
+            </div>
+            <div data-hf-id="hf-sip2-proof" class="sip2-proof" id="sip2-proof"><span data-hf-id="hf-sip2-proof-a">真实问题</span><strong data-hf-id="hf-sip2-proof-b">本地实测</strong><span data-hf-id="hf-sip2-proof-c">可复用结果</span></div>
+          </div>
+
+          <div data-hf-id="hf-sip2-lockup" class="sip2-lockup" id="sip2-lockup" data-layout-allow-overlap="">
+            <div data-hf-id="hf-sip2-lockup-meta" class="sip2-lockup-meta" id="sip2-lockup-meta"><span data-hf-id="hf-sip2-meta-a">SANJIN ORIGINAL</span><span data-hf-id="hf-sip2-meta-b">REAL ACTION / REAL RESULT</span></div>
+            <div data-hf-id="hf-sip2-mark-row" class="sip2-mark-row">
+              <div data-hf-id="hf-sip2-mark" class="sip2-mark" id="sip2-mark">
+                <span data-hf-id="hf-sip2-mark-bar-a" class="sip2-mark-bar"></span>
+                <span data-hf-id="hf-sip2-mark-bar-b" class="sip2-mark-bar"></span>
+                <span data-hf-id="hf-sip2-mark-bar-c" class="sip2-mark-bar"></span>
+                <span data-hf-id="hf-sip2-mark-gold" class="sip2-mark-gold" id="sip2-mark-gold"></span>
+              </div>
+              <div data-hf-id="hf-sip2-name-wrap" class="sip2-name-wrap"><div data-hf-id="hf-sip2-name" class="sip2-name" id="sip2-name">三金</div></div>
+            </div>
+            <div data-hf-id="hf-sip2-ai" class="sip2-ai" id="sip2-ai"><span data-hf-id="hf-sip2-ai-main" class="sip2-ai-main">AI 实战</span><span data-hf-id="hf-sip2-ai-side" class="sip2-ai-side">TESTED LOCALLY / BUILT FOR REAL</span></div>
+            <div data-hf-id="hf-sip2-tagline" class="sip2-tagline" id="sip2-tagline"><div data-hf-id="hf-sip2-tagline-main" class="sip2-tagline-main">从<em data-hf-id="hf-sip2-know">知道</em>，到<em data-hf-id="hf-sip2-do">做到</em></div><div data-hf-id="hf-sip2-tagline-proof" class="sip2-tagline-proof">真实问题 · 真实执行 · 真实结果</div></div>
+          </div>
+
+          <span data-hf-id="hf-sip2-spark-a" class="sip2-spark sip2-spark-a" id="sip2-spark-a"></span>
+          <span data-hf-id="hf-sip2-spark-b" class="sip2-spark sip2-spark-b" id="sip2-spark-b"></span>
+          <span data-hf-id="hf-sip2-spark-c" class="sip2-spark sip2-spark-c" id="sip2-spark-c"></span>
+        </div>
+        <div data-hf-id="hf-sip2-flash" class="sip2-flash" id="sip2-flash"></div>
+        <div data-hf-id="hf-sip2-exit-blue" class="sip2-exit sip2-exit-blue" id="sip2-exit-blue" data-layout-allow-overflow=""></div>
+        <div data-hf-id="hf-sip2-exit-gold" class="sip2-exit sip2-exit-gold" id="sip2-exit-gold" data-layout-allow-overflow=""></div>
+      </div>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused:true });
+        tl.fromTo("#sip2-stage", { scale:1.06, opacity:0 }, { scale:1, opacity:1, duration:.25, ease:"power4.out" }, 0);
+        tl.fromTo("#sip2-flash", { opacity:.82 }, { opacity:0, duration:.16, ease:"power3.out" }, 0);
+        tl.fromTo("#sip2-header", { y:-34, opacity:0 }, { y:0, opacity:1, duration:.32, ease:"power3.out" }, .06);
+        tl.fromTo("#sip2-meter", { scaleX:0 }, { scaleX:1, duration:.58, ease:"expo.out" }, .09);
+        tl.fromTo("#sip2-streak-a", { x:-980, scaleX:.25 }, { x:680, scaleX:1, duration:.65, ease:"power4.out" }, .03);
+        tl.fromTo("#sip2-streak-b", { x:760, scaleX:.2 }, { x:-520, scaleX:1, duration:.75, ease:"power4.out" }, .1);
+        tl.fromTo("#sip2-kicker", { x:-90, opacity:0 }, { x:0, opacity:1, duration:.28, ease:"power3.out" }, .14);
+        tl.fromTo("#sip2-hero-a", { x:-760, scaleX:1.18, opacity:0 }, { x:0, scaleX:1, opacity:1, duration:.46, ease:"expo.out" }, .16);
+        tl.fromTo("#sip2-hero-b", { x:760, scaleX:1.18, opacity:0 }, { x:0, scaleX:1, opacity:1, duration:.48, ease:"expo.out" }, .28);
+        tl.fromTo("#sip2-rail", { scaleX:0 }, { scaleX:1, duration:.55, ease:"circ.out" }, .42);
+        tl.fromTo("#sip2-node-a", { y:30, scale:.7, opacity:0 }, { y:0, scale:1, opacity:1, duration:.3, ease:"back.out(1.8)" }, .45);
+        tl.fromTo("#sip2-node-b", { y:30, scale:.7, opacity:0 }, { y:0, scale:1, opacity:1, duration:.3, ease:"back.out(1.8)" }, .65);
+        tl.fromTo("#sip2-node-c", { y:30, scale:.7, opacity:0 }, { y:0, scale:1, opacity:1, duration:.3, ease:"back.out(1.8)" }, .85);
+        tl.fromTo("#sip2-proof", { y:24, opacity:0 }, { y:0, opacity:1, duration:.3, ease:"power2.out" }, .74);
+        tl.to("#sip2-story", { x:-120, scale:.92, opacity:0, duration:.28, ease:"power3.in" }, 1.05);
+        tl.fromTo("#sip2-lockup", { x:130, scale:.9, opacity:0 }, { x:0, scale:1, opacity:1, duration:.38, ease:"power4.out" }, 1.08);
+        tl.fromTo("#sip2-lockup-meta", { y:-22, opacity:0 }, { y:0, opacity:1, duration:.28, ease:"power2.out" }, 1.18);
+        tl.fromTo(".sip2-mark-bar", { scaleX:0 }, { scaleX:1, duration:.26, stagger:.1, ease:"expo.out" }, 1.14);
+        tl.fromTo("#sip2-mark-gold", { scale:0, rotation:180 }, { scale:1, rotation:45, duration:.38, ease:"back.out(2)" }, 1.52);
+        tl.fromTo("#sip2-name", { x:-340, scaleX:1.24, opacity:0 }, { x:0, scaleX:1, opacity:1, duration:.45, ease:"power4.out" }, 1.22);
+        tl.fromTo("#sip2-ai", { y:54, scale:.88, opacity:0 }, { y:0, scale:1, opacity:1, duration:.38, ease:"back.out(1.6)" }, 1.58);
+        tl.fromTo("#sip2-tagline", { y:38, opacity:0 }, { y:0, opacity:1, duration:.34, ease:"power3.out" }, 1.78);
+        tl.fromTo("#sip2-halo", { scale:.72, rotation:-18, opacity:.18 }, { scale:1.05, rotation:0, opacity:1, duration:2.05, ease:"sine.out" }, .3);
+        tl.fromTo("#sip2-grid", { y:90, opacity:.08 }, { y:0, opacity:.2, duration:2.2, ease:"sine.out" }, .16);
+        tl.fromTo("#sip2-spark-a", { x:-90, y:60, scale:0, opacity:0 }, { x:0, y:0, scale:1, opacity:1, duration:.5, ease:"power3.out" }, .72);
+        tl.fromTo("#sip2-spark-b", { x:110, y:-50, scale:0, opacity:0 }, { x:0, y:0, scale:1, opacity:1, duration:.5, ease:"power3.out" }, .98);
+        tl.fromTo("#sip2-spark-c", { x:80, y:90, scale:0, opacity:0 }, { x:0, y:0, scale:1, opacity:1, duration:.5, ease:"power3.out" }, 1.25);
+        tl.to("#sip2-lockup", { scale:1.025, duration:.72, ease:"sine.inOut" }, 1.92);
+        tl.fromTo("#sip2-flash", { opacity:0 }, { opacity:.32, duration:.06, ease:"power2.in" }, 1.55);
+        tl.to("#sip2-flash", { opacity:0, duration:.1, ease:"power2.out" }, 1.61);
+        tl.fromTo("#sip2-exit-blue", { x:-1500 }, { x:0, duration:.38, ease:"power3.inOut" }, 2.58);
+        tl.fromTo("#sip2-exit-gold", { x:-1580 }, { x:0, duration:.24, ease:"power3.inOut" }, 2.74);
+        window.__timelines["sanjin-ip-sting-v2"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

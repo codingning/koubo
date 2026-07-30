@@ -26,6 +26,7 @@ import {
 } from "./visual_director.mjs";
 import { createMultiAgentApi } from "./multi-agent/api.mjs";
 import { buildBlindReviewBundle } from "./multi-agent/evaluation.mjs";
+import { buildExpertKnowledgeLibrary } from "./multi-agent/expert-knowledge-library.mjs";
 import { canonicalJson, contentHash, loadAgentProfiles, validateLibrary } from "./multi-agent/contracts.mjs";
 import { canEnterScriptStage } from "./multi-agent/content-strategy.mjs";
 import { createOrdinaryViewerCritic } from "./multi-agent/ordinary-viewer-critic.mjs";
@@ -61,6 +62,7 @@ const referenceCollector = path.join(root, "scripts", "collect_douyin_references
 const referenceLibraryFile = path.join(root, "config", "reference_video_library.json");
 const referenceCreatorsFile = path.join(root, "config", "reference_creators.json");
 const platformConfig = await readJsonFile(path.join(root, "config", "platform.json"));
+const creatorBrand = await readJsonFile(path.join(root, "config", "creator_brand.json")).catch(() => ({}));
 const pluginRegistry = loadPluginRegistry(path.join(root, "config", "plugins.json"));
 const shotRegistry = loadShotRegistry(path.join(root, "config", "shot_registry.json"));
 const visualWorkflowDefaults = await loadVisualWorkflowDefaults(root);
@@ -84,7 +86,8 @@ const mime = {
   ".md": "text/plain; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg", ".mp4": "video/mp4", ".webm": "video/webm",
   ".srt": "application/x-subrip; charset=utf-8", ".ass": "text/plain; charset=utf-8",
-  ".csv": "text/csv; charset=utf-8", ".edl": "text/plain; charset=utf-8"
+  ".csv": "text/csv; charset=utf-8", ".edl": "text/plain; charset=utf-8",
+  ".zip": "application/zip"
 };
 
 await Promise.all([fsp.mkdir(jobsRoot, { recursive: true }), fsp.mkdir(contentRoot, { recursive: true })]);
@@ -1334,7 +1337,7 @@ function cleanCoverCopy(value, limit = 24) {
 }
 function normalizeCoverPlan(raw) {
   const value = raw && typeof raw === "object" ? raw : {};
-  const lines = (Array.isArray(value.lines) ? value.lines : []).map(item => cleanCoverCopy(item, 14)).filter(Boolean).slice(0, 3);
+  const lines = (Array.isArray(value.lines) ? value.lines : []).map(item => cleanCoverCopy(item, 14)).filter(Boolean).slice(0, 2);
   const highlights = (Array.isArray(value.highlights) ? value.highlights : []).map(item => cleanCoverCopy(item, 12)).filter(item => item && lines.some(line => line.includes(item))).slice(0, 3);
   const features = (Array.isArray(value.features) ? value.features : []).map(item => cleanCoverCopy(item, 8)).filter(Boolean).slice(0, 4);
   const sourceTime = Number(value.sourceTime);
@@ -1650,147 +1653,370 @@ function videoColorPipeline(source = {}) {
 function splitCoverTitle(value) {
   const text = cleanCoverCopy(value, 42);
   if (!text) return [];
-  const explicit = text.split(/[\/｜|]+/).map(item => cleanCoverCopy(item, 14)).filter(Boolean);
-  if (explicit.length >= 2) return explicit.slice(0, 3);
+  const explicit = text.split(/[\/｜|]+/).map(item => cleanCoverCopy(item, 10)).filter(Boolean);
+  if (explicit.length >= 2) return explicit.slice(0, 2);
   const phrases = text.split(/[，。！？；：—-]+/).map(item => cleanCoverCopy(item, 18)).filter(Boolean);
   const source = phrases.length > 1 ? phrases : [text];
   const lines = [];
   for (const phrase of source) {
     const chars = [...phrase];
-    while (chars.length && lines.length < 3) lines.push(chars.splice(0, chars.length > 18 ? 10 : 12).join(""));
-    if (lines.length >= 3) break;
+    while (chars.length && lines.length < 2) lines.push(chars.splice(0, chars.length > 14 ? 7 : 8).join(""));
+    if (lines.length >= 2) break;
   }
-  return lines.filter(Boolean).slice(0, 3);
+  return lines.filter(Boolean).slice(0, 2);
 }
-function coverDesignForJob(job) {
+function coverDesignForJob(job, coverSourceMetadata = null) {
   const planned = normalizeCoverPlan(job.currentPlan?.coverDesign);
   const script = String(job.script || "");
   const override = cleanCoverCopy(job.options?.coverTitle, 42);
   let lines = override ? splitCoverTitle(override) : planned.lines;
-  if (!lines.length && /Codex/i.test(script) && /口播工作台/.test(script)) lines = ["我用 Codex", "做了一个", "AI口播工作台"];
+  if (!lines.length && /Codex/i.test(script) && /口播工作台/.test(script)) lines = ["Codex剪口播", "真的能用吗"];
   if (!lines.length) lines = splitCoverTitle(job.options?.contentTitle);
   if (!lines.length) {
     const candidates = script.split(/[。！？\n]+/).map(item => cleanCoverCopy(item, 32)).filter(item => item.length >= 6);
     lines = splitCoverTitle(candidates.find(item => /AI|Codex|工作台|视频|工具|项目/i.test(item)) || candidates[0] || "本期口播实战");
   }
-  const highlights = planned.highlights.length ? planned.highlights : ["Codex", "AI", "口播工作台"].filter(item => lines.some(line => line.includes(item)));
+  const highlights = planned.highlights.length ? planned.highlights : ["没用", "垃圾", "失败", "真相", "AI", "Codex"].filter(item => lines.some(line => line.includes(item)));
   const detectedFeatures = [
     [/口播稿|写稿/, "写稿"], [/剪辑/, "剪辑"], [/字幕/, "字幕"], [/工作流/, "工作流"]
   ].filter(([pattern]) => pattern.test(script)).map(([, label]) => label);
-  const firstKeep = job.currentPlan?.keepSegments?.[0] || { start: 0, end: Math.max(1, Number(job.source?.duration || 1)) };
-  const preferredTime = firstKeep.start + Math.min(5.2, Math.max(0.5, (firstKeep.end - firstKeep.start) * 0.67));
-  const sourceTime = planned.sourceTime !== null && (job.currentPlan?.keepSegments || []).some(item => planned.sourceTime >= item.start && planned.sourceTime <= item.end)
-    ? planned.sourceTime
-    : preferredTime;
+  const outputDuration = Number(coverSourceMetadata?.duration || job.output?.metadata?.duration || job.output?.duration || job.source?.duration || 1);
+  const preferredTime = Math.min(Math.max(0.5, outputDuration * 0.62), Math.max(0.5, outputDuration - 0.25));
+  const requestedTime = Number(job.options?.coverSourceTime);
+  const sourceTime = Number.isFinite(requestedTime) && requestedTime >= 0 && requestedTime <= outputDuration
+    ? requestedTime
+    : planned.sourceTime !== null && Number(planned.sourceTime) <= outputDuration
+      ? planned.sourceTime
+      : preferredTime;
   return {
-    eyebrow: planned.eyebrow || (/第一次/.test(script) ? "程序员第一次拍视频" : "本期 AI 实战"),
-    lines: lines.slice(0, 3),
+    lines: lines.slice(0, 2),
     highlights,
     features: (planned.features.length ? planned.features : detectedFeatures).slice(0, 4),
     sourceTime: Number(Math.max(0, sourceTime).toFixed(3)),
+    templateId: creatorBrand.defaultCoverTemplate?.id || "content-first-real-person-conflict-cover-v3",
     source: override ? "user-override" : planned.lines.length ? "ai-plan" : "local-fallback"
   };
 }
 function coverAssEscape(value) {
   return String(value || "").replace(/[{}]/g, "").replace(/\\/g, "").replace(/\r?\n/g, " ").trim();
 }
-function coverLineAss(line, highlights) {
+function coverTextWeight(value) {
+  return [...String(value || "")].reduce((sum, char) => sum + (/^[\x00-\x7F]$/.test(char) ? 0.56 : 1), 0);
+}
+function coverScaledFontSize(line, base, targetWeight = 5.8) {
+  const weight = Math.max(1, coverTextWeight(line));
+  return Math.max(Math.round(base * 0.72), Math.round(base * Math.min(1, targetWeight / weight)));
+}
+function coverHighlightedResultAss(line, highlights) {
   const value = coverAssEscape(line);
   const highlight = highlights.find(item => value.includes(item));
   if (!highlight) return value;
   const index = value.indexOf(highlight);
-  return `${value.slice(0, index)}{\\c&H001FD2FF&}${value.slice(index, index + highlight.length)}{\\c&H00FFFFFF&}${value.slice(index + highlight.length)}`;
+  return `${value.slice(0, index)}{\\c&H0000D9FF&}${value.slice(index, index + highlight.length)}{\\c&H00FFFFFF&}${value.slice(index + highlight.length)}`;
 }
-function coverFontSize(line) {
-  const weight = [...String(line || "")].reduce((sum, char) => sum + (/^[\x00-\x7F]$/.test(char) ? 0.56 : 1), 0);
-  return weight > 10 ? 72 : weight > 8 ? 82 : 96;
+function coverCanvasSpec(width, height) {
+  if (width === 1080 && height === 1920) return { firstSize: 238, secondSize: 220, firstY: 500, secondY: 850, scaleX: 90 };
+  if (width === 1080 && height === 1440) return { firstSize: 230, secondSize: 205, firstY: 330, secondY: 650, scaleX: 92 };
+  return { firstSize: 218, secondSize: 190, firstY: 280, secondY: 570, scaleX: 94 };
 }
-async function writeCoverAss(coverDir, design) {
+async function writeContentFirstCoverAss(coverDir, design, width, height, suffix) {
+  const spec = coverCanvasSpec(width, height);
+  const first = coverAssEscape(design.lines[0] || "本期核心冲突");
+  const second = coverAssEscape(design.lines[1] || "结果直接看见");
+  const firstSize = coverScaledFontSize(first, spec.firstSize);
+  const secondSize = coverScaledFontSize(second, spec.secondSize);
   const lines = [
-    "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1080", "PlayResY: 1920", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
+    "[Script Info]", "ScriptType: v4.00+", `PlayResX: ${width}`, `PlayResY: ${height}`, "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
     "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    "Style: Main,Microsoft YaHei,96,&H00FFFFFF,&H000000FF,&H0005080A,&H50000000,-1,0,0,0,100,100,0,0,1,5,3,7,0,0,0,1",
-    "Style: Eyebrow,Microsoft YaHei,34,&H00101820,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
-    "Style: Feature,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H0005080A,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,7,0,0,0,1", "",
+    `Style: BlueOuter,Microsoft YaHei,${firstSize},&H00FFB500,&H000000FF,&H00140F0D,&H8A000000,-1,0,0,0,${spec.scaleX},100,-9,0,1,18,9,5,0,0,0,1`,
+    `Style: BlueInner,Microsoft YaHei,${firstSize},&H00FFB500,&H000000FF,&H00FFFFFF,&H00000000,-1,0,0,0,${spec.scaleX},100,-9,0,1,5,0,5,0,0,0,1`,
+    `Style: Result,Microsoft YaHei,${secondSize},&H00FFFFFF,&H000000FF,&H00140F0D,&H8A000000,-1,0,0,0,${spec.scaleX},100,-8,0,1,14,8,5,0,0,0,1`, "",
     "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
-    `Dialogue: 2,0:00:00.00,0:00:10.00,Eyebrow,,0,0,0,,{\\an7\\pos(88,282)}${coverAssEscape(design.eyebrow)}`
+    `Dialogue: 2,0:00:00.00,0:00:10.00,BlueOuter,,0,0,0,,{\\an5\\pos(${Math.round(width / 2)},${spec.firstY})}${first}`,
+    `Dialogue: 3,0:00:00.00,0:00:10.00,BlueInner,,0,0,0,,{\\an5\\pos(${Math.round(width / 2)},${spec.firstY})}${first}`,
+    `Dialogue: 3,0:00:00.00,0:00:10.00,Result,,0,0,0,,{\\an5\\pos(${Math.round(width / 2)},${spec.secondY})}${coverHighlightedResultAss(second, design.highlights)}`
   ];
-  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(65,${370 + index * 125})\\fs${coverFontSize(line)}}${coverLineAss(line, design.highlights)}`));
-  if (design.features.length) lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Feature,,0,0,0,,{\\an7\\pos(90,1598)}${coverAssEscape(design.features.join("  ·  "))}`);
-  const file = path.join(coverDir, "cover.ass");
-  await fsp.writeFile(file, lines.join("\r\n"), "utf8");
-  return file;
-}
-async function writeHorizontalCoverAss(coverDir, design, width, suffix) {
-  const x = width >= 1900 ? 120 : 70;
-  const labelX = x + 25;
-  const lines = [
-    "[Script Info]", "ScriptType: v4.00+", `PlayResX: ${width}`, "PlayResY: 1080", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
-    "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    "Style: Main,Microsoft YaHei,88,&H00FFFFFF,&H000000FF,&H0005080A,&H50000000,-1,0,0,0,100,100,0,0,1,5,3,7,0,0,0,1",
-    "Style: Eyebrow,Microsoft YaHei,32,&H00101820,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
-    "Style: Feature,Microsoft YaHei,36,&H00FFFFFF,&H000000FF,&H0005080A,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,7,0,0,0,1", "",
-    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
-    `Dialogue: 2,0:00:00.00,0:00:10.00,Eyebrow,,0,0,0,,{\\an7\\pos(${labelX},190)}${coverAssEscape(design.eyebrow)}`
-  ];
-  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(${x + 5},${300 + index * 125})\\fs${Math.min(88, coverFontSize(line))}}${coverLineAss(line, design.highlights)}`));
-  if (design.features.length) lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Feature,,0,0,0,,{\\an7\\pos(${x + 30},865)}${coverAssEscape(design.features.join("  ·  "))}`);
   const file = path.join(coverDir, `cover-${suffix}.ass`);
   await fsp.writeFile(file, lines.join("\r\n"), "utf8");
   return file;
+}
+async function coverSourceForJob(job) {
+  const requested = String(job.options?.coverSourcePath || "").trim();
+  const fallback = job.output?.path && fs.existsSync(job.output.path) ? job.output.path : job.sourcePath;
+  const file = requested ? path.resolve(requested) : fallback;
+  if (!file || !fs.existsSync(file)) throw new Error("封面背景素材不存在");
+  return {
+    path: file,
+    role: requested ? String(job.options?.coverSourceRole || "user-provided-real-person-source") : "approved-final-video-frame",
+    metadata: await probe(file),
+    sha256: await sha256File(file)
+  };
 }
 async function renderCover(job, version) {
   if (job.options?.generateCover === false) return { requested: false, engine: "none", available: false };
   const jobDir = confined(jobsRoot, job.id);
   const coverDir = path.join(jobDir, "covers", `v${version}`);
   await fsp.mkdir(coverDir, { recursive: true });
-  const design = coverDesignForJob(job);
-  await writeCoverAss(coverDir, design);
-  const labelWidth = Math.min(620, Math.max(360, 82 + [...design.eyebrow].length * 39));
-  const featureFilters = design.features.length
-    ? ",drawbox=x=65:y=1585:w=500:h=72:color=0x06131D@0.82:t=fill"
-    : "";
-  const color = videoColorPipeline(job.source);
-  const filter = `[0:v]${color.filter}[color];[color]split=2[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:8[bg2];[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg2];[bg2][fg2]overlay=(W-w)/2:(H-h)/2,eq=brightness=-0.035:saturation=0.84:contrast=1.04,drawbox=x=38:y=245:w=720:h=515:color=0x06131D@0.58:t=fill,drawbox=x=38:y=245:w=9:h=515:color=0x2ED6C4@1:t=fill,drawbox=x=65:y=270:w=${labelWidth}:h=62:color=0xFFAA3C@1:t=fill${featureFilters},ass=filename='cover.ass',format=rgb24[cover]`;
-  const png9x16 = path.join(coverDir, `cover-v${version}-9x16.png`);
-  const jpg9x16 = path.join(coverDir, `cover-v${version}-9x16.jpg`);
-  const png3x4 = path.join(coverDir, `cover-v${version}-3x4.png`);
-  const jpg3x4 = path.join(coverDir, `cover-v${version}-3x4.jpg`);
-  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(design.sourceTime), "-i", job.sourcePath, "-filter_complex", filter, "-map", "[cover]", "-frames:v", "1", "-update", "1", png9x16], { cwd: coverDir });
-  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png9x16, "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1", "-update", "1", jpg9x16]);
-  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png9x16, "-vf", "crop=1080:1440:0:240", "-frames:v", "1", "-update", "1", png3x4]);
-  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png3x4, "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1", "-update", "1", jpg3x4]);
-  const renderHorizontal = async (width, suffix) => {
-    await writeHorizontalCoverAss(coverDir, design, width, suffix);
-    const panelX = width >= 1900 ? 90 : 40;
-    const panelWidth = width >= 1900 ? 890 : 750;
-    const labelX = panelX + 55;
-    const labelWidthHorizontal = Math.min(panelWidth - 90, Math.max(350, 76 + [...design.eyebrow].length * 36));
-    const featureHorizontal = design.features.length ? `,drawbox=x=${labelX}:y=850:w=470:h=68:color=0x06131D@0.82:t=fill` : "";
-    const foregroundWidth = Math.round(width * 0.52);
-    const horizontalFilter = `[0:v]${color.filter}[color];[color]split=2[bg][fg];[bg]scale=${width}:1080:force_original_aspect_ratio=increase,crop=${width}:1080,boxblur=24:8[bg2];[fg]scale=${foregroundWidth}:1080:force_original_aspect_ratio=decrease[fg2];[bg2][fg2]overlay=x=W-w-45:y=(H-h)/2,eq=brightness=-0.045:saturation=0.84:contrast=1.05,drawbox=x=${panelX}:y=150:w=${panelWidth}:h=650:color=0x06131D@0.62:t=fill,drawbox=x=${panelX}:y=150:w=9:h=650:color=0x2ED6C4@1:t=fill,drawbox=x=${labelX}:y=178:w=${labelWidthHorizontal}:h=58:color=0xFFAA3C@1:t=fill${featureHorizontal},ass=filename='cover-${suffix}.ass',format=rgb24[cover]`;
-    const png = path.join(coverDir, `cover-v${version}-${suffix}.png`);
-    const jpg = path.join(coverDir, `cover-v${version}-${suffix}.jpg`);
-    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(design.sourceTime), "-i", job.sourcePath, "-filter_complex", horizontalFilter, "-map", "[cover]", "-frames:v", "1", "-update", "1", png], { cwd: coverDir });
+  const source = await coverSourceForJob(job);
+  const design = coverDesignForJob(job, source.metadata);
+  const color = videoColorPipeline(source.metadata);
+  const outputs = [
+    { key: "vertical", suffix: "9x16", width: 1080, height: 1920 },
+    { key: "grid", suffix: "3x4", width: 1080, height: 1440 },
+    { key: "wide16x9", suffix: "16x9", width: 1920, height: 1080 },
+    { key: "landscape4x3", suffix: "4x3", width: 1440, height: 1080 }
+  ];
+  const rendered = {};
+  for (const output of outputs) {
+    await writeContentFirstCoverAss(coverDir, design, output.width, output.height, output.suffix);
+    const filter = `[0:v]${color.filter},scale=${output.width}:${output.height}:force_original_aspect_ratio=increase,crop=${output.width}:${output.height},eq=brightness=-0.10:contrast=1.20:saturation=1.08,unsharp=5:5:0.7:5:5:0.0,ass=filename='cover-${output.suffix}.ass',format=rgb24[cover]`;
+    const png = path.join(coverDir, `cover-v${version}-${output.suffix}.png`);
+    const jpg = path.join(coverDir, `cover-v${version}-${output.suffix}.jpg`);
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(design.sourceTime), "-i", source.path, "-filter_complex", filter, "-map", "[cover]", "-frames:v", "1", "-update", "1", png], { cwd: coverDir });
     await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png, "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1", "-update", "1", jpg]);
-    return { path: jpg, url: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-${suffix}.jpg`, pngUrl: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-${suffix}.png`, metadata: await probe(jpg) };
-  };
-  const wide16x9 = await renderHorizontal(1920, "16x9");
-  const landscape4x3 = await renderHorizontal(1440, "4x3");
-  const metadata9x16 = await probe(jpg9x16), metadata3x4 = await probe(jpg3x4);
-  const artifact = { version, design, engine: "local-ffmpeg-ass", privacy: "local-frame-only", generatedAt: new Date().toISOString() };
+    rendered[output.key] = {
+      path: jpg,
+      url: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-${output.suffix}.jpg`,
+      pngUrl: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-${output.suffix}.png`,
+      metadata: await probe(jpg)
+    };
+  }
+  const privacy = source.role === "approved-final-video-frame" ? "approved-final-frame-only" : "user-provided-local-cover-source";
+  const sourceRecord = { role: source.role, fileName: path.basename(source.path), sha256: source.sha256, metadata: source.metadata, sourceTime: design.sourceTime };
+  const artifact = { version, design, style: design.templateId, engine: "local-ffmpeg-ass", privacy, source: sourceRecord, generatedAt: new Date().toISOString() };
   await writeJson(path.join(jobDir, `cover-design-v${version}.json`), artifact);
   return {
     requested: true,
     available: true,
     engine: "local-ffmpeg-ass",
+    style: design.templateId,
     design,
-    privacy: "local-frame-only",
-    vertical: { path: jpg9x16, url: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-9x16.jpg`, pngUrl: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-9x16.png`, metadata: metadata9x16 },
-    grid: { path: jpg3x4, url: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-3x4.jpg`, pngUrl: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-3x4.png`, metadata: metadata3x4 },
-    wide16x9,
-    landscape4x3
+    privacy,
+    source: sourceRecord,
+    ...rendered
   };
+}
+function cleanPublishText(value, limit = 1800) {
+  return String(value || "").replace(/\r\n/g, "\n").replace(/[\t ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, limit);
+}
+function publishTitleText(value) {
+  if (typeof value === "string") return cleanPublishText(value, 42);
+  if (!value || typeof value !== "object") return "";
+  return cleanPublishText(value.title || value.text || value.name, 42);
+}
+function uniquePublishTexts(values, limit) {
+  const seen = new Set();
+  const result = [];
+  for (const raw of values) {
+    const value = cleanPublishText(raw, 42);
+    const key = value.replace(/[\s，。！？、；：,.!?;:—-]/g, "").toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+function publishScriptExcerpt(job) {
+  const script = cleanPublishText(job.script || job.transcript?.text, 5000);
+  const sentences = script.split(/(?<=[。！？!?])|\n+/)
+    .map(item => cleanPublishText(item, 120))
+    .filter(item => item && !/^大家好[，,]?我是/.test(item));
+  return cleanPublishText(sentences.slice(0, 3).join(""), 260) || "这条视频记录了从问题、实测到真实结果的完整过程。";
+}
+function publishTitleCandidates(job, content) {
+  const script = String(job.script || job.transcript?.text || "");
+  const design = coverDesignForJob(job);
+  const coverTitle = cleanPublishText(design.lines.join(""), 42);
+  const contentTitles = (Array.isArray(content?.titles) ? content.titles : []).map(publishTitleText);
+  const topic = publishTitleText(content?.mainTopic || job.options?.contentTitle);
+  const firstSentence = publishScriptExcerpt(job).split(/[。！？!?]/)[0];
+  const special = /抖音/.test(script) && /收藏/.test(script) && /Obsidian|知识库/i.test(script)
+    ? ["我做了个 Skill，把抖音收藏变成本地知识库", "你的抖音收藏，为什么越存越没用？", "我真的找回了一条旧收藏，还把它做成了 Skill"]
+    : /AI|Codex|HyperFrames|工作台/i.test(script) && /剪辑|重剪|剪过/.test(script)
+      ? ["我把口播交给 AI 重剪了一遍", "不会剪辑，也能做出口播成片？", "AI 工作台真的能替我剪口播吗？"]
+      : [];
+  const candidates = uniquePublishTexts([
+    ...special,
+    coverTitle,
+    ...contentTitles,
+    topic,
+    firstSentence,
+    topic ? `${topic}，我实际做了一遍` : "这次，我把方法真正做成了结果",
+  ], 3);
+  const fallbacks = ["这次，我把方法真正做成了结果", "从问题到结果，我完整走了一遍", "这个方法到底能不能真的落地？"];
+  for (const fallback of fallbacks) {
+    if (candidates.length >= 3) break;
+    if (!candidates.includes(fallback)) candidates.push(fallback);
+  }
+  const angles = ["结果直给", "问题钩子", "真实案例"];
+  return candidates.map((title, index) => ({ id: `title-${index + 1}`, title, angle: angles[index] }));
+}
+function normalizePublishHashtags(values) {
+  const source = Array.isArray(values) ? values : String(values || "").split(/[\s,，、]+/);
+  const result = [];
+  const seen = new Set();
+  for (const raw of source) {
+    const text = cleanPublishText(raw, 24).replace(/^#+/, "").replace(/\s+/g, "");
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(`#${text}`);
+    if (result.length >= 8) break;
+  }
+  return result;
+}
+function publishHashtagsForJob(job, content) {
+  const text = `${job.script || ""}\n${content?.mainTopic || ""}\n${job.options?.contentTitle || ""}`;
+  const rules = [
+    [/AI/i, "AI"], [/Codex/i, "Codex"], [/Skill|技能/i, "AI技能"], [/Obsidian/i, "Obsidian"],
+    [/抖音/.test(text) && /收藏/.test(text) ? /./ : /$a/, "抖音收藏"], [/知识库/, "本地知识库"],
+    [/口播/, "口播短视频"], [/剪辑|重剪/, "AI剪辑"], [/工作台/, "AI工作台"], [/Windows/i, "Windows实测"],
+  ];
+  const matched = rules.filter(([pattern]) => pattern.test(text)).map(([, topic]) => topic);
+  return normalizePublishHashtags([...matched, "三金AI实战", "从知道到做到", "AI实战", "效率工具"]).slice(0, 8);
+}
+function publishPlatformDefaults(job, content, title, hashtags) {
+  const excerpt = publishScriptExcerpt(job);
+  const existing = content?.platformCopy || content?.publish || {};
+  const isKnowledgeVideo = /抖音/.test(job.script || "") && /收藏/.test(job.script || "") && /Obsidian|知识库/i.test(job.script || "");
+  const douyinClose = isKnowledgeVideo
+    ? "想把收藏夹从‘以后再看’变成‘现在能用’，评论区留‘知识库’。整理好后我会放进群公告，不方便进群也可以单独发。"
+    : "你最想让 AI 帮你解决哪一个真实问题？";
+  const fallback = {
+    douyin: `${title}\n\n${excerpt}\n\n${douyinClose}`,
+    xiaohongshu: `${title}\n\n这次完整走了一遍：\n1. 先从真实问题和观众代入出发\n2. 用本地工具完成实际链路\n3. 用真实结果、页面和测试做证明\n4. 人工确认后再准备发布\n\n${excerpt}\n\n目前证明的是这条内容和生产链路已经完成，不代表播放或留存已经被数据验证。`,
+    wechat: `${title}\n\n${excerpt}\n\n这是一次从真实问题、实际执行到结果验收的完整记录。视频、封面和发布文案都在本地准备，最终仍由我手动确认和发布。`,
+  };
+  const labels = { douyin: "抖音", xiaohongshu: "小红书", wechat: "视频号" };
+  return Object.fromEntries(Object.keys(labels).map(key => {
+    const body = cleanPublishText(existing[key] || (key === "wechat" ? existing.weibo : "") || fallback[key], 1800);
+    return [key, { label: labels[key], body, hashtags, combined: cleanPublishText(`${body}\n\n${hashtags.join(" ")}`, 2200) }];
+  }));
+}
+function publishPackageMarkdown(value) {
+  const titleLines = (value.titleCandidates || []).map((item, index) => `${index + 1}. ${item.title}（${item.angle}）`).join("\n");
+  const platformLines = Object.values(value.platforms || {}).map(item => `## ${item.label}\n\n${item.body}\n\n关联话题：${(item.hashtags || []).join(" ")}`).join("\n\n");
+  const covers = [
+    value.covers?.vertical?.url ? `- 9:16 信息流封面：${value.covers.vertical.url}` : "- 9:16 信息流封面：未生成",
+    value.covers?.grid?.url ? `- 3:4 主页封面：${value.covers.grid.url}` : "- 3:4 主页封面：未生成",
+    value.covers?.wide16x9?.url ? `- 16:9 横版封面：${value.covers.wide16x9.url}` : "- 16:9 横版封面：未生成",
+    value.covers?.landscape4x3?.url ? `- 4:3 横版封面：${value.covers.landscape4x3.url}` : "- 4:3 横版封面：未生成",
+  ].join("\n");
+  return `# 发布素材包 v${value.outputVersion}\n\n生成时间：${value.generatedAt}\n\n最终标题：${value.selectedTitle}\n\n成片 SHA-256：${value.mediaSha256 || "未记录"}\n\n## 标题候选\n\n${titleLines}\n\n${platformLines}\n\n## 封面\n\n${covers}\n\n> 本素材包只用于人工审核、复制和下载，不会连接平台账号或自动发布。\n`;
+}
+function powershellLiteral(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+async function compressPublishPackage(files, output) {
+  const existing = files.filter(file => file && fs.existsSync(file));
+  if (!existing.length) throw new Error("发布素材包没有可压缩文件");
+  const script = `$items=@(${existing.map(powershellLiteral).join(",")}); Compress-Archive -LiteralPath $items -DestinationPath ${powershellLiteral(output)} -Force`;
+  await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { cwd: path.dirname(output), timeoutMs: 120000 });
+}
+async function buildPublishPackage(job, outputVersion, options = {}) {
+  const version = Number(outputVersion);
+  if (!Number.isInteger(version) || version < 1 || Number(job.output?.version) !== version) throw new Error("发布素材包必须绑定当前成片版本");
+  const content = await readContent(job.contentId);
+  const previous = options.mode === "save" && Number(job.publishPackage?.outputVersion) === version ? job.publishPackage : null;
+  const generatedTitles = publishTitleCandidates(job, content);
+  const titleCandidates = previous?.titleCandidates?.length ? previous.titleCandidates : generatedTitles;
+  const selectedTitle = cleanPublishText(options.selectedTitle || previous?.selectedTitle || titleCandidates[0]?.title, 42);
+  let hashtags = normalizePublishHashtags(options.hashtags || previous?.hashtags || publishHashtagsForJob(job, content));
+  const fallbackTopics = normalizePublishHashtags(["三金AI实战", "从知道到做到", "AI实战", "内容创作"]);
+  for (const topic of fallbackTopics) {
+    if (hashtags.length >= 4) break;
+    if (!hashtags.includes(topic)) hashtags.push(topic);
+  }
+  const defaultPlatforms = publishPlatformDefaults(job, content, selectedTitle, hashtags);
+  const platforms = Object.fromEntries(Object.entries(defaultPlatforms).map(([key, fallback]) => {
+    const supplied = options.platforms?.[key] || previous?.platforms?.[key] || {};
+    const body = cleanPublishText(supplied.body || fallback.body, 1800);
+    const platformHashtags = normalizePublishHashtags(supplied.hashtags || hashtags);
+    return [key, { ...fallback, body, hashtags: platformHashtags, combined: cleanPublishText(`${body}\n\n${platformHashtags.join(" ")}`, 2200) }];
+  }));
+  const jobDir = confined(jobsRoot, job.id);
+  const jsonName = `publish-package-v${version}.json`;
+  const markdownName = `publish-copy-v${version}.md`;
+  const zipName = `publish-package-v${version}.zip`;
+  const packageValue = {
+    schemaVersion: 1,
+    status: "ready",
+    outputVersion: version,
+    mediaSha256: job.output?.mediaSha256 || null,
+    generatedAt: new Date().toISOString(),
+    generation: {
+      engine: "local-content-derived",
+      automatic: options.automatic === true,
+      coverTemplate: job.output?.cover?.style || creatorBrand.defaultCoverTemplate?.id || null,
+      coverSource: job.output?.cover?.source ? {
+        role: job.output.cover.source.role,
+        fileName: job.output.cover.source.fileName,
+        sha256: job.output.cover.source.sha256,
+        sourceTime: job.output.cover.source.sourceTime
+      } : null
+    },
+    titleCandidates,
+    selectedTitle,
+    hashtags,
+    platforms,
+    covers: {
+      vertical: job.output?.cover?.vertical ? { url: job.output.cover.vertical.url, pngUrl: job.output.cover.vertical.pngUrl } : null,
+      grid: job.output?.cover?.grid ? { url: job.output.cover.grid.url, pngUrl: job.output.cover.grid.pngUrl } : null,
+      wide16x9: job.output?.cover?.wide16x9 ? { url: job.output.cover.wide16x9.url, pngUrl: job.output.cover.wide16x9.pngUrl } : null,
+      landscape4x3: job.output?.cover?.landscape4x3 ? { url: job.output.cover.landscape4x3.url, pngUrl: job.output.cover.landscape4x3.pngUrl } : null,
+    },
+    artifacts: {
+      json: `/video-jobs/${job.id}/${jsonName}`,
+      markdown: `/video-jobs/${job.id}/${markdownName}`,
+      zip: `/video-jobs/${job.id}/${zipName}`,
+    },
+    archive: { available: true, error: null },
+    autoPublish: false,
+  };
+  const jsonPath = path.join(jobDir, jsonName);
+  const markdownPath = path.join(jobDir, markdownName);
+  const zipPath = path.join(jobDir, zipName);
+  await writeJson(jsonPath, packageValue);
+  await fsp.writeFile(markdownPath, publishPackageMarkdown(packageValue), "utf8");
+  try {
+    await compressPublishPackage([
+      jsonPath, markdownPath,
+      job.output?.cover?.vertical?.path, job.output?.cover?.grid?.path,
+      job.output?.cover?.wide16x9?.path, job.output?.cover?.landscape4x3?.path,
+    ], zipPath);
+  } catch (error) {
+    packageValue.archive = { available: false, error: error.message };
+    packageValue.artifacts.zip = null;
+    await writeJson(jsonPath, packageValue);
+    await fsp.writeFile(markdownPath, publishPackageMarkdown(packageValue), "utf8");
+  }
+  job.publishPackage = packageValue;
+  const publishArtifacts = {
+    publishPackage: packageValue.artifacts.json,
+    publishCopy: packageValue.artifacts.markdown,
+    ...(packageValue.artifacts.zip ? { publishBundle: packageValue.artifacts.zip } : {}),
+  };
+  job.output = { ...job.output, artifacts: { ...(job.output.artifacts || {}), ...publishArtifacts } };
+  job.versions = (job.versions || []).map(item => Number(item.version) === version ? job.output : item);
+  return packageValue;
+}
+function visibleReviewPlaceholderWarnings(job) {
+  const visibleText = [
+    job.script,
+    job.options?.coverTitle,
+    ...(job.currentPlan?.overlayCards || []).map(item => item.text || item.title || item.label),
+    ...(job.currentPlan?.captions || []).map(item => item.text),
+  ].filter(Boolean).join("\n");
+  const patterns = [
+    /PRIVATE\s+REVIEW\s+PROTOTYPE/i,
+    /NOT\s+PUBLIC\s+YET/i,
+    /NO\s+AUTO\s+PUBLISH/i,
+    /仅供(?:内部)?审核/,
+    /未发布(?:版本|样片)?/,
+  ];
+  return patterns.filter(pattern => pattern.test(visibleText)).map(pattern => pattern.source);
 }
 function outputToSource(time, keeps) {
   let cursor = 0;
@@ -1867,7 +2093,10 @@ function mediaKindFor(fileName = "") {
 function normalizePlacement(value) {
   const start = Number(value?.start), end = Number(value?.end);
   if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return null;
-  const validModes = new Set(["broll", "pip", "comparison-left", "comparison-right"]);
+  const validModes = new Set([
+    "broll", "pip", "comparison-left", "comparison-right",
+    "montage-left", "montage-center", "montage-right", "ui-main", "proof-primary",
+  ]);
   return { start, end, mode: validModes.has(value?.mode) ? value.mode : "broll" };
 }
 
@@ -2285,7 +2514,13 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
   const duration = (job.currentPlan?.keepSegments || []).reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
   const beats = (job.contentDirection?.shooting?.visualBeats || []).filter(item => item && (item.asset || item.purpose)).slice(0, job.options?.layout === "landscape-tech" ? 10 : 6);
   const assets = [];
-  const visualNodes = (beats.length ? beats : (job.currentPlan?.overlayCards || []).map(card => ({ segment: card.text, asset: card.text, purpose: "强化当前口播重点" }))).slice(0, job.options?.layout === "landscape-tech" ? 10 : 6);
+  const visualNodes = (beats.length ? beats : job.contentBreakdown?.segments?.map(segment => ({
+    segmentId: segment.id,
+    segment: segment.upperLeftTitle || segment.gist,
+    asset: segment.rightVisual?.description || segment.rightVisual?.type,
+    purpose: `为${segment.sceneRole || "explanation"}场景准备可验证视觉`,
+    sceneRole: segment.sceneRole || "explanation",
+  })) || (job.currentPlan?.overlayCards || []).map(card => ({ segment: card.text, asset: card.text, purpose: "强化当前口播重点" }))).slice(0, job.options?.layout === "landscape-tech" ? 10 : 8);
   if (!visualNodes.length) visualNodes.push({ segment: "开头结果", asset: "本次口播的核心结果信息卡", purpose: "让观众先看到本条视频要交付的结果" });
   for (const [index, beat] of visualNodes.entries()) {
     const placement = job.options?.layout === "landscape-tech" ? candidatePlacementForBeat(beat, index, visualNodes.length, duration) : candidatePlacement(index, visualNodes.length, duration);
@@ -2311,6 +2546,7 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
         : { type: "exact", segmentId: null, start: placement.start, end: placement.end, offsetStart: 0, offsetEnd: null },
       createdAt: new Date().toISOString()
     };
+    asset.sceneRole = String(beat.sceneRole || job.contentBreakdown?.segments?.find(segment => segment.id === segmentId)?.sceneRole || "explanation");
     try {
       await writeGeneratedMotionCandidate(job, asset, beat, index);
     } catch (error) {
@@ -2493,6 +2729,28 @@ export function hyperframesTrackVisible(metadata, dimensions) {
     && bounds.x2 < Number(dimensions.width)
     && bounds.y2 < Number(dimensions.height);
 }
+
+export function integratedHyperframesSafeAreaChecks({ packaging = {}, captionPackaging = {}, dimensions = {}, timelineCards = [] } = {}) {
+  const compositionValidated = packaging.engine === "hyperframes"
+    && packaging.safeArea === true
+    && packaging.validatedBy === "hyperframes-check";
+  const integratedCaptionsValidated = captionPackaging.engine === "hyperframes"
+    && captionPackaging.integrated === true
+    && captionPackaging.safeArea === true
+    && captionPackaging.validatedBy === "hyperframes-check";
+  const transparentCaptionTrackVisible = captionPackaging.engine === "hyperframes"
+    && hyperframesTrackVisible(captionPackaging.metadata, dimensions);
+  const captionsDisabled = captionPackaging.requested === "none" || captionPackaging.engine === "none";
+  const staticCaptions = ["ass-static", "ass-fallback"].includes(captionPackaging.engine);
+  return {
+    captionSafeArea: captionsDisabled || staticCaptions || integratedCaptionsValidated || transparentCaptionTrackVisible,
+    dynamicCaptionTrack: captionPackaging.engine !== "hyperframes" || integratedCaptionsValidated || transparentCaptionTrackVisible,
+    cardSafeArea: compositionValidated || (
+      timelineCards.every(card => String(card?.text || "").length <= 24)
+      && (timelineCards.length === 0 || packaging.safeArea === true)
+    ),
+  };
+}
 async function buildMediaRenderPlan(job, version, manifest, firstInputIndex) {
   const renderable = manifest.assets.filter(asset => asset.eligibleForRender);
   const dimensions = masterDimensions(job);
@@ -2664,10 +2922,9 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
   );
   const minimumSegment = Math.min(...timeline.clips.map(clip => clip.duration));
   const sdrBt709 = metadata.colorPrimaries === "bt709" && metadata.colorTransfer === "bt709" && metadata.colorSpace === "bt709";
-  const captionSafeArea = job.options.captions === false
-    || ["ass-static", "ass-fallback"].includes(captionPackaging.engine)
-    || (captionPackaging.engine === "hyperframes" && captionPackaging.integrated === true && captionPackaging.safeArea === true && hyperframesTrackVisible(captionPackaging.metadata, dimensions));
-  const cardSafeArea = timeline.cards.every(card => card.text.length <= 24) && (timeline.cards.length === 0 || packaging.safeArea === true);
+  const safeAreaChecks = integratedHyperframesSafeAreaChecks({ packaging, captionPackaging, dimensions, timelineCards: timeline.cards });
+  const captionSafeArea = job.options.captions === false || safeAreaChecks.captionSafeArea;
+  const cardSafeArea = safeAreaChecks.cardSafeArea;
   const variantDimensions = Object.fromEntries(Object.entries(variants).map(([name, item]) => [name, item.available === false ? { available: false, reason: item.reason } : {
     available: true,
     width: item.metadata.width,
@@ -2709,7 +2966,7 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
       integratedLoudnessTarget,
       truePeakTarget,
       captionSafeArea,
-      dynamicCaptionTrack: captionPackaging.engine === "hyperframes" ? hyperframesTrackVisible(captionPackaging.metadata, dimensions) : true,
+      dynamicCaptionTrack: safeAreaChecks.dynamicCaptionTrack,
       cardSafeArea,
       minimumSegmentDuration: minimumSegment >= 0.35,
       cutDensityPerMinute: Number((timeline.clips.length / Math.max(metadata.duration / 60, 0.01)).toFixed(2)),
@@ -3141,17 +3398,22 @@ async function runKeyframeStage(job, version, stageConfig, feedback = "") {
   const direction = normalizeKeyframeDirection(result?.data || {}, job.contentBreakdown, stageConfig.settings?.count || 4);
   const directionName = `keyframe-direction-v${version}.json`;
   await writeJson(path.join(jobDir, directionName), direction);
-  const clean = await ensureWorkflowCleanSource(job);
+  const outputDuration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0)
+    || Number(job.source?.duration || 0);
+  const approvedAssets = (job.assets || []).filter(asset =>
+    asset.reviewStatus === "approved" && !assetComplianceIssues(asset, job, outputDuration).length,
+  );
   const projectRelative = path.join("workflow", `keyframes-v${version}`);
   const projectDir = path.join(jobDir, projectRelative);
   const project = await buildHyperframesDirectorProject({
     projectDir,
-    sourceVideo: clean.videoPath,
-    sourceAudio: clean.audioPath,
+    sourceVideo: job.sourcePath,
+    sourceAudio: null,
     breakdown: job.contentBreakdown,
     styleReport: job.visualStyleReport,
     mode: "keyframes",
     keyframeDirection: direction,
+    approvedAssets,
     renderSpec: { ...job.workflow.config.rendering.keyframes, count: direction.frames.length },
     promptSnapshot: { stage: "keyframes", version, prompt: stageConfig.prompt, feedback, settings: stageConfig.settings, model: result?.model || null },
   });
@@ -3713,8 +3975,8 @@ async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "")
     catch (error) { coverPackaging = { requested: true, available: false, engine: "failed", fallbackReason: error.message }; }
   }
   const variants = await renderVariants(job, videoVersion, outputPath);
-  const packaging = { requested: "hyperframes", engine: "hyperframes", cards: job.contentBreakdown?.segments?.length || 0, panels: job.contentBreakdown?.segments?.length || 0, project: projectRelative };
-  const captionPackaging = { requested: job.options.captions === false ? "none" : "keyword-pop", engine: job.options.captions === false ? "none" : "hyperframes", style: "keyword-pop", cues: captions.length, integrated: true, safeArea: true };
+  const packaging = { requested: "hyperframes", engine: "hyperframes", cards: job.contentBreakdown?.segments?.length || 0, panels: job.contentBreakdown?.segments?.length || 0, project: projectRelative, safeArea: true, validatedBy: "hyperframes-check" };
+  const captionPackaging = { requested: job.options.captions === false ? "none" : "keyword-pop", engine: job.options.captions === false ? "none" : "hyperframes", style: "keyword-pop", cues: captions.length, integrated: true, safeArea: true, validatedBy: "hyperframes-check" };
   const qaReport = await runQa(job, videoVersion, outputPath, outputDuration, timeline, variants, packaging, captionPackaging, coverPackaging, manifest, videoColorPipeline(job.source));
   const reviewBundle = await createReviewBundle(job, videoVersion, outputPath, outputDuration);
   const artifactUrl = name => `/video-jobs/${job.id}/${name}`;
@@ -4904,6 +5166,10 @@ const multiAgentApi = createMultiAgentApi({
   writeArtifact: writeMultiAgentArtifact,
   readArtifact: readMultiAgentArtifact,
   listMemory: listMultiAgentMemory,
+  listKnowledgeLibrary: async () => buildExpertKnowledgeLibrary({
+    root,
+    runtimeRecords: await listMultiAgentMemory(),
+  }),
   memory: multiAgentMemory,
   tutorials: multiAgentTutorials,
   orchestrator: multiAgentOrchestrator,
@@ -5243,7 +5509,39 @@ const server = http.createServer(async (req, res) => {
       return await withJobMutation(jobId, async () => {
         const job = await readJob(jobId);
         const cover = await regenerateCover(job, body);
-        return json(res, 200, { job, cover, reusedVideo: true, reusedPlan: true });
+        if (job.status === "approved") {
+          await buildPublishPackage(job, Number(job.output.version), {
+            mode: "save",
+            selectedTitle: cleanPublishText(body.coverTitle || job.publishPackage?.selectedTitle, 42),
+            automatic: false,
+          });
+          await saveJob(job);
+        }
+        return json(res, 200, { job, cover, publishPackage: job.publishPackage || null, reusedVideo: true, reusedPlan: true });
+      });
+    }
+    const publishPackageMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/publish-package$/);
+    if (req.method === "POST" && publishPackageMatch) {
+      const body = await readBodyJson(req);
+      const jobId = publishPackageMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
+        if (job.status !== "approved") return json(res, 409, { error: "请先审核通过当前成片，再生成发布素材包" });
+        const selectedTitle = cleanPublishText(body.selectedTitle, 42);
+        const currentCoverTitle = cleanPublishText(job.output?.cover?.design?.lines?.join(""), 42).replace(/\s+/g, "");
+        if (selectedTitle && body.syncCovers !== false && selectedTitle.replace(/\s+/g, "") !== currentCoverTitle) {
+          await regenerateCover(job, { coverTitle: selectedTitle });
+        }
+        const publishPackage = await buildPublishPackage(job, outputVersion, {
+          mode: body.mode === "save" ? "save" : "regenerate",
+          selectedTitle,
+          hashtags: body.hashtags,
+          platforms: body.platforms,
+          automatic: false,
+        });
+        await saveJob(job);
+        return json(res, 200, { job, publishPackage, reusedVideo: true });
       });
     }
     const assetRediscoverMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/rediscover$/);
@@ -5431,6 +5729,8 @@ const server = http.createServer(async (req, res) => {
         const job = await readJob(jobId);
         const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
         if (job.output.qaPass !== true) return json(res, 409, { error: "当前成片QA未通过，不能最终审核" });
+        const placeholderWarnings = visibleReviewPlaceholderWarnings(job);
+        if (placeholderWarnings.length) return json(res, 409, { error: "发布前检查发现画面或稿件仍含审核占位文案，请清理后重新渲染", placeholderWarnings });
         const jobDir = confined(jobsRoot, job.id);
         const manifestPath = path.join(jobDir, `media-manifest-v${outputVersion}.json`);
         const reviewBundlePath = path.join(jobDir, `review-bundle-v${outputVersion}.json`);
@@ -5472,7 +5772,9 @@ const server = http.createServer(async (req, res) => {
           autoPublish: false,
         };
         const persisted = await createOrReadVersionedFinalReview(path.join(jobDir, finalReviewName), proposedFinalReview);
-        if (persisted.replayed && job.status === "approved") return json(res, 200, { job, finalReview: persisted.review, replayed: true });
+        if (persisted.replayed && job.status === "approved" && job.publishPackage?.status === "ready" && Number(job.publishPackage.outputVersion) === outputVersion) {
+          return json(res, 200, { job, finalReview: persisted.review, publishPackage: job.publishPackage, replayed: true });
+        }
         const finalReview = persisted.review;
         job.status = "approved";
         job.approvedAt = finalReview.approvedAt;
@@ -5490,8 +5792,14 @@ const server = http.createServer(async (req, res) => {
         await writeJson(path.join(jobDir, "final-review.json"), finalReview);
         job.output = { ...job.output, mediaSha256, finalReview: { status: "approved", version: outputVersion, url: finalReviewUrl, mediaSha256, approvedAt: job.approvedAt, evidenceHash: finalReview.evidenceHash, recordHash: finalReview.recordHash }, artifacts: { ...(job.output.artifacts || {}), finalReview: finalReviewUrl } };
         job.versions = (job.versions || []).map(item => Number(item.version) === outputVersion ? job.output : item);
+        try {
+          if (!job.output?.cover?.available) await regenerateCover(job, {});
+          await buildPublishPackage(job, outputVersion, { mode: "regenerate", automatic: true });
+        } catch (error) {
+          job.publishPackage = { status: "error", outputVersion, generatedAt: new Date().toISOString(), error: error.message, autoPublish: false };
+        }
         await saveJob(job);
-        return json(res, 200, { job, finalReview, replayed: persisted.replayed });
+        return json(res, 200, { job, finalReview, publishPackage: job.publishPackage, replayed: persisted.replayed });
       });
     }
     if (pathname.startsWith("/video-jobs/")) {
@@ -5550,4 +5858,6 @@ export {
   createWorkspaceEvidenceSnapshot,
   withJobMutation,
   writeMultiAgentArtifact,
+  renderCover,
+  buildPublishPackage,
 };

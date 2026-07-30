@@ -947,6 +947,7 @@ def content_breakdown(payload: dict[str, Any]) -> dict[str, Any]:
                 "sourceTime": {"start": 0.0, "end": 18.0},
                 "editedTime": {"start": 0.0, "end": 16.5},
                 "gist": "这一段口播的大意",
+                "sceneRole": "hook | proof-montage | thesis-takeover | ui-demo | revision-flow | learning-summary | cta | explanation",
                 "upperLeftTitle": "左上大标题",
                 "subtitleOrKeyLine": "副标题或重点句",
                 "oneSentenceSummary": "本段真正想表达的一句摘要",
@@ -983,7 +984,9 @@ def content_breakdown(payload: dict[str, Any]) -> dict[str, Any]:
 请严格按以下结构输出：
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 
-每段只输出实际需要的0—3张事实卡；标题、摘要、重点句和事实卡各司其职，不能机械复述同一句话，也不得为了凑数量补占位卡。sourceTime引用原视频秒数，editedTime引用删减后的成片秒数，并与提供的时间线一致。"""
+每段只输出实际需要的0—3张事实卡；标题、摘要、重点句和事实卡各司其职，不能机械复述同一句话，也不得为了凑数量补占位卡。sourceTime引用原视频秒数，editedTime引用删减后的成片秒数，并与提供的时间线一致。
+
+sceneRole是后续渲染的机器合同，每段必须从hook、proof-montage、thesis-takeover、ui-demo、revision-flow、learning-summary、cta、explanation中选择一个。hook用结果或冲突建立观看理由；proof-montage用多个真实成片或证据形成版本墙；thesis-takeover让唯一问题接管主画面；ui-demo让真实界面或录屏成为主证据并保留真人画中画；revision-flow展示自然语言如何定位、修改和保护未点名部分；learning-summary把可复用规律收束成结构；cta给出清晰选择或问题；explanation用于其他解释段。不得把所有段都选成explanation或同一种角色。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.15, max_tokens=14000)
     data = result.get("data")
     if not isinstance(data, dict) or not isinstance(data.get("segments"), list):
@@ -1065,6 +1068,7 @@ def motion_sample_direction(payload: dict[str, Any]) -> dict[str, Any]:
         "segmentLayouts": [
             {
                 "segmentId": "S01",
+                "sceneRole": "继承内容拆解中的语义场景角色",
                 "mode": "speaker-focus | split-right | graphic-focus | evidence-focus",
             }
         ],
@@ -1107,7 +1111,7 @@ def motion_sample_direction(payload: dict[str, Any]) -> dict[str, Any]:
 
 样片必须为15—25秒。全局原样继承已批准关键帧结果的presentation，并按segmentId逐项继承frames中的visualIntent：不得恢复内部标签、安全框或已经删除的事实卡；visualIntent.factCards允许0—3张，样片事实卡数量必须与对应数组长度完全一致，空数组就保持不显示。用户标为精确引用的观众可见文案必须逐字保留；copy-prompt的完整text不得压缩成关键词，memo-action的lines不得改写或打乱。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right；在不改变批准内容的前提下，可以逐段重新组织人物、证据与图形图层。保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素。可以吸收推拉、弹出、淡入和数字变化的节奏，但不能复制参考视频画面。
 
-segmentLayouts是逐段布局机器合同，必须覆盖样片范围内每个有效内容段且segmentId唯一。mode只能是speaker-focus、split-right、graphic-focus、evidence-focus：speaker-focus以真人表达为主，图形仅辅助；split-right让真人与信息并列；graphic-focus以二维图形或信息卡为主，真人缩小为画中画；evidence-focus只在存在已批准真实证据时使用并让证据成为主层，真人缩小为画中画，否则改选graphic-focus或split-right。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。
+segmentLayouts是逐段布局机器合同，必须覆盖样片范围内每个有效内容段且segmentId唯一。sceneRole必须继承内容拆解中的同名字段，不得改写。mode只能是speaker-focus、split-right、graphic-focus、evidence-focus：speaker-focus以真人表达为主，图形仅辅助；split-right让真人与信息并列；graphic-focus以二维图形或信息卡为主，真人缩小为画中画；evidence-focus只在存在已批准真实证据时使用并让证据成为主层，真人缩小为画中画，否则改选graphic-focus或split-right。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。
 
 choreography是机器执行合同：at一律表示相对sampleStart的样片内秒数，不是源视频或editedTime的绝对秒数。除speaker外，每项都必须填写样片范围内有效的segmentId；speaker的segmentId使用空字符串或null。target只能是title、key-line、summary、facts、fact-1、fact-2、fact-3、visual、speaker。facts表示整组事实卡，factIndex必须为null；fact-1、fact-2、fact-3的factIndex必须分别为1、2、3。只有对应已批准visualIntent.factCards中真实存在该索引时才能输出fact-N；0张事实卡时禁止输出facts或fact-N，也不得补占位卡。同一segmentId内禁止重复target，facts与fact-N不能混用；speaker全样片只能出现一次。
 
@@ -1124,6 +1128,7 @@ def full_video_direction(payload: dict[str, Any]) -> dict[str, Any]:
         "segmentMotion": [
             {
                 "segmentId": "S01",
+                "sceneRole": "继承内容拆解中的语义场景角色",
                 "visualMode": "本段视觉类型",
                 "layoutMode": "speaker-focus | split-right | graphic-focus | evidence-focus",
                 "titleAt": 0.08,
@@ -1158,7 +1163,7 @@ def full_video_direction(payload: dict[str, Any]) -> dict[str, Any]:
 严格按以下结构输出：
 {json.dumps(schema, ensure_ascii=False, indent=2)}
 
-每个内容段都必须有一条segmentMotion。全局原样继承已批准关键帧结果的presentation；凡segmentId对应已批准关键帧，必须原样继承对应frame的visualIntent，并延续已批准样片的时间与运动语法。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right。factsAt的项目数必须与对应visualIntent.factCards的项目数完全一致（0—3），不得把0、1或2张事实卡补足到3张。用户标为精确引用的文案必须逐字保留；copy-prompt必须继续展示完整可复制text，不能压缩成关键词，memo-action的lines不得改写或打乱。没有对应关键帧的内容段可以按内容选择对比、流程、提示词窗口、QA扫描、图表或真实证据，但仍须遵守同一presentation边界和观众可见内容原则。
+每个内容段都必须有一条segmentMotion。sceneRole必须逐段继承内容拆解中的同名字段，不得把proof-montage、thesis-takeover、ui-demo、revision-flow、learning-summary或cta降级成统一卡片网格。全局原样继承已批准关键帧结果的presentation；凡segmentId对应已批准关键帧，必须原样继承对应frame的visualIntent，并延续已批准样片的时间与运动语法。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right。factsAt的项目数必须与对应visualIntent.factCards的项目数完全一致（0—3），不得把0、1或2张事实卡补足到3张。用户标为精确引用的文案必须逐字保留；copy-prompt必须继续展示完整可复制text，不能压缩成关键词，memo-action的lines不得改写或打乱。没有对应关键帧的内容段可以按内容选择对比、流程、提示词窗口、QA扫描、图表或真实证据，但仍须遵守同一presentation边界和观众可见内容原则。
 
 每条segmentMotion的layoutMode只能是speaker-focus、split-right、graphic-focus、evidence-focus：speaker-focus以真人表达为主，图形仅辅助；split-right让真人与信息并列；graphic-focus以二维图形或信息卡为主，真人缩小为画中画；evidence-focus只在存在已批准真实证据时使用并让证据成为主层，真人缩小为画中画，否则改选graphic-focus或split-right。Director必须根据该段语义逐段决定人物、证据与图形的主次，不得机械沿用同一布局。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。全片保持同一颜色、字体、安全区和动效语法，但构图与图层主次可以逐段变化。最终目标为2K母版，必须列出技术QA、信息层级、人物遮挡、素材实际合成与来源署名检查。"""
     result = call_json([{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.18, max_tokens=14000)

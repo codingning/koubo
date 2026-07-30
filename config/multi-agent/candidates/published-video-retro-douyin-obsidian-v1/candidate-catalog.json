@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "id": "published-video-retro-douyin-obsidian-v1-candidates.v1",
+  "status": "candidate_catalog_inbox_only",
+  "createdAt": "2026-07-30T00:00:00+08:00",
+  "productionEligible": false,
+  "sourceCatalogId": "published-video-retro-douyin-obsidian-v1-sources.v1",
+  "admissionRule": "These records come from one approved and published project. They remain inbox until independently trialed and reviewed on another real project.",
+  "records": [
+    {
+      "id": "brand-technique.post-opening-identity-sting.v1",
+      "type": "brand-technique",
+      "status": "inbox",
+      "title": "完整开场结束后插入品牌片头",
+      "definition": "先让冲突开场完整兑现，再插入独立 2.8–3.2 秒品牌片头，并整体顺延后续画面、字幕、人声和音效。",
+      "evidence": [{ "sourceId": "douyin-obsidian-composition-v1", "timeRange": [5.5, 8.5] }],
+      "prohibitions": ["覆盖未说完的开场", "只叠加画面而不顺延声音", "自动成为所有创作者的品牌"]
+    },
+    {
+      "id": "sound-technique.three-note-ascending-sonic-logo.v1",
+      "type": "sound-technique",
+      "status": "inbox",
+      "title": "三音上行品牌声音标记",
+      "definition": "用短促三音上行动机与品牌图形落位同步，形成跨期可识别的声音记忆。",
+      "evidence": [{ "sourceId": "douyin-obsidian-composition-v1", "timeRange": [5.5, 8.11] }],
+      "prohibitions": ["压过人声", "每个转场都重复", "未授权复用第三方旋律"]
+    },
+    {
+      "id": "visual-technique.real-page-long-pan-proof.v1",
+      "type": "visual-technique",
+      "status": "inbox",
+      "title": "真实页面长距离平移证明",
+      "definition": "当页面纵向信息超过一屏时，用可读速度平移真实页面，让观众看见规模和上下文，而不是只给装饰截图。",
+      "evidence": [{ "sourceId": "douyin-obsidian-approved-master-v1", "timeRange": [8.5, 26.18] }],
+      "prohibitions": ["伪造平台页面", "移动快于阅读速度", "暴露私信或隐私信息"]
+    },
+    {
+      "id": "motion-technique.progressive-path-node-reveal.v1",
+      "type": "motion-technique",
+      "status": "inbox",
+      "title": "路径填充与节点递进",
+      "definition": "把多步工作流做成路径逐段填充和节点依次落位，使观众感知步骤、顺序和完成度。",
+      "evidence": [{ "sourceId": "douyin-obsidian-approved-master-v1", "timeRange": [26.18, 54.71] }],
+      "prohibitions": ["为简单一步制造假复杂度", "节点与旁白错位", "只追求炫技不说明完成信号"]
+    },
+    {
+      "id": "director-technique.closed-loop-proof-assembly.v1",
+      "type": "director-technique",
+      "status": "inbox",
+      "title": "闭环证据组装",
+      "definition": "按问题、动作、真实结果、测试信号的顺序组装证据，并用闭环路径或落锤画面明确证明链路已完成。",
+      "evidence": [{ "sourceId": "douyin-obsidian-approved-master-v1", "timeRange": [54.71, 81.71] }],
+      "prohibitions": ["把计划当完成", "省略关键中间动作", "用动画替代真实结果"]
+    },
+    {
+      "id": "voice-technique.semantic-segment-emotion-arc.v1",
+      "type": "voice-technique",
+      "status": "inbox",
+      "title": "按语义段设计情绪配音弧线",
+      "definition": "把全文拆成可独立控制的语义段，为痛点、解释、证明和 CTA 分别选择情绪、速度和重音，再拼接成连续表演。",
+      "evidence": [{ "sourceId": "douyin-obsidian-composition-v1", "segments": 18 }],
+      "prohibitions": ["整篇使用同一情绪", "在句中硬切破坏语义", "只靠提示词而不试听候选"]
+    },
+    {
+      "id": "qa-technique.visible-placeholder-copy-gate.v1",
+      "type": "qa-technique",
+      "status": "inbox",
+      "title": "发布前清扫可见占位文案",
+      "definition": "最终批准前检测画面中的 private review、not public、no auto publish 等审核占位语；存在时阻止发布包进入 ready。",
+      "evidence": [{ "sourceId": "douyin-obsidian-approved-master-v1", "observation": "The published master still contains small visible review-placeholder copy, so the omission is recorded as a release defect." }],
+      "prohibitions": ["只扫描文件名", "忽略很小但可见的文字", "自动删除无法确认含义的内容"]
+    },
+    {
+      "id": "release-technique.approval-triggered-publish-package.v1",
+      "type": "release-technique",
+      "status": "inbox",
+      "title": "最终批准触发发布素材包",
+      "definition": "成片通过最终人工批准后，绑定同一媒体哈希生成封面、标题候选、平台文案、话题和 ZIP；不连接平台账号。",
+      "evidence": [{ "sourceId": "douyin-obsidian-publish-package-v3", "artifact": "videos/douyin-obsidian-old-favorite-proof-v1/publish/v3/publish-package-v3.zip" }],
+      "prohibitions": ["批准前生成最终发布状态", "封面绑定旧视频版本", "自动发布"]
+    },
+    {
+      "id": "cover-technique.real-person-conflict-multi-ratio-cover.v1",
+      "type": "cover-technique",
+      "status": "inbox",
+      "title": "真人冲突文案四画幅封面",
+      "definition": "从经确认的真人原片选帧铺满画面，用第一行认知冲突和第二行后果或结果形成超大标题，并为 9:16、3:4、16:9、4:3 分别排版。",
+      "evidence": [
+        { "sourceId": "douyin-obsidian-publish-package-v3", "artifact": "videos/douyin-obsidian-old-favorite-proof-v1/publish/v3/cover-v3-3x4.png" },
+        { "sourceId": "douyin-obsidian-user-review-v1", "observation": "The user rejected brand-heavy and decorative covers, required a real-person background, preferred conflict copy, and requested a 4:3 landscape layout." }
+      ],
+      "prohibitions": ["只验收9比16", "从9比16简单拉伸或裁切全部画幅", "用虚构人像替代真人源", "反复覆盖同一审核文件名", "未经用户视觉审核即批准"]
+    }
+  ]
+}

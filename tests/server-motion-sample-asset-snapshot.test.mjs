@@ -285,7 +285,7 @@ test("upload, replacement, approval, rejection, and placement changes invalidate
       ({ response } = await postJson(baseUrl, `/api/jobs/${scenario.jobId}/assets/asset-1/approve`, {
         approved: true,
         expectedAssetDecisionVersion: 0,
-        placement: { start: 2, end: 6, mode: "pip" },
+        placement: { start: 2, end: 6, mode: "montage-center" },
       }));
     }
     assert.ok([200, 201].includes(response.status), `${scenario.action}: ${response.status}`);
@@ -298,7 +298,7 @@ test("upload, replacement, approval, rejection, and placement changes invalidate
     assert.equal(persisted.assetDecisionVersion, 1, scenario.action);
     const audit = JSON.parse(await fsp.readFile(path.join(scenario.jobDir, "asset-decisions.json"), "utf8"));
     assert.equal(audit.at(-1).decisionVersion, 1, scenario.action);
-    if (scenario.action === "placement") assert.deepEqual(audit.at(-1).placement, { start: 2, end: 6, mode: "pip" });
+    if (scenario.action === "placement") assert.deepEqual(audit.at(-1).placement, { start: 2, end: 6, mode: "montage-center" });
   }
 });
 

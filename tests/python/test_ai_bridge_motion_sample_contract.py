@@ -169,6 +169,7 @@ class MotionSampleDirectionContractTests(unittest.TestCase):
         )
         prompt = "\n".join(str(item.get("content", "")) for item in captured)
         self.assertIn("layoutMode", prompt)
+        self.assertIn("sceneRole", prompt)
         for mode in LAYOUT_MODES:
             self.assertIn(mode, prompt)
         self.assertIn("不锁定静态布局或split-right", prompt)
@@ -216,6 +217,7 @@ class MotionSampleDirectionContractTests(unittest.TestCase):
 
         full_prompt = config["stages"]["full_render"]["prompt"]
         self.assertIn("layoutMode", full_prompt)
+        self.assertIn("sceneRole", full_prompt)
         for mode in LAYOUT_MODES:
             self.assertIn(mode, full_prompt)
         self.assertIn("不锁定静态布局或split-right", full_prompt)

@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 2,
+  "status": "user-approved-default",
+  "creatorName": "三金",
+  "channelName": "三金AI实战",
+  "brandCore": "从知道到做到",
+  "defaultCoverTemplate": {
+    "id": "content-first-real-person-conflict-cover-v3",
+    "status": "user-directed-current-candidate",
+    "generator": "local-ffmpeg-ass",
+    "source": "user-provided-real-person-source-or-approved-final-frame",
+    "primaryPlatform": "douyin",
+    "outputs": [
+      { "id": "vertical", "width": 1080, "height": 1920, "purpose": "抖音信息流完整竖版" },
+      { "id": "grid", "width": 1080, "height": 1440, "purpose": "抖音个人主页3:4裁切版" },
+      { "id": "wide16x9", "width": 1920, "height": 1080, "purpose": "横版发布与归档" },
+      { "id": "landscape4x3", "width": 1440, "height": 1080, "purpose": "横版列表兼容" }
+    ],
+    "safeArea": {
+      "vertical": { "top": 240, "right": 150, "bottom": 360, "left": 72 },
+      "gridCrop": { "x": 0, "y": 240, "width": 1080, "height": 1440 }
+    },
+    "contentRules": {
+      "headlineMaxLines": 2,
+      "headlineRecommendedChineseCharacters": "4-7 per line",
+      "headlineAngle": "cognitive-conflict-plus-consequence-or-result",
+      "singleFocus": true,
+      "realPersonFullFramePreferred": true,
+      "separateCoverSourceAllowed": true,
+      "brandSignature": false,
+      "useApprovedFinalFrameAsFallback": true,
+      "generatedHumanPortraits": false
+    },
+    "visualSignature": [
+      "real creator footage fills the frame without cutout replacement",
+      "the first line states a cognitive conflict in bright cyan with white and black outlines",
+      "the second line states the consequence or result in white with one yellow emphasis",
+      "headline may cover the face when thumbnail readability improves",
+      "no personal-brand badge, explanation panel, English filler, or decorative border",
+      "every aspect ratio receives an independent composition"
+    ],
+    "researchBasis": "docs/research/2026-07-30-douyin-profile-cover-study.md"
+  },
+  "publishPackage": {
+    "generateOnFinalApproval": true,
+    "titleCandidateCount": 3,
+    "platforms": ["douyin", "xiaohongshu", "wechat"],
+    "hashtagCount": { "min": 4, "max": 8 },
+    "autoPublish": false,
+    "requiredPrePublishChecks": [
+      "remove private-review, not-public-yet and no-auto-publish placeholder copy from visible frames",
+      "bind cover and copy to the approved output version and media hash",
+      "verify privacy, attribution, factual claims and CTA wording",
+      "preview 9:16, 3:4, 16:9 and 4:3 compositions before download"
+    ]
+  },
+  "defaultIpSting": {
+    "id": "sanjin-ip-sting-v2",
+    "enabled": true,
+    "placement": "after-opening-segment",
+    "startAnchor": "opening-segment-end",
+    "durationSeconds": 3.0,
+    "templatePath": "video/brand/sanjin-ip-sting-v2.html",
+    "sonicLogoPath": "video/brand/audio/sanjin-ip-sonic-v2.wav",
+    "overlayTrackIndex": 5,
+    "keepCaptionsAbove": true,
+    "identityText": "三金AI实战",
+    "tagline": "从知道到做到",
+    "contentPromise": "把AI知识做成真实结果",
+    "palette": {
+      "ink": "#070D1B",
+      "cream": "#F6F1E7",
+      "electricBlue": "#2457F5",
+      "softBlue": "#8AA6FF",
+      "resultGold": "#E6B443"
+    },
+    "motionSignature": [
+      "knowledge-action-result rail builds in three beats",
+      "three electric-blue rails assemble the 三 mark",
+      "gold result diamond resolves the 金 memory cue",
+      "三金AI实战 lockup lands with an ascending three-note sonic mnemonic",
+      "blue-and-gold diagonal wipe hands off to the next scene"
+    ],
+    "constraints": [
+      "keep total duration between 2.8 and 3.2 seconds",
+      "place only after the complete opening segment has ended",
+      "insert the sting as its own timeline segment and shift all later scenes, captions, voice, and SFX",
+      "do not overlay the sting on an unfinished opening segment",
+      "do not attribute third-party source material to 三金",
+      "keep the approved three-second timing unless the user explicitly requests another revision"
+    ]
+  }
+}

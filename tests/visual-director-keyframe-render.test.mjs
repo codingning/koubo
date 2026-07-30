@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildHyperframesDirectorProject,
   DIRECTOR_SCENE_LAYOUT_MODES,
+  DIRECTOR_SCENE_ROLES,
   findLockedVisualIntentConflict,
   normalizeContentBreakdown,
   normalizeFullDirection,
@@ -79,6 +80,7 @@ const breakdown = normalizeContentBreakdown({
     },
     {
       id: "S04",
+      sceneRole: "explanation",
       sourceTime: { start: 17.3, end: 23.58 },
       editedTime: { start: 3, end: 6 },
       upperLeftTitle: "AI 只给了这一步",
@@ -97,6 +99,7 @@ const breakdown = normalizeContentBreakdown({
     },
     {
       id: "S06",
+      sceneRole: "explanation",
       sourceTime: { start: 28.2, end: 34.3 },
       editedTime: { start: 6, end: 9 },
       upperLeftTitle: "复制这句行动指令",
@@ -333,6 +336,192 @@ test("fact card normalization drops omitted and empty placeholders while preserv
   assert.deepEqual(direction.frames[0].visualIntent.factCards, [{ label: "重点", value: "关键帧真实事实" }]);
   assert.equal(direction.frames[1].visualIntent.factCards, null);
   assert.equal(direction.frames[2].visualIntent.factCards, null);
+});
+
+test("content breakdown assigns reusable semantic scene roles instead of a repeated card template", () => {
+  const normalized = normalizeContentBreakdown({
+    segments: [
+      { id: "R01", editedTime: { start: 0, end: 2 }, gist: "先看最终效果", sceneRole: "hook" },
+      { id: "R02", editedTime: { start: 2, end: 4 }, gist: "前三条旧视频缩成过去版本墙", rightVisual: { type: "真实证据蒙太奇" } },
+      { id: "R03", editedTime: { start: 4, end: 6 }, gist: "这次只验证一个核心问题" },
+      { id: "R04", editedTime: { start: 6, end: 8 }, gist: "展示真实工作台界面和操作录屏" },
+      { id: "R05", editedTime: { start: 8, end: 10 }, gist: "告诉 AI 哪一秒怎么改，哪些别动" },
+      { id: "R06", editedTime: { start: 10, end: 12 }, gist: "把字幕动效节奏规律存进本地知识库" },
+      { id: "R07", editedTime: { start: 12, end: 14 }, gist: "最后请观众选择下一步想看什么" },
+    ],
+  }, { sourceDuration: 14, outputDuration: 14, minimumSegments: 7, maximumSegments: 7 });
+
+  assert.deepEqual(DIRECTOR_SCENE_ROLES, [
+    "hook",
+    "proof-montage",
+    "thesis-takeover",
+    "ui-demo",
+    "revision-flow",
+    "learning-summary",
+    "cta",
+    "explanation",
+  ]);
+  assert.deepEqual(normalized.segments.map(segment => segment.sceneRole), [
+    "hook",
+    "proof-montage",
+    "thesis-takeover",
+    "ui-demo",
+    "revision-flow",
+    "learning-summary",
+    "cta",
+  ]);
+});
+
+test("keyframe selection keeps real proof and UI roles when the model omits them", () => {
+  const roleBreakdown = normalizeContentBreakdown({
+    segments: [
+      { id: "E01", editedTime: { start: 0, end: 2 }, sourceTime: { start: 0, end: 2 }, sceneRole: "hook" },
+      { id: "E02", editedTime: { start: 2, end: 4 }, sourceTime: { start: 2, end: 4 }, sceneRole: "proof-montage" },
+      { id: "E03", editedTime: { start: 4, end: 6 }, sourceTime: { start: 4, end: 6 }, sceneRole: "thesis-takeover" },
+      { id: "E04", editedTime: { start: 6, end: 8 }, sourceTime: { start: 6, end: 8 }, sceneRole: "ui-demo" },
+      { id: "E05", editedTime: { start: 8, end: 10 }, sourceTime: { start: 8, end: 10 }, sceneRole: "revision-flow" },
+      { id: "E06", editedTime: { start: 10, end: 12 }, sourceTime: { start: 10, end: 12 }, sceneRole: "learning-summary" },
+      { id: "E07", editedTime: { start: 12, end: 14 }, sourceTime: { start: 12, end: 14 }, sceneRole: "cta" },
+    ],
+  }, { sourceDuration: 14, outputDuration: 14, minimumSegments: 7, maximumSegments: 7 });
+  const direction = normalizeKeyframeDirection({
+    selectedSegmentIds: ["E01", "E03", "E05", "E06", "E07"],
+    frames: ["E01", "E03", "E05", "E06", "E07"].map(segmentId => ({
+      segmentId,
+      sourceTime: Number(segmentId.slice(-2)),
+      purpose: `model-${segmentId}`,
+    })),
+  }, roleBreakdown, 4);
+
+  assert.deepEqual(direction.frames.map(frame => frame.segmentId), ["E01", "E02", "E04", "E05", "E06"]);
+  assert.equal(direction.frames[1].purpose, "验证核心方法", "forced proof frame must not inherit another segment's model payload");
+  assert.equal(direction.frames[2].purpose, "验证结果证据", "forced UI frame must not inherit another segment's model payload");
+});
+
+test("semantic scene roles render distinct takeovers and a three-slot proof montage", async t => {
+  const roleBreakdown = normalizeContentBreakdown({
+    segments: [
+      { id: "R01", editedTime: { start: 0, end: 3 }, gist: "先看结果", upperLeftTitle: "先看结果", sceneRole: "hook", factCards: [{ label: "结果", value: "不碰时间线" }] },
+      { id: "R02", editedTime: { start: 3, end: 6 }, gist: "过去三个版本", upperLeftTitle: "过去版本", sceneRole: "proof-montage" },
+      { id: "R03", editedTime: { start: 6, end: 9 }, gist: "唯一实验问题", upperLeftTitle: "不会剪辑，也能做出层次吗？", oneSentenceSummary: "只验证这一件事", sceneRole: "thesis-takeover" },
+      { id: "R04", editedTime: { start: 9, end: 12 }, gist: "自然语言返修", upperLeftTitle: "说清哪一秒怎么改", sceneRole: "revision-flow", factCards: [{ label: "定位", value: "哪一秒" }, { label: "动作", value: "怎么改" }, { label: "边界", value: "哪些别动" }] },
+      { id: "R05", editedTime: { start: 12, end: 15 }, gist: "沉淀学习规律", upperLeftTitle: "把规律留下", sceneRole: "learning-summary", factCards: [{ label: "字幕", value: "跟随语义" }, { label: "动效", value: "只强化重点" }, { label: "节奏", value: "快慢有层次" }] },
+      { id: "R06", editedTime: { start: 15, end: 18 }, gist: "选择下一步", upperLeftTitle: "下一条先拆什么？", sceneRole: "cta", factCards: [{ label: "A", value: "字幕" }, { label: "B", value: "动效" }, { label: "C", value: "节奏" }] },
+    ],
+  }, { sourceDuration: 18, outputDuration: 18, minimumSegments: 6, maximumSegments: 6 });
+  const fullDirection = normalizeFullDirection({ segmentMotion: [] }, roleBreakdown);
+  const assets = ["montage-left", "montage-center", "montage-right"].map((mode, index) => ({
+    id: `proof-${index + 1}`,
+    sourceType: "local-upload",
+    mediaKind: "video",
+    path: sourceVideoFixture,
+    placement: { start: 3, end: 6, mode },
+    clipStart: 0,
+  }));
+  const project = await renderFixtureProject(t, "full", { presentation, frames: [] }, {
+    breakdown: roleBreakdown,
+    fullDirection,
+    rangeEnd: 18,
+    approvedAssets: assets,
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+
+  assert.match(documentHtml, /scene-role-proof-montage/);
+  assert.match(documentHtml, /class="thesis-takeover v-step"/);
+  assert.match(documentHtml, /class="revision-flow v-step"/);
+  assert.match(documentHtml, /class="learning-board v-step"/);
+  assert.match(documentHtml, /class="cta-board v-step"/);
+  for (const mode of ["montage-left", "montage-center", "montage-right"]) {
+    assert.match(documentHtml, new RegExp(`data-placement-mode="${mode}"`));
+  }
+  assert.deepEqual(manifest.sceneRoles.map(item => item.sceneRole), roleBreakdown.segments.map(segment => segment.sceneRole));
+  assert.deepEqual(project.compositedAssetIds.sort(), assets.map(asset => asset.id).sort());
+});
+
+test("keyframe mode preserves semantic role layouts and does not collapse revision flow into a memo card", async t => {
+  const roleBreakdown = normalizeContentBreakdown({
+    segments: [
+      {
+        id: "K01",
+        editedTime: { start: 0, end: 3 },
+        gist: "真实工作台界面",
+        upperLeftTitle: "它还不是一键成片",
+        sceneRole: "ui-demo",
+        factCards: [{ label: "成片方式", value: "通过对话逐版修改" }],
+      },
+      {
+        id: "K02",
+        editedTime: { start: 3, end: 6 },
+        gist: "按秒返修",
+        upperLeftTitle: "返修直接说",
+        oneSentenceSummary: "定位问题、说明修改、保护其他部分。",
+        sceneRole: "revision-flow",
+        factCards: [
+          { label: "定位方式", value: "指出具体哪一秒" },
+          { label: "修改要求", value: "说明应该怎么改" },
+          { label: "保护范围", value: "标明哪些别动" },
+        ],
+      },
+      {
+        id: "K03",
+        editedTime: { start: 6, end: 9 },
+        gist: "观众选择下一条",
+        upperLeftTitle: "下一条，学哪个视频？",
+        sceneRole: "cta",
+      },
+    ],
+  }, { sourceDuration: 9, outputDuration: 9, minimumSegments: 3, maximumSegments: 3 });
+  const direction = normalizeKeyframeDirection({
+    presentation,
+    selectedSegmentIds: ["K01", "K02", "K03"],
+    frames: [
+      { segmentId: "K01", sourceTime: 1, visualIntent: { primaryVisual: { kind: "memo-action", lines: ["打开工作台", "查看真实界面", "核对版本结果"] } } },
+      {
+        segmentId: "K02",
+        sourceTime: 4,
+        visualIntent: {
+          title: "返修直接说",
+          keyLine: "定位问题、说明修改、保护其他部分",
+          summary: "定位问题、说明修改、保护其他部分。",
+          factCards: [],
+          primaryVisual: {
+            kind: "memo-action",
+            lines: ["查看结果中的问题", "指出具体哪一秒", "说明应该怎么改", "标明哪些别动"],
+          },
+        },
+      },
+      { segmentId: "K03", sourceTime: 7, visualIntent: { primaryVisual: { kind: "inherit" } } },
+    ],
+  }, roleBreakdown, 3);
+  const project = await renderFixtureProject(t, "keyframes", direction, {
+    breakdown: roleBreakdown,
+    approvedAssets: [{
+      id: "ui-proof",
+      sourceType: "local-upload",
+      mediaKind: "image",
+      path: sourceVideoFixture,
+      placement: { start: 0, end: 3, mode: "ui-main" },
+      clipStart: 0,
+    }],
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const uiScene = sceneHtml(documentHtml, "K01", "K02");
+  const revisionScene = sceneHtml(documentHtml, "K02", "K03");
+  const ctaScene = sceneHtml(documentHtml, "K03");
+
+  assert.match(uiScene, /data-layout-mode="evidence-focus"/);
+  assert.match(documentHtml, /data-asset-id="ui-proof"/);
+  assert.match(documentHtml, /data-placement-mode="ui-main"/);
+  assert.deepEqual(project.compositedAssetIds, ["ui-proof"]);
+  assert.match(revisionScene, /data-layout-mode="graphic-focus"/);
+  assert.match(revisionScene, /class="revision-flow v-step"/);
+  assert.doesNotMatch(revisionScene, /class="memo-card v-step"/);
+  assert.match(revisionScene, /指出具体哪一秒/);
+  assert.match(revisionScene, /说明应该怎么改/);
+  assert.match(revisionScene, /标明哪些别动/);
+  assert.match(ctaScene, /data-layout-mode="graphic-focus"/);
+  assert.match(documentHtml, /tl\.to\("#speakerStage",\{"x":0,"y":0,"scale":0\.42/);
 });
 
 test("legacy unsafe segment ids cannot widen GSAP selectors and duplicate ids fail closed", async t => {
@@ -615,6 +804,42 @@ test("full direction consumes per-segment layout mode", async t => {
   assert.match(sceneHtml(documentHtml, "S04", "S06"), /layout-graphic-focus/);
 });
 
+test("full render keeps scene-role primary evidence visible from the approved placement start", async t => {
+  const evidenceBreakdown = structuredClone(breakdown);
+  evidenceBreakdown.segments[1].sceneRole = "ui-demo";
+  const fullDirection = normalizeFullDirection({
+    segmentMotion: [
+      { segmentId: "S04", sceneRole: "ui-demo", layoutMode: "evidence-focus", visualAt: 10 },
+    ],
+  }, evidenceBreakdown);
+  const project = await renderFixtureProject(t, "full", { presentation, frames: [] }, {
+    breakdown: evidenceBreakdown,
+    fullDirection,
+    approvedAssets: [{
+      id: "full-primary-evidence",
+      sourceType: "local-derived",
+      mediaKind: "video",
+      path: sourceVideoFixture,
+      placement: { start: 3, end: 6, mode: "ui-main" },
+      clipStart: 0,
+    }],
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const evidenceVideo = documentHtml.match(/<video id="evidence-media-1"[^>]*data-start="([^"]+)"[^>]*data-duration="([^"]+)"/);
+
+  assert.ok(evidenceVideo, "missing full-render evidence video timing");
+  assert.equal(Number(evidenceVideo[1]), 3);
+  assert.equal(Number(evidenceVideo[2]), 3);
+});
+
+test("full render sustains subtle ambient motion between information beats", async t => {
+  const project = await renderFixtureProject(t, "full", { presentation, frames: [] });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+
+  assert.match(documentHtml, /<div class="ambient-drift" data-layout-allow-overflow><\/div>/);
+  assert.match(documentHtml, /tl\.to\("\.ambient-drift",\{"x":-160,"y":72,"scale":1\.08,"duration":9,"ease":"none"\},0\);/);
+});
+
 test("overlapping approved assets cannot replace locked keyframe visual intent", async t => {
   const direction = normalizeKeyframeDirection(rawDirection, breakdown, 3);
   const approvedAssets = [
@@ -746,6 +971,83 @@ test("sample HTML applies custom choreography timing, action preset, and easing"
   assert.equal(calls[0].at, 0.731);
   assertTimelineVar(calls[0].vars, "x", 60);
   assertTimelineVar(calls[0].vars, "ease", "sine.inOut");
+});
+
+test("sample visual-led scenes establish the primary layer without blank lead-in", async t => {
+  const visualLedBreakdown = normalizeContentBreakdown({
+    segments: [
+      {
+        id: "V01",
+        sourceTime: { start: 0, end: 3 },
+        editedTime: { start: 0, end: 3 },
+        upperLeftTitle: "Show the result first",
+        oneSentenceSummary: "The opening already has a primary visual",
+        sceneRole: "hook",
+      },
+      {
+        id: "V02",
+        sourceTime: { start: 3, end: 6 },
+        editedTime: { start: 3, end: 6 },
+        upperLeftTitle: "Three real examples",
+        oneSentenceSummary: "Evidence should take over immediately",
+        sceneRole: "proof-montage",
+      },
+      {
+        id: "V03",
+        sourceTime: { start: 6, end: 9 },
+        editedTime: { start: 6, end: 9 },
+        upperLeftTitle: "Can it work without a timeline?",
+        subtitleOrKeyLine: "The screen must actively deliver the point",
+        oneSentenceSummary: "This is the only question",
+        factCards: [
+          { label: "Constraint", value: "No manual timeline" },
+          { label: "Outcome", value: "A layered result" },
+        ],
+        sceneRole: "thesis-takeover",
+      },
+    ],
+  }, { sourceDuration: 9, outputDuration: 9, minimumSegments: 3, maximumSegments: 3 });
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 9,
+    segmentLayouts: [
+      { segmentId: "V01", mode: "graphic-focus" },
+      { segmentId: "V02", mode: "evidence-focus" },
+      { segmentId: "V03", mode: "speaker-focus" },
+    ],
+    choreography: [{
+      order: 1,
+      at: 3.8,
+      segmentId: "V02",
+      target: "visual",
+      actionPreset: "reveal-right",
+      easing: "power4.inOut",
+    }],
+  }, visualLedBreakdown, { outputDuration: 9 });
+  const project = await renderFixtureProject(t, "sample", { presentation, frames: [] }, {
+    breakdown: visualLedBreakdown,
+    motionDirection,
+    rangeEnd: 9,
+    approvedAssets: [{
+      id: "visual-led-proof",
+      sourceType: "local-upload",
+      mediaKind: "image",
+      path: sourceVideoFixture,
+      placement: { start: 3, end: 6, mode: "montage-left" },
+    }],
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+  const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
+  const thesisScene = sceneHtml(documentHtml, "V03");
+  const thesisVisualCalls = timelineFromCalls(documentHtml, "#scene-V03 .visual-panel");
+
+  assert.ok(manifest.evidenceLayout[0].start <= 3.02, "proof evidence must start at the scene boundary");
+  assert.equal(manifest.sceneLayouts.find(item => item.segmentId === "V03")?.effectiveMode, "graphic-focus", "thesis sceneRole must override a speaker-focus model suggestion");
+  assert.ok(thesisVisualCalls[0]?.at <= 6.02, "thesis takeover must start its primary visual at the scene boundary");
+  assertTimelineVar(thesisVisualCalls[0].vars, "opacity", 0.32);
+  assertTimelineVar(thesisVisualCalls[0].vars, "duration", 0.38);
+  assert.doesNotMatch(thesisScene, /<section class="facts">/, "thesis takeover must not render redundant standalone facts behind its primary panel");
+  assert.equal(timelineFromCalls(documentHtml, "#scene-V03 .summary").length, 0, "missing thesis summary DOM must not receive a GSAP call");
 });
 
 test("invalid choreography action and easing never enter sample HTML", async t => {
@@ -1066,6 +1368,19 @@ test("motion choreography infers segments from nonzero sample-relative time", ()
   assert.equal(direction.choreography[2].segmentId, "O03", "sampleEnd must bind to the last overlapping segment");
 });
 
+test("configured sample duration overrides a shorter model suggestion", () => {
+  const direction = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 15.86,
+  }, { segments: [] }, {
+    outputDuration: 20,
+    durationSeconds: 20,
+  });
+
+  assert.equal(direction.durationSeconds, 20);
+  assert.equal(direction.sampleEnd, 20);
+});
+
 test("fallback choreography omits fact beats that do not exist in approved keyframes", () => {
   const sparseBreakdown = normalizeContentBreakdown({
     segments: [
@@ -1131,6 +1446,22 @@ test("late speaker fade is normalized to a truthful visible push-in", () => {
   assert.equal(direction.choreography[0].actionPreset, "push-in");
 });
 
+test("early speaker fade preserves the first scene graphic-focus pose", async t => {
+  const motionDirection = normalizeMotionDirection({
+    sampleStart: 0,
+    sampleDuration: 3,
+    segmentLayouts: [{ segmentId: "S01", mode: "graphic-focus" }],
+    choreography: [{ order: 1, at: 0, target: "speaker", actionPreset: "fade", easing: "sine.out" }],
+  }, breakdown, { outputDuration: 9, durationSeconds: 3 });
+  const project = await renderFixtureProject(t, "sample", normalizeKeyframeDirection(rawDirection, breakdown, 3), {
+    motionDirection,
+    rangeEnd: 3,
+  });
+  const documentHtml = fs.readFileSync(project.indexPath, "utf8");
+
+  assert.match(documentHtml, /tl\.fromTo\("#speakerStage",\{[^}]*"opacity":0[^}]*"scale":0\.42[^}]*\},\{"x":0,"y":0,"scale":0\.42,"opacity":1/);
+});
+
 test("late speaker choreography keeps the default visible entrance and uses a non-opacity camera beat", async t => {
   const motionDirection = normalizeMotionDirection({
     sampleStart: 0,
@@ -1154,7 +1485,7 @@ test("late speaker choreography keeps the default visible entrance and uses a no
   assert.equal(manifest.appliedChoreography.find(item => item.target === "speaker")?.at, 2);
 });
 
-test("evidence choreography records its actual placement-constrained start", async t => {
+test("evidence choreography records its actual visual-led start", async t => {
   const motionDirection = normalizeMotionDirection({
     sampleStart: 0,
     sampleDuration: 9,
@@ -1181,9 +1512,9 @@ test("evidence choreography records its actual placement-constrained start", asy
   const manifest = JSON.parse(fs.readFileSync(project.manifestPath, "utf8"));
   const applied = manifest.appliedChoreography.find(item => item.selector === "#evidence-1");
 
-  assert.equal(applied?.at, 0.4);
+  assert.equal(applied?.at, 0);
   assert.equal(applied?.actionPreset, "push-in");
   assert.equal(applied?.easing, "power2.out");
-  assert.match(documentHtml, /tl\.from\("#evidence-1",\{[^}]*"ease":"power2\.out"[^}]*\}, 0\.400\);/);
+  assert.match(documentHtml, /tl\.from\("#evidence-1",\{[^}]*"ease":"power2\.out"[^}]*\}, 0\.000\);/);
   assert.match(documentHtml, /tl\.set\("#evidence-1",\{opacity:0\},1\.200\);/, "evidence exit must end with a seek-safe hard kill at the clip boundary");
 });

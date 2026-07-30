@@ -330,6 +330,7 @@ export function createMultiAgentApi({
   writeArtifact,
   readArtifact,
   listMemory,
+  listKnowledgeLibrary,
   memory,
   tutorials,
   orchestrator,
@@ -570,6 +571,13 @@ export function createMultiAgentApi({
         })
         : [];
       return { status: 200, body: { records: sanitize(records) } };
+    }
+
+    if (req.method === "GET" && pathname === "/api/multi-agent/knowledge-library") {
+      const library = typeof listKnowledgeLibrary === "function"
+        ? await listKnowledgeLibrary()
+        : { schemaVersion: 1, readOnly: true, summary: { total: 0 }, catalogs: [], records: [] };
+      return { status: 200, body: sanitize(library) };
     }
 
     const artifactMatch = pathname.match(

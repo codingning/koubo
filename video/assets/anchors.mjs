@@ -25,8 +25,8 @@ export function normalizeAssetAnchor(value, legacyPlacement = null) {
 }
 
 function segmentBounds(segment) {
-  const start = finite(segment?.outputStart ?? segment?.start ?? segment?.outputIn);
-  const end = finite(segment?.outputEnd ?? segment?.end ?? segment?.outputOut);
+  const start = finite(segment?.outputStart ?? segment?.editedTime?.start ?? segment?.start ?? segment?.outputIn);
+  const end = finite(segment?.outputEnd ?? segment?.editedTime?.end ?? segment?.end ?? segment?.outputOut);
   return start !== null && end !== null && end > start ? { start, end } : null;
 }
 

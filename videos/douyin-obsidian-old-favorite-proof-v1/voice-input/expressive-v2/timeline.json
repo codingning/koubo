@@ -1,0 +1,208 @@
+{
+  "targetLufs": -16,
+  "truePeakLimitDbtp": -1.5,
+  "sampleRate": 48000,
+  "channels": 1,
+  "totalDuration": 93.0,
+  "segments": [
+    {
+      "id": "01",
+      "text": "收藏根本不等于学会。找不到、用不上，它就是数字垃圾。",
+      "path": "assets/voice/01-expressive-tight.wav",
+      "start": 0.01,
+      "duration": 4.873563,
+      "end": 4.883563,
+      "pauseAfter": 0.3,
+      "sceneHoldAfter": 0.24
+    },
+    {
+      "id": "02",
+      "text": "你的抖音收藏夹，是不是也越来越长？",
+      "path": "assets/voice/02-expressive.wav",
+      "start": 8.5,
+      "duration": 2.74,
+      "end": 11.24,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "03",
+      "text": "AI 教程、健身方法、剪辑技巧——没看完，先点收藏，心里想着：以后再看。",
+      "path": "assets/voice/03-expressive.wav",
+      "start": 11.38,
+      "duration": 6.24,
+      "end": 17.62,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "04",
+      "text": "可真要用时，几百条、几千条挤在一起。",
+      "path": "assets/voice/04-expressive.wav",
+      "start": 17.76,
+      "duration": 3.42,
+      "end": 21.18,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "05",
+      "text": "标题记不清，作者也忘了，翻半天，还是找不到。",
+      "path": "assets/voice/05-expressive.wav",
+      "start": 21.32,
+      "duration": 4.56,
+      "end": 25.88,
+      "pauseAfter": 0.3,
+      "sceneHoldAfter": 0.0
+    },
+    {
+      "id": "06",
+      "text": "所以，我做了一个中文技能。",
+      "path": "assets/voice/06-expressive.wav",
+      "start": 26.18,
+      "duration": 2.24,
+      "end": 28.42,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "07",
+      "text": "你把它交给 AI，它会在 Windows 本地把环境配好。",
+      "path": "assets/voice/07-expressive.wav",
+      "start": 28.56,
+      "duration": 3.84,
+      "end": 32.4,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "08",
+      "text": "登录还是由你自己扫码。收藏、视频和文字转录，全都留在你的电脑里。",
+      "path": "assets/voice/08-expressive.wav",
+      "start": 32.54,
+      "duration": 6.72,
+      "end": 39.26,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "09",
+      "text": "每条收藏，都会变成一篇 Obsidian 笔记。",
+      "path": "assets/voice/09-expressive.wav",
+      "start": 39.4,
+      "duration": 3.52,
+      "end": 42.92,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "10",
+      "text": "原视频名称、作者、链接、时间码和核心内容，全都可以搜索。",
+      "path": "assets/voice/10-expressive.wav",
+      "start": 43.06,
+      "duration": 5.45,
+      "end": 48.51,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "11",
+      "text": "验收通过后，你再确认一次，让 AI 装上定时任务，新收藏就会自动同步。",
+      "path": "assets/voice/11-expressive.wav",
+      "start": 48.65,
+      "duration": 5.76,
+      "end": 54.41,
+      "pauseAfter": 0.3,
+      "sceneHoldAfter": 0.0
+    },
+    {
+      "id": "12",
+      "text": "下次你只要问 AI：我之前收藏过哪个讲剪辑节奏的视频？",
+      "path": "assets/voice/12-expressive.wav",
+      "start": 54.71,
+      "duration": 4.8,
+      "end": 59.51,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "13",
+      "text": "它会从本地知识库找到笔记，再把原视频名称和链接交给你。",
+      "path": "assets/voice/13-expressive.wav",
+      "start": 59.65,
+      "duration": 5.28,
+      "end": 64.93,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "14",
+      "text": "更巧的是，我最早收藏过一条用 Codex 加 Obsidian 整理收藏的教程。",
+      "path": "assets/voice/14-expressive.wav",
+      "start": 65.07,
+      "duration": 5.92,
+      "end": 70.99,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "15",
+      "text": "后来我真的把它找回来，做成了这套技能；现在连那条教程本身，也进了知识库。",
+      "path": "assets/voice/15-expressive.wav",
+      "start": 71.13,
+      "duration": 6.32,
+      "end": 77.45,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "16",
+      "text": "整套项目刚刚跑完，四十三项测试，全部通过。",
+      "path": "assets/voice/16-expressive.wav",
+      "start": 77.59,
+      "duration": 3.82,
+      "end": 81.41,
+      "pauseAfter": 0.3,
+      "sceneHoldAfter": 0.0
+    },
+    {
+      "id": "17",
+      "text": "想把收藏夹从以后再看，变成现在能用，评论区留知识库。",
+      "path": "assets/voice/17-expressive.wav",
+      "start": 81.71,
+      "duration": 4.64,
+      "end": 86.35,
+      "pauseAfter": 0.14
+    },
+    {
+      "id": "18",
+      "text": "我把使用说明整理好后放进群公告；不方便进群，也可以单独发给你。",
+      "path": "assets/voice/18-expressive.wav",
+      "start": 86.49,
+      "duration": 5.68,
+      "end": 92.17,
+      "pauseAfter": 0.0,
+      "sceneHoldAfter": 0.83
+    }
+  ],
+  "scenes": [
+    {
+      "scene": 1,
+      "start": 0.0,
+      "duration": 5.5,
+      "end": 5.5
+    },
+    {
+      "scene": 2,
+      "start": 8.5,
+      "duration": 17.68,
+      "end": 26.18
+    },
+    {
+      "scene": 3,
+      "start": 26.18,
+      "duration": 28.53,
+      "end": 54.71
+    },
+    {
+      "scene": 4,
+      "start": 54.71,
+      "duration": 27.0,
+      "end": 81.71
+    },
+    {
+      "scene": 5,
+      "start": 81.71,
+      "duration": 11.29,
+      "end": 93.0
+    }
+  ]
+}

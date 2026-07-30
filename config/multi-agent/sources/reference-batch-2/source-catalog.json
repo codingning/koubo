@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "id": "reference-knowledge-batch-2-sources.v1",
+  "status": "research_source_catalog",
+  "createdAt": "2026-07-29T00:00:00+08:00",
+  "createdBy": {
+    "type": "research-distillation",
+    "id": "koubo-reference-batch-2"
+  },
+  "productionEligible": false,
+  "usageBoundary": "public-reference-research-only-no-redistribution",
+  "reviewRule": "Only fully_reviewed_local_evidence sources may support candidate records. discovery_only entries are leads, not evidence.",
+  "sources": [
+    {
+      "id": "youtube-help-audience-retention-key-moments",
+      "platform": "web",
+      "url": "https://support.google.com/youtube/answer/9314415?hl=en",
+      "author": "YouTube Help",
+      "title": "Measure key moments for audience retention",
+      "reviewStatus": "reviewed_text",
+      "redistributionAllowed": false,
+      "evidenceScope": ["intro expectation match", "first-30-second diagnostic", "experimentation caveat"]
+    },
+    {
+      "id": "tiktok-creative-codes",
+      "platform": "web",
+      "url": "https://ads.tiktok.com/business/en/creative-codes",
+      "author": "TikTok for Business",
+      "title": "TikTok Creative Codes",
+      "reviewStatus": "reviewed_text",
+      "redistributionAllowed": false,
+      "evidenceScope": ["hook body close", "suspense surprise emotion", "main-message delivery"]
+    },
+    {
+      "id": "tiktok-creative-best-practices",
+      "platform": "web",
+      "url": "https://ads.tiktok.com/business/en-US/blog/creative-best-practices-top-performing-ads",
+      "author": "TikTok for Business",
+      "title": "Creative best practices for top-performing ads",
+      "reviewStatus": "reviewed_text",
+      "redistributionAllowed": false,
+      "evidenceScope": ["early value proposition", "hook relevance", "advertising-only evidence boundary"]
+    },
+    {
+      "id": "tiktok-creative-accelerator-guidance",
+      "platform": "web",
+      "url": "https://ads.tiktok.com/business/creativecenter/quicktok/online/tiktok_creative_accelerator/pc/en",
+      "author": "TikTok Creative Center",
+      "title": "Creative Accelerator guidance",
+      "reviewStatus": "reviewed_text",
+      "redistributionAllowed": false,
+      "evidenceScope": ["hook tied to key narrative", "clear coherent primary message"]
+    },
+    {
+      "id": "tiktok-creative-advertising-guide",
+      "platform": "web",
+      "url": "https://ads.tiktok.com/business/en/guides/what-is-ad-creative-guide",
+      "author": "TikTok for Business",
+      "title": "TikTok creative advertising guide",
+      "reviewStatus": "reviewed_text",
+      "redistributionAllowed": false,
+      "evidenceScope": ["problem solution benefit", "before and after", "advertising-only evidence boundary"]
+    },
+    {
+      "id": "douyin-7664869757132262708",
+      "platform": "douyin",
+      "videoId": "7664869757132262708",
+      "url": "https://www.douyin.com/video/7664869757132262708",
+      "author": "胡泊Hubo",
+      "title": "未来最贵的员工：一个人就能把事做成",
+      "reviewStatus": "fully_reviewed_local_evidence",
+      "accessedAt": "2026-07-29T03:00:40.800Z",
+      "durationSeconds": 258.433333,
+      "mediaSha256": "e2fa30be066e56b3f19c9a74f648cabca51a8a602c902b5d30b38121aa30b943",
+      "transcriptSha256": "5138b6a0e1a98e2dd15cba62256fd2c04a04a8eaeeb5a00b0e1e5a6fce512a8a",
+      "transcriptModel": "faster-whisper/small",
+      "transcriptSegments": 157,
+      "redistributionAllowed": false,
+      "evidenceScope": ["spoken structure", "opening sequence", "argument progression", "observed visual changes"]
+    },
+    {
+      "id": "douyin-7662001440788925747",
+      "platform": "douyin",
+      "videoId": "7662001440788925747",
+      "url": "https://www.douyin.com/video/7662001440788925747",
+      "author": "胡泊Hubo",
+      "title": "消不掉的AI味：满分小孩的后遗症",
+      "reviewStatus": "fully_reviewed_local_evidence",
+      "accessedAt": "2026-07-29T03:01:26.010Z",
+      "durationSeconds": 317.133333,
+      "mediaSha256": "8ee8a7b8ce8d98a153b251421ccfe371a1315719f022989a939be27639439dbc",
+      "transcriptSha256": "bc5434360ab388921f89667abcc333ae876d4ee3901c6d9788a6992f943c5012",
+      "transcriptModel": "faster-whisper/small",
+      "transcriptSegments": 203,
+      "redistributionAllowed": false,
+      "evidenceScope": ["conflict framing", "payoff promise", "data as story action", "analogy", "lived detail", "observed visual changes"]
+    },
+    {
+      "id": "douyin-7666040511572105206",
+      "platform": "douyin",
+      "videoId": "7666040511572105206",
+      "url": "https://www.douyin.com/video/7666040511572105206",
+      "author": "阿易剪辑师",
+      "title": "口播逐帧点评，提升剪辑质感",
+      "reviewStatus": "fully_reviewed_local_evidence",
+      "accessedAt": "2026-07-29T03:02:06.082Z",
+      "durationSeconds": 627.542993,
+      "mediaSha256": "36c8278fe30b3db0fbd9599b86443bf3fa9069c53f4766b5cc4ce4743c7b1b1f",
+      "transcriptSha256": "942a37619bc55700df646a3804be097d1c5011a1abedb4b413f6fa0a31b1d9da",
+      "transcriptModel": "faster-whisper/small",
+      "transcriptSegments": 472,
+      "redistributionAllowed": false,
+      "evidenceScope": ["caption readability", "safe zones", "typographic hierarchy", "visual separation", "transition continuity", "voice and BGM balance", "semantic cutting"]
+    },
+    {
+      "id": "youtube-QR8LxximqWI",
+      "platform": "youtube",
+      "videoId": "QR8LxximqWI",
+      "url": "https://www.youtube.com/watch?v=QR8LxximqWI",
+      "author": "HillierSmith",
+      "title": "Editing and storytelling reference lead",
+      "reviewStatus": "caption_reviewed",
+      "redistributionAllowed": false,
+      "evidenceScope": ["story-first position", "editing serves story", "frankenbite ethical risk"]
+    },
+    {
+      "id": "youtube-UkWgk6W79mg",
+      "platform": "youtube",
+      "videoId": "UkWgk6W79mg",
+      "url": "https://www.youtube.com/watch?v=UkWgk6W79mg",
+      "author": "Adobe Video & Motion",
+      "title": "HillierSmith storytelling reference lead",
+      "reviewStatus": "caption_reviewed",
+      "redistributionAllowed": false,
+      "evidenceScope": ["unmotivated sequences", "good ideas before montage", "copying rhetoric rejected"]
+    },
+    {
+      "id": "youtube-7hHyY2HhHf4",
+      "platform": "youtube",
+      "videoId": "7hHyY2HhHf4",
+      "url": "https://www.youtube.com/watch?v=7hHyY2HhHf4",
+      "author": "The Editing Podcast",
+      "title": "Talking-head editing reference lead",
+      "reviewStatus": "caption_reviewed",
+      "redistributionAllowed": false,
+      "evidenceScope": ["pattern interrupt", "viewer-perspective review", "subtract over-processing"]
+    },
+    {
+      "id": "youtube-J0ydlAqg6_8",
+      "platform": "youtube",
+      "videoId": "J0ydlAqg6_8",
+      "url": "https://www.youtube.com/watch?v=J0ydlAqg6_8",
+      "author": "Tim Runia",
+      "title": "Seven cuts reference lead",
+      "reviewStatus": "caption_reviewed",
+      "redistributionAllowed": false,
+      "evidenceScope": ["intentional cuts", "rhythm contrast", "purpose-driven cut selection"]
+    },
+    {
+      "id": "youtube-sLaXSvpfDZs",
+      "platform": "youtube",
+      "videoId": "sLaXSvpfDZs",
+      "url": "https://www.youtube.com/watch?v=sLaXSvpfDZs",
+      "author": "Johnny Harris",
+      "title": "Visual argument reference lead",
+      "reviewStatus": "caption_reviewed_opening_only",
+      "redistributionAllowed": false,
+      "evidenceScope": ["opening contrast", "central question", "opening-only review boundary"]
+    },
+    {
+      "id": "bilibili-BV1yCga6bEaT",
+      "platform": "bilibili",
+      "videoId": "BV1yCga6bEaT",
+      "url": "https://www.bilibili.com/video/BV1yCga6bEaT",
+      "author": "阿易剪辑师镜像待核验",
+      "title": "口播剪辑点评镜像线索",
+      "reviewStatus": "discovery_only",
+      "redistributionAllowed": false,
+      "evidenceScope": []
+    }
+  ],
+  "catalogHash": "4e8a63d0006573d602db2cee8c2ae2dfc886f73fb776f15f46cbb9d8f8d2b395"
+}

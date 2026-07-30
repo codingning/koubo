@@ -25,6 +25,7 @@ test("semantic and hybrid anchors relocate inside stable segments", () => {
   const segments = [{ segmentId: "s1", outputStart: 5, outputEnd: 12 }];
   assert.deepEqual(resolveAssetAnchor({ type: "semantic", segmentId: "s1", offsetStart: 1, offsetEnd: 4 }, segments, 20), { start: 6, end: 9, anchorType: "semantic", segmentId: "s1" });
   assert.deepEqual(resolveAssetAnchor({ type: "hybrid", segmentId: "s1", start: 7, end: 15 }, segments, 20), { start: 7, end: 12, anchorType: "hybrid", segmentId: "s1" });
+  assert.deepEqual(resolveAssetAnchor({ type: "semantic", segmentId: "s2" }, [{ id: "s2", editedTime: { start: 12, end: 18 } }], 20), { start: 12, end: 18, anchorType: "semantic", segmentId: "s2" });
   assert.equal(normalizeAssetAnchor({ type: "semantic" }), null);
 });
 

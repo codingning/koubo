@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "douyin-profile-cover-study-candidates.v1",
+  "status": "candidate_catalog_inbox_only",
+  "createdAt": "2026-07-30T00:00:00+08:00",
+  "productionEligible": false,
+  "sourceCatalogId": "douyin-profile-cover-study-sources.v1",
+  "admissionRule": "Each technique requires generated 9:16, 3:4, 16:9, and 4:3 assets, thumbnail review, and human approval on another real project before promotion.",
+  "records": [
+    {
+      "id": "cover-technique.real-person-content-first.v1",
+      "type": "cover-technique",
+      "status": "inbox",
+      "title": "真人原片铺满，内容优先于品牌框",
+      "definition": "有可靠真人素材时使用真实视频帧作为全画面背景，不显示固定品牌 badge，让标题层级和高对比语法承担跨期一致性；标题可以遮挡人物。",
+      "source": { "type": "public-reference-and-project-review-distillation", "sourceId": "douyin-profile-cover-study-sources.v1", "license": "project-internal-original-abstraction" },
+      "evidence": [
+        { "sourceId": "douyin-profile-huchuliang", "observation": "Face, headline, and contrast hierarchy remain readable while the real background changes." },
+        { "sourceId": "project-user-cover-review-2026-07-30", "observation": "The user rejected brand-heavy and decorative alternatives, required a real-person background, and accepted oversized copy even when it covers the face." }
+      ],
+      "applicability": ["talking-head cover", "creator-provided real-person source", "content-first thumbnail"],
+      "prohibitions": ["generate a fake person", "force a brand badge onto every episode", "prioritize an unobstructed face over headline readability", "approve automatically"]
+    },
+    {
+      "id": "cover-technique.two-line-conflict-consequence.v1",
+      "type": "cover-technique",
+      "status": "inbox",
+      "title": "第一行认知冲突，第二行后果或结果",
+      "definition": "封面最多两行超大标题：第一行打破观众默认认知，第二行给出损失、后果或可见结果；功能说明和完整叙述移到发布标题与正文。",
+      "source": { "type": "public-reference-and-project-review-distillation", "sourceId": "douyin-profile-cover-study-sources.v1", "license": "project-internal-original-abstraction" },
+      "evidence": [
+        { "sourceId": "douyin-profile-mediastorm", "observation": "High-contrast two-line questions and consequences dominate before secondary detail." },
+        { "sourceId": "project-user-cover-review-2026-07-30", "observation": "The conflict title 收藏≠学会 / 越存越没用 was preferred over the descriptive feature title 几千条收藏 / AI秒找回." }
+      ],
+      "applicability": ["Douyin profile grid", "release package cover title", "thumbnail A/B review"],
+      "prohibitions": ["copy source wording", "shrink long feature descriptions to fit", "use a category label as the only click reason", "make unsupported absolute claims", "approve automatically"]
+    },
+    {
+      "id": "cover-technique.independent-four-ratio-layout.v1",
+      "type": "cover-technique",
+      "status": "inbox",
+      "title": "四画幅独立排版与版本化交付",
+      "definition": "分别为 9:16、3:4、16:9、4:3 计算背景裁切、标题字号、位置和安全区，并为每轮候选使用新的版本化文件名，避免简单裁切、拉伸和客户端缓存误判。",
+      "source": { "type": "project-derived-validation", "sourceId": "douyin-profile-cover-study-sources.v1", "license": "project-internal-original-abstraction" },
+      "evidence": [
+        { "sourceId": "douyin-profile-ting-tech-world", "observation": "The profile grid judges a different composition boundary from the full video frame." },
+        { "sourceId": "project-user-cover-review-2026-07-30", "observation": "The user required a 4:3 landscape asset and same-path overwrites caused visually stale review results." }
+      ],
+      "applicability": ["cover QA", "publish package", "multi-platform export"],
+      "prohibitions": ["derive every ratio by stretching 9:16", "judge only dimensions", "overwrite the same review filename", "place essential text outside the ratio-specific safe area", "approve automatically"]
+    }
+  ]
+}

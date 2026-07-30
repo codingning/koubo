@@ -14,7 +14,7 @@
   },
   "rendering": {
     "keyframes": {
-      "count": 4,
+      "count": 5,
       "minCount": 3,
       "maxCount": 5,
       "width": 1920,
@@ -119,7 +119,7 @@
         { "key": "minimumSegments", "label": "最少信息段", "type": "number", "min": 3, "max": 12, "step": 1 },
         { "key": "maximumSegments", "label": "最多信息段", "type": "number", "min": 5, "max": 16, "step": 1 }
       ],
-      "prompt": "你是一名口播内容导演和剪辑导演。先根据带时间戳的逐字稿识别假启动、错句、重复、口头禅和自然停顿，只做保守删减，不得改变原意或补写没有说过的话。再按语义把成片拆成5—12个信息段。每段必须输出：1.这一段口播的大意；2.左上大标题；3.副标题或重点句；4.一句摘要；5.实际需要的0—3张事实卡；6.适合放在右侧的图表、二维动效或真实证据；7.应参考风格报告中的哪种包装方式；8.源视频与成片时间段。必须区分字幕和信息卡：字幕只呈现说了什么，信息卡提炼这段真正想表达什么。标题、摘要和事实卡不能机械复述同一句话；只有存在真实、可扫读的信息层级时才输出事实卡，不得为了凑数量补占位卡。"
+      "prompt": "你是一名口播内容导演和剪辑导演。先根据带时间戳的逐字稿识别假启动、错句、重复、口头禅和自然停顿，只做保守删减，不得改变原意或补写没有说过的话。再按语义把成片拆成5—12个信息段。每段必须输出：1.这一段口播的大意；2.sceneRole，且只能从hook、proof-montage、thesis-takeover、ui-demo、revision-flow、learning-summary、cta、explanation中选择；3.左上大标题；4.副标题或重点句；5.一句摘要；6.实际需要的0—3张事实卡；7.适合放在右侧的图表、二维动效或真实证据；8.应参考风格报告中的哪种包装方式；9.源视频与成片时间段。sceneRole是渲染机器合同：结果钩子、证据蒙太奇、核心问题接管、真实界面演示、自然语言返修流程、学习规律总结和结尾选择必须使用各自角色，不能全部降级为explanation或同一种卡片结构。必须区分字幕和信息卡：字幕只呈现说了什么，信息卡提炼这段真正想表达什么。标题、摘要和事实卡不能机械复述同一句话；只有存在真实、可扫读的信息层级时才输出事实卡，不得为了凑数量补占位卡。"
     },
     "keyframes": {
       "number": 3,
@@ -128,8 +128,8 @@
       "autoRun": true,
       "reviewGate": false,
       "settings": {
-        "count": 4,
-        "selection": "cover-opening-method-proof-close",
+        "count": 5,
+        "selection": "hook-proof-ui-revision-close",
         "useRealSpeakerFrames": true,
         "includeTitle": true,
         "includeSummary": true,
@@ -143,7 +143,7 @@
         { "key": "includeRightVisual", "label": "展示右侧图表或二维动效终态", "type": "checkbox" },
         { "key": "avoidFaceCenterline", "label": "禁止信息遮挡人物脸部中轴", "type": "checkbox" }
       ],
-      "prompt": "请基于已批准的风格规则、逐字稿和内容拆解，选择3—5个最能代表开场钩子、核心方法、结果证据和结尾互动的信息段，生成横版16:9关键帧设计。顶层必须输出presentation，除非用户明确要求调试图，否则showInternalLabels和showSafeGuides均为false，禁止把引擎名、阶段ID、内部状态、安全框或制作说明放进观众画面。每张必须使用我的真人口播画面，同时输出人类可读的composition和机器可执行的visualIntent；composition不能代替visualIntent。visualIntent必须包含title、keyLine、summary、factCards和primaryVisual，factCards是本帧实际显示的0—3张辅助事实卡，空数组表示明确不显示，主视觉已表达同一信息时不得重复补卡。primaryVisual.kind只能使用inherit、hook-contrast、memo-action或copy-prompt；memo-action必须给出具体操作顺序，copy-prompt必须保留完整可复制正文。用户标为精确引用或放在引号内的观众可见文案必须逐字保留，不得同义改写。主标题清晰、信息层级明确、颜色系统统一且不得挡住人物脸部中轴；关键帧必须是未来动态视频某一时刻的真实落地帧，并注明前后动效状态、人物缩放状态和该帧验证的问题。"
+      "prompt": "请基于已批准的风格规则、逐字稿和内容拆解，选择3—5个最能代表开场钩子、核心方法、结果证据和结尾互动的信息段，生成横版16:9关键帧设计。如果内容拆解中存在对应角色，选帧必须覆盖hook、proof-montage、ui-demo、revision-flow，以及learning-summary或cta；不得用抽象工具卡替代已批准的真实历史视频、真实工作台截图或录屏证据。顶层必须输出presentation，除非用户明确要求调试图，否则showInternalLabels和showSafeGuides均为false，禁止把引擎名、阶段ID、内部状态、安全框或制作说明放进观众画面。每张必须使用我的真人口播画面，同时输出人类可读的composition和机器可执行的visualIntent；composition不能代替visualIntent。visualIntent必须包含title、keyLine、summary、factCards和primaryVisual，factCards是本帧实际显示的0—3张辅助事实卡，空数组表示明确不显示，主视觉已表达同一信息时不得重复补卡。primaryVisual.kind只能使用inherit、hook-contrast、memo-action或copy-prompt；memo-action必须给出具体操作顺序，copy-prompt必须保留完整可复制正文。用户标为精确引用或放在引号内的观众可见文案必须逐字保留，不得同义改写。主标题清晰、信息层级明确、颜色系统统一且不得挡住人物脸部中轴；关键帧必须是未来动态视频某一时刻的真实落地帧，并注明前后动效状态、人物缩放状态和该帧验证的问题。"
     },
     "keyframe_review": {
       "number": 4,
@@ -180,7 +180,7 @@
         { "key": "usePushPull", "label": "吸收参考视频的推拉节奏", "type": "checkbox" },
         { "key": "useNumberCount", "label": "数字或进度变化", "type": "checkbox" }
       ],
-      "prompt": "把已批准关键帧渲染成15—25秒HyperFrames动态样片。已批准关键帧结果的顶层presentation和每帧visualIntent是观众可见内容的绑定合同；全局原样继承presentation，并按segmentId原样继承对应frame的visualIntent。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right；Director可以在不改变批准内容的前提下，逐段重新组织人物、证据与图形图层，并增加出现时间、缓动、镜头运动和转场。不得恢复内部标签、安全框或已经删除的事实卡；只编排已批准且实际存在的0—3张visualIntent.factCards，数量必须与对应数组长度完全一致，空数组就保持不显示，禁止补占位卡。用户标为精确引用的文案必须逐字保留；copy-prompt的完整正文不得压缩成关键词，memo-action的操作顺序不得改写或打乱。保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素；整体节奏必须有序推进，不能所有元素同时出现。必须输出segmentLayouts并覆盖样片范围内每个有效内容段，segmentId不得重复；mode只能使用speaker-focus、split-right、graphic-focus、evidence-focus。speaker-focus以真人表达为主，split-right让真人与信息并列，graphic-focus以二维图形或信息卡为主且真人缩小为画中画，evidence-focus只在存在已批准真实证据时使用并让真人缩小为画中画，否则改选graphic-focus或split-right。choreography.at必须使用相对sampleStart的样片内秒数；除speaker外每项必须绑定有效segmentId。target只能使用title、key-line、summary、facts、fact-1、fact-2、fact-3、visual、speaker；factIndex在facts时为null，在fact-1、fact-2、fact-3时分别为1、2、3。0张事实卡时禁止输出facts或fact-N；同一segmentId内禁止重复target或混用facts与fact-N，speaker全样片最多一项。actionPreset只能使用fade、fade-up、slide-left、slide-right、pop、push-in、reveal-right。easing只允许power1至power4、sine、circ、expo的.in、.out、.inOut组合，或none，或参数1至2的back.out(N)，禁止自定义函数、CSS选择器或可执行代码。可以吸收参考视频里优秀的推拉、弹出、淡入、数字变化和窗口切换节奏，但不能简单复制画面。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。每个动效都要服务于当前口播含义。输出逐秒动效表、缓动方式、镜头缩放和样片起止时间。"
+      "prompt": "把已批准关键帧渲染成15—25秒HyperFrames动态样片。已批准关键帧结果的顶层presentation和每帧visualIntent是观众可见内容的绑定合同；全局原样继承presentation，并按segmentId原样继承对应frame的visualIntent。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right；Director可以在不改变批准内容的前提下，逐段重新组织人物、证据与图形图层，并增加出现时间、缓动、镜头运动和转场。不得恢复内部标签、安全框或已经删除的事实卡；只编排已批准且实际存在的0—3张visualIntent.factCards，数量必须与对应数组长度完全一致，空数组就保持不显示，禁止补占位卡。用户标为精确引用的文案必须逐字保留；copy-prompt的完整正文不得压缩成关键词，memo-action的操作顺序不得改写或打乱。保持lines、factCards和highlights各自的数组内部顺序，字段为空时不得新增占位元素；整体节奏必须有序推进，不能所有元素同时出现。必须输出segmentLayouts并覆盖样片范围内每个有效内容段，segmentId不得重复；sceneRole必须继承内容拆解中的同名字段，不得改写或统一降级；mode只能使用speaker-focus、split-right、graphic-focus、evidence-focus。speaker-focus以真人表达为主，split-right让真人与信息并列，graphic-focus以二维图形或信息卡为主且真人缩小为画中画，evidence-focus只在存在已批准真实证据时使用并让真人缩小为画中画，否则改选graphic-focus或split-right。choreography.at必须使用相对sampleStart的样片内秒数；除speaker外每项必须绑定有效segmentId。target只能使用title、key-line、summary、facts、fact-1、fact-2、fact-3、visual、speaker；factIndex在facts时为null，在fact-1、fact-2、fact-3时分别为1、2、3。0张事实卡时禁止输出facts或fact-N；同一segmentId内禁止重复target或混用facts与fact-N，speaker全样片最多一项。actionPreset只能使用fade、fade-up、slide-left、slide-right、pop、push-in、reveal-right。easing只允许power1至power4、sine、circ、expo的.in、.out、.inOut组合，或none，或参数1至2的back.out(N)，禁止自定义函数、CSS选择器或可执行代码。可以吸收参考视频里优秀的推拉、弹出、淡入、数字变化和窗口切换节奏，但不能简单复制画面。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。每个动效都要服务于当前口播含义。输出逐秒动效表、缓动方式、镜头缩放和样片起止时间。"
     },
     "full_render": {
       "number": 6,
@@ -209,7 +209,7 @@
         { "key": "generateContextSegments", "label": "生成15—30秒分段上下文小样", "type": "checkbox" },
         { "key": "runEditorialQa", "label": "执行信息层级与遮挡QA", "type": "checkbox" }
       ],
-      "prompt": "把已经批准的风格规则、内容拆解、关键帧和动态样片扩展到完整口播视频。已批准关键帧结果的顶层presentation是全局绑定合同，每帧visualIntent是对应segmentId的内容与事实合同；全局原样继承presentation，凡segmentId对应已批准关键帧，必须原样继承对应frame的visualIntent，并延续已批准样片的时间与运动语法。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right；Director必须逐段决定人物、证据与图形的图层主次，并安排时间、运动和转场。不得恢复被隐藏或删除的观众可见元素。全片事实卡数量必须与对应visualIntent.factCards的数组长度完全一致（0—3），不得把0、1或2张事实卡补足到3张。用户标为精确引用的文案必须逐字保留；copy-prompt必须继续展示完整可复制正文，不能压缩成关键词，memo-action的操作顺序不得改写或打乱。没有对应关键帧的信息段可以按内容选择真人主画面、标题摘要事实卡、真实证据、前后对比、图表或二维动效，但仍须遵守同一presentation边界和观众可见内容原则。每条segmentMotion必须输出layoutMode，且只能使用speaker-focus、split-right、graphic-focus、evidence-focus。speaker-focus以真人表达为主，split-right让真人与信息并列，graphic-focus以二维图形或信息卡为主且真人缩小为画中画，evidence-focus只在存在已批准真实证据时使用并让真人缩小为画中画，否则改选graphic-focus或split-right。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。保持同一颜色、字体、安全区和动效语法，但构图与图层主次可以逐段变化，不能把同一模板机械重复到每一段；字幕与信息卡继续分轨。只合成已批准素材，来源署名必须真实进入画面。先输出完整HyperFrames故事板和逐段动效时间线，再渲染2560×1440、30fps的2K母版以及1920×1080审核版。最终QA必须检查完整解码、H.264/AAC/yuv420p、BT.709、时长、音量、黑帧/冻结、字幕安全区、真人存在时的脸部中轴、信息层级、批准素材实际合成和来源署名。任何未通过项都不得进入最终审核；不得自动发布。"
+      "prompt": "把已经批准的风格规则、内容拆解、关键帧和动态样片扩展到完整口播视频。已批准关键帧结果的顶层presentation是全局绑定合同，每帧visualIntent是对应segmentId的内容与事实合同；全局原样继承presentation，凡segmentId对应已批准关键帧，必须原样继承对应frame的visualIntent，并延续已批准样片的时间与运动语法。已批准关键帧只锁定visualIntent与事实内容，不锁定静态布局或split-right；Director必须逐段决定人物、证据与图形的图层主次，并安排时间、运动和转场。不得恢复被隐藏或删除的观众可见元素。全片事实卡数量必须与对应visualIntent.factCards的数组长度完全一致（0—3），不得把0、1或2张事实卡补足到3张。用户标为精确引用的文案必须逐字保留；copy-prompt必须继续展示完整可复制正文，不能压缩成关键词，memo-action的操作顺序不得改写或打乱。没有对应关键帧的信息段可以按内容选择真人主画面、标题摘要事实卡、真实证据、前后对比、图表或二维动效，但仍须遵守同一presentation边界和观众可见内容原则。每条segmentMotion必须输出sceneRole和layoutMode；sceneRole必须继承内容拆解中的同名字段，proof-montage、thesis-takeover、ui-demo、revision-flow、learning-summary和cta不得降级成统一卡片网格；layoutMode只能使用speaker-focus、split-right、graphic-focus、evidence-focus。speaker-focus以真人表达为主，split-right让真人与信息并列，graphic-focus以二维图形或信息卡为主且真人缩小为画中画，evidence-focus只在存在已批准真实证据时使用并让真人缩小为画中画，否则改选graphic-focus或split-right。人物不要求始终作为主画面；当前真人链路中，真人作为次层时仍保持可见。真人出现时必须保护脸部中轴和可读性，只能使用真实原片，不得伪造、补画、换脸或替换人物。保持同一颜色、字体、安全区和动效语法，但构图与图层主次可以逐段变化，不能把同一模板机械重复到每一段；字幕与信息卡继续分轨。只合成已批准素材，来源署名必须真实进入画面。先输出完整HyperFrames故事板和逐段动效时间线，再渲染2560×1440、30fps的2K母版以及1920×1080审核版。最终QA必须检查完整解码、H.264/AAC/yuv420p、BT.709、时长、音量、黑帧/冻结、字幕安全区、真人存在时的脸部中轴、信息层级、批准素材实际合成和来源署名。任何未通过项都不得进入最终审核；不得自动发布。"
     }
   }
 }

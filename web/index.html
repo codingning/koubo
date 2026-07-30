@@ -28,6 +28,7 @@
         <button class="nav-item" data-view="publish"><span class="nav-icon">发</span><span>发布文案</span></button>
         <button class="nav-item" data-view="evidence"><span class="nav-icon">证</span><span>证据和风险</span></button>
         <button class="nav-item" data-view="roadmap"><span class="nav-icon">设</span><span>工作区设置</span></button>
+        <button class="nav-item" data-view="expert-library"><span class="nav-icon">专</span><span>专家知识库</span></button>
         <button class="nav-item" data-view="library"><span class="nav-icon">库</span><span>内容库</span></button>
       </nav>
 
@@ -579,18 +580,44 @@
           </article>
         </section>
 
-        <section id="view-publish" class="view" data-title="发布文案" data-eyebrow="审核后再手动发布">
-          <div class="platform-tabs">
-            <button class="platform-tab is-active" data-platform="douyin">抖音</button>
-            <button class="platform-tab" data-platform="xiaohongshu">小红书</button>
-            <button class="platform-tab" data-platform="weibo">微博</button>
-          </div>
-          <article class="panel publish-panel">
+        <section id="view-publish" class="view" data-title="发布准备" data-eyebrow="最终成片确认后同步生成">
+          <div id="publish-package-state" class="warning-banner"><strong>等待成片</strong><span>审核通过最终成片后，这里会自动生成统一品牌封面、标题、发布文案和关联话题。</span></div>
+          <article class="panel publish-package-panel">
+            <div class="publish-package-head">
+              <div><span>当前发布素材包</span><small id="publish-package-meta">尚未绑定已审核成片</small></div>
+              <a id="download-publish-package" class="btn btn-dark is-hidden" href="#" download>下载全部素材包</a>
+            </div>
+            <section id="publish-title-section" class="publish-block is-hidden">
+              <div class="section-heading compact"><h3>选择标题</h3><p>提供三个角度；修改最终标题时只重做封面，不重渲染视频。</p></div>
+              <div id="publish-title-options" class="publish-title-options"></div>
+              <label for="publish-title"><strong>最终标题</strong><small>封面主标题与发布标题保持一致。</small></label>
+              <input id="publish-title" type="text" maxlength="42" placeholder="输入最终发布标题">
+            </section>
+            <div class="platform-tabs">
+              <button class="platform-tab is-active" data-platform="douyin">抖音</button>
+              <button class="platform-tab" data-platform="xiaohongshu">小红书</button>
+              <button class="platform-tab" data-platform="wechat">视频号</button>
+            </div>
+            <div class="publish-panel">
             <div class="publish-head">
-              <div><span id="platform-name">抖音发布文案</span><small>不会自动发布，只能复制</small></div>
+              <div><span id="platform-name">抖音发布文案</span><small>可以修改、保存和复制，但不会自动发布</small></div>
               <button id="copy-publish" class="btn btn-primary">复制文案</button>
             </div>
-            <textarea id="publish-text" class="publish-text" readonly></textarea>
+              <textarea id="publish-text" class="publish-text"></textarea>
+              <label class="publish-topic-label" for="publish-hashtags"><strong>关联话题</strong><small>建议四到八个，必须与真实内容直接相关。</small></label>
+              <textarea id="publish-hashtags" class="publish-hashtags" rows="2" placeholder="#AI #三金AI实战"></textarea>
+              <div id="publish-package-actions" class="inline-actions publish-package-actions is-hidden">
+                <button id="save-publish-package" class="btn btn-primary">保存并同步封面</button>
+                <button id="regenerate-publish-package" class="btn btn-secondary">重新生成素材包</button>
+              </div>
+            </div>
+            <section id="publish-cover-section" class="publish-block is-hidden">
+              <div class="section-heading compact"><h3>三金统一品牌封面</h3><p>深蓝、三道蓝线、金色结果点；同时检查信息流9:16与主页3:4裁切。</p></div>
+              <div class="publish-cover-grid">
+                <article><strong>9:16 信息流封面</strong><img id="publish-cover-vertical" alt="9:16 信息流封面"><a id="download-publish-cover-vertical" download>下载 9:16</a></article>
+                <article><strong>3:4 主页封面</strong><img id="publish-cover-grid" alt="3:4 主页封面"><a id="download-publish-cover-grid" download>下载 3:4</a></article>
+              </div>
+            </section>
           </article>
           <div class="warning-banner"><strong>发布边界</strong><span>请先确认真实证据、隐私、版权、标题和封面。此网页不会连接任何平台账号。</span></div>
         </section>
@@ -625,6 +652,51 @@
               <div class="settings-actions"><button id="save-workspace-settings" class="btn btn-primary">保存工作区设置</button><small>切换后只显示该工作区生成的稿件和视频任务。</small></div>
             </article>
             <div id="platform-stage-grid" class="roadmap-grid workspace-settings"></div>
+          </div>
+        </section>
+
+        <section id="view-expert-library" class="view" data-title="专家知识库" data-eyebrow="教材、试用与生产知识分层可见">
+          <div class="expert-library-hero">
+            <div>
+              <span class="step-tag">只读总览</span>
+              <h2>专家手里现在到底有什么教材</h2>
+              <p>统一查看候选教材、隔离试用知识和生产运行知识。页面只读取版本化目录与本地运行库，不会因为查看、搜索或筛选而自动批准、晋级或影响成片。</p>
+            </div>
+            <button id="expert-library-refresh" class="btn btn-secondary">刷新知识库</button>
+          </div>
+
+          <div id="expert-library-summary" class="expert-library-summary" aria-live="polite">
+            <article><span>全部知识</span><strong>—</strong><small>正在读取</small></article>
+            <article><span>候选教材</span><strong>—</strong><small>inbox</small></article>
+            <article><span>隔离试用</span><strong>—</strong><small>trial</small></article>
+            <article><span>生产可调用</span><strong>—</strong><small>approved / promoted</small></article>
+          </div>
+
+          <div id="expert-library-boundary" class="expert-library-boundary">
+            <strong>知识状态边界</strong>
+            <span>正在核对运行知识与候选教材……</span>
+          </div>
+
+          <div class="expert-library-toolbar">
+            <label class="expert-search">搜索知识<input id="expert-library-search" type="search" placeholder="搜索标题、问题、用途、标签或知识 ID"></label>
+            <label>专家领域<select id="expert-library-domain"><option value="all">全部领域</option></select></label>
+            <label>知识状态<select id="expert-library-status"><option value="all">全部状态</option><option value="inbox">候选 inbox</option><option value="trial">试用 trial</option><option value="approved">已批准 approved</option><option value="promoted">长期 promoted</option></select></label>
+            <label>使用范围<select id="expert-library-usage"><option value="all">全部范围</option><option value="production-callable">生产可调用</option><option value="isolated-trial-catalog">隔离试用</option><option value="candidate-only">候选教材</option><option value="runtime">已载入运行库</option></select></label>
+          </div>
+
+          <div class="expert-library-layout">
+            <aside class="expert-domain-panel panel">
+              <div class="panel-head"><h3>专家教材分布</h3><span class="mini-label">按领域</span></div>
+              <div id="expert-domain-summary" class="expert-domain-summary"><div class="empty-state">正在统计领域分布……</div></div>
+              <div class="expert-source-note">
+                <strong>数据来源</strong>
+                <span id="expert-catalog-summary">正在读取目录……</span>
+              </div>
+            </aside>
+            <div>
+              <div class="expert-list-heading"><strong id="expert-library-result-count">正在加载知识……</strong><span>展开卡片可查看适用条件、禁止事项、证据和版本来源</span></div>
+              <div id="expert-library-records" class="expert-library-records"><div class="empty-state">正在读取专家知识库……</div></div>
+            </div>
           </div>
         </section>
 

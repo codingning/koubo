@@ -119,6 +119,7 @@
     publish: ["审核后再手动发布", "发布文案"],
     evidence: ["只讲能证明的事实", "证据和风险"],
     roadmap: ["本地优先 · 可迁移到多用户部署", "工作区设置"],
+    "expert-library": ["教材、试用与生产知识分层可见", "专家知识库"],
     library: ["示例和历史内容都保留", "内容库"]
   };
 
@@ -143,6 +144,7 @@
   let contentGenerating = false;
   let selectedVideoFile = null;
   let currentVideoJob = null;
+  let publishPackageDraft = null;
   let selectedVideoOutputVersion = null;
   let availableVideoJobs = [];
   let videoJobsLoading = false;
@@ -159,6 +161,8 @@
   let blindReviewBundle = null;
   let tutorialCheckpoint = null;
   let memoryRecords = [];
+  let expertKnowledgeLibrary = null;
+  let expertKnowledgeLoading = false;
   let multiAgentReviews = null;
   let contentStrategyAnalyzing = false;
   let contentStrategyDraft = {
@@ -276,8 +280,192 @@
     byId("page-eyebrow").textContent = pageNames[view][0];
     byId("page-title").textContent = pageNames[view][1];
     if (view === "edit") renderEditExperienceMode();
+    if (view === "expert-library") refreshExpertKnowledgeLibrary();
     $(".sidebar").classList.remove("is-open");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const expertDomainLabels = {
+    content: "内容策略",
+    caption: "字幕",
+    motion: "视觉 / 动效",
+    sound: "声音 / 音效",
+    voice: "配音",
+    director: "Director",
+    cover: "封面",
+    brand: "品牌",
+    release: "发布",
+    qa: "质量检查",
+    other: "其他",
+  };
+
+  const expertStatusLabels = {
+    inbox: "候选教材",
+    extracted: "已提取",
+    recreated: "已复刻",
+    trial: "隔离试用",
+    approved: "项目已批准",
+    promoted: "长期已晋级",
+    rejected: "已拒绝",
+    expired: "已过期",
+    disabled: "已停用",
+    unknown: "状态未知",
+  };
+
+  const expertUsageLabels = {
+    "production-callable": "专家默认可调用",
+    "runtime-trial-only": "运行库显式试用",
+    "isolated-trial-catalog": "隔离试用资产，默认不可调用",
+    "candidate-only": "候选教材，不影响成片",
+    "not-production-callable": "当前不可用于生产",
+  };
+
+  function expertKnowledgeList(value) {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === "") return [];
+    return [value];
+  }
+
+  function renderExpertKnowledgeSummary() {
+    const host = byId("expert-library-summary");
+    const summary = expertKnowledgeLibrary?.summary;
+    if (!summary) {
+      host.innerHTML = '<article><span>读取失败</span><strong>—</strong><small>请刷新</small></article>';
+      return;
+    }
+    const cards = [
+      ["全部知识", summary.total, `${summary.catalogCount || 0} 个版本化目录`],
+      ["候选教材", summary.inbox, "inbox · 不影响成片"],
+      ["隔离试用", summary.trial, "trial · 仅实验使用"],
+      ["生产可调用", summary.defaultCallable, `${summary.approved || 0} approved · ${summary.promoted || 0} promoted`],
+    ];
+    host.innerHTML = cards.map(([label, value, note], index) => `<article class="expert-summary-card expert-summary-${index}"><span>${htmlEscape(label)}</span><strong>${Number(value || 0)}</strong><small>${htmlEscape(note)}</small></article>`).join("");
+  }
+
+  function renderExpertDomainOptions() {
+    const select = byId("expert-library-domain");
+    const current = select.value || "all";
+    const domains = Object.entries(expertKnowledgeLibrary?.summary?.byDomain || {})
+      .filter(([, count]) => Number(count) > 0)
+      .sort((left, right) => Number(right[1]) - Number(left[1]) || left[0].localeCompare(right[0]));
+    select.innerHTML = '<option value="all">全部领域</option>' + domains.map(([domain, count]) => `<option value="${htmlEscape(domain)}">${htmlEscape(expertDomainLabels[domain] || domain)}（${Number(count)}）</option>`).join("");
+    select.value = domains.some(([domain]) => domain === current) ? current : "all";
+  }
+
+  function renderExpertDomainSummary() {
+    const host = byId("expert-domain-summary");
+    const domains = Object.entries(expertKnowledgeLibrary?.summary?.byDomain || {})
+      .filter(([, count]) => Number(count) > 0)
+      .sort((left, right) => Number(right[1]) - Number(left[1]) || left[0].localeCompare(right[0]));
+    if (!domains.length) {
+      host.innerHTML = '<div class="empty-state">没有可统计的专家领域。</div>';
+      return;
+    }
+    const max = Math.max(...domains.map(([, count]) => Number(count)));
+    host.innerHTML = domains.map(([domain, count]) => `<button class="expert-domain-row" data-expert-domain="${htmlEscape(domain)}"><span><strong>${htmlEscape(expertDomainLabels[domain] || domain)}</strong><small>${Number(count)} 条</small></span><i><b style="width:${Math.max(8, Math.round(Number(count) / max * 100))}%"></b></i></button>`).join("");
+  }
+
+  function expertEvidenceSummary(evidence) {
+    if (!evidence || typeof evidence !== "object") return String(evidence || "");
+    return evidence.observation || evidence.summary || evidence.claim || evidence.type || evidence.sourceId || JSON.stringify(evidence);
+  }
+
+  function renderExpertKnowledgeCard(record) {
+    const applicability = expertKnowledgeList(record.applicability);
+    const prohibitions = expertKnowledgeList(record.prohibitions);
+    const evidence = expertKnowledgeList(record.evidence);
+    const tags = expertKnowledgeList(record.tags);
+    const paths = expertKnowledgeList(record.sourcePaths);
+    const layerLabels = expertKnowledgeList(record.layers).map(layer => ({ inbox: "候选目录", trial: "试用目录", runtime: "运行库" }[layer] || layer));
+    return `<article class="expert-knowledge-card status-${htmlEscape(record.status)}">
+      <header>
+        <div class="expert-card-heading">
+          <div class="expert-card-badges"><span class="expert-domain-badge">${htmlEscape(expertDomainLabels[record.domain] || record.domain)}</span><span class="expert-status-badge status-${htmlEscape(record.status)}">${htmlEscape(expertStatusLabels[record.status] || record.status)}</span></div>
+          <h3>${htmlEscape(record.title || record.id)}</h3>
+          <code>${htmlEscape(record.id)}</code>
+        </div>
+        <span class="expert-usage-badge usage-${htmlEscape(record.usageState)}">${htmlEscape(expertUsageLabels[record.usageState] || record.usageState)}</span>
+      </header>
+      <p class="expert-card-description">${htmlEscape(record.description || "尚未填写技巧说明。")}</p>
+      ${tags.length ? `<div class="expert-tags">${tags.map(tag => `<span>${htmlEscape(tag)}</span>`).join("")}</div>` : ""}
+      <details>
+        <summary>查看适用条件、禁止事项与证据</summary>
+        <div class="expert-detail-grid">
+          <section><strong>适用条件</strong>${applicability.length ? `<ul>${applicability.map(item => `<li>${htmlEscape(item)}</li>`).join("")}</ul>` : "<p>尚未单独列出。</p>"}</section>
+          <section><strong>禁止事项</strong>${prohibitions.length ? `<ul>${prohibitions.map(item => `<li>${htmlEscape(item)}</li>`).join("")}</ul>` : "<p>尚未单独列出。</p>"}</section>
+          <section><strong>证据</strong>${evidence.length ? `<ul>${evidence.map(item => `<li>${htmlEscape(expertEvidenceSummary(item))}</li>`).join("")}</ul>` : "<p>当前目录未附可展示证据摘要。</p>"}</section>
+          <section><strong>来源与版本</strong><p>${htmlEscape(layerLabels.join(" + ") || "未知来源层")}</p>${paths.map(item => `<code>${htmlEscape(item)}</code>`).join("")}${Object.keys(record.versions || {}).length ? `<pre>${htmlEscape(JSON.stringify(record.versions, null, 2))}</pre>` : ""}</section>
+        </div>
+      </details>
+    </article>`;
+  }
+
+  function filteredExpertKnowledgeRecords() {
+    const query = byId("expert-library-search").value.trim().toLowerCase();
+    const domain = byId("expert-library-domain").value;
+    const status = byId("expert-library-status").value;
+    const usage = byId("expert-library-usage").value;
+    return expertKnowledgeList(expertKnowledgeLibrary?.records).filter(record => {
+      if (domain !== "all" && record.domain !== domain) return false;
+      if (status !== "all" && record.status !== status) return false;
+      if (usage === "runtime" && !record.runtimeLoaded) return false;
+      if (usage !== "all" && usage !== "runtime" && record.usageState !== usage) return false;
+      if (!query) return true;
+      const haystack = [
+        record.id, record.title, record.description, record.domain, record.namespace,
+        ...expertKnowledgeList(record.tags),
+        ...expertKnowledgeList(record.applicability),
+        ...expertKnowledgeList(record.prohibitions),
+      ].join(" ").toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+
+  function renderExpertKnowledgeRecords() {
+    const host = byId("expert-library-records");
+    if (!expertKnowledgeLibrary) {
+      host.innerHTML = '<div class="empty-state">专家知识库尚未加载。</div>';
+      return;
+    }
+    const records = filteredExpertKnowledgeRecords();
+    byId("expert-library-result-count").textContent = `显示 ${records.length} / ${Number(expertKnowledgeLibrary.summary?.total || 0)} 条知识`;
+    host.innerHTML = records.length
+      ? records.map(renderExpertKnowledgeCard).join("")
+      : '<div class="empty-state">没有符合当前筛选条件的知识。你可以清空搜索或切换状态。</div>';
+  }
+
+  function renderExpertKnowledgeLibrary() {
+    renderExpertKnowledgeSummary();
+    renderExpertDomainOptions();
+    renderExpertDomainSummary();
+    renderExpertKnowledgeRecords();
+    const summary = expertKnowledgeLibrary?.summary || {};
+    byId("expert-library-boundary").innerHTML = `<strong>知识状态边界</strong><span>当前运行库载入 ${Number(summary.runtimeLoaded || 0)} 条；默认可调用 ${Number(summary.defaultCallable || 0)} 条。trial 只用于隔离实验，inbox 只是候选教材，查看本页不会改变任何状态。</span>`;
+    byId("expert-catalog-summary").textContent = expertKnowledgeList(expertKnowledgeLibrary?.catalogs).map(catalog => `${catalog.recordCount} 条 · ${catalog.path}`).join("\n") || "当前没有版本化目录。";
+  }
+
+  async function refreshExpertKnowledgeLibrary() {
+    if (expertKnowledgeLoading) return;
+    expertKnowledgeLoading = true;
+    const button = byId("expert-library-refresh");
+    button.disabled = true;
+    button.textContent = "正在读取…";
+    try {
+      const response = await fetch(`${videoApiBase}/api/multi-agent/knowledge-library`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "专家知识库读取失败");
+      expertKnowledgeLibrary = payload;
+      renderExpertKnowledgeLibrary();
+    } catch (error) {
+      expertKnowledgeLibrary = null;
+      byId("expert-library-records").innerHTML = `<div class="experiment-error">专家知识库读取失败：${htmlEscape(error.message)}</div>`;
+      byId("expert-library-result-count").textContent = "读取失败";
+      renderExpertKnowledgeSummary();
+    } finally {
+      expertKnowledgeLoading = false;
+      button.disabled = false;
+      button.textContent = "刷新知识库";
+    }
   }
 
   function setCurrentItem(id) {
@@ -437,16 +625,144 @@
 
   function renderPublish() {
     const platform = persisted.platform || "douyin";
+    const packageValue = currentVideoJob?.publishPackage;
+    const ready = currentVideoJob?.status === "approved" && packageValue?.status === "ready" && Number(packageValue.outputVersion) === Number(currentVideoJob.output?.version);
+    const state = byId("publish-package-state");
+    const titleSection = byId("publish-title-section");
+    const coverSection = byId("publish-cover-section");
+    const actions = byId("publish-package-actions");
+    const download = byId("download-publish-package");
+    if (ready) {
+      publishPackageDraft = structuredClone(packageValue);
+      state.innerHTML = `<strong>发布素材包已就绪</strong><span>已绑定成片 v${htmlEscape(packageValue.outputVersion)}；所有内容只保存在本机，不会自动发布。</span>`;
+      state.classList.add("is-ready");
+      byId("publish-package-meta").textContent = `成片 v${packageValue.outputVersion} · 三金统一品牌封面 · ${new Date(packageValue.generatedAt).toLocaleString("zh-CN")}`;
+      titleSection.classList.remove("is-hidden");
+      coverSection.classList.remove("is-hidden");
+      actions.classList.remove("is-hidden");
+      byId("save-publish-package").disabled = false;
+      byId("regenerate-publish-package").disabled = false;
+      const selectedTitle = packageValue.selectedTitle || packageValue.titleCandidates?.[0]?.title || "";
+      byId("publish-title").value = selectedTitle;
+      byId("publish-title-options").innerHTML = (packageValue.titleCandidates || []).map(item => `<button class="publish-title-option ${item.title === selectedTitle ? "is-active" : ""}" data-publish-title="${htmlEscape(item.title)}"><span>${htmlEscape(item.title)}</span><small>${htmlEscape(item.angle || "标题候选")}</small></button>`).join("");
+      const coverMap = [
+        ["vertical", "publish-cover-vertical", "download-publish-cover-vertical"],
+        ["grid", "publish-cover-grid", "download-publish-cover-grid"],
+      ];
+      for (const [name, imageId, linkId] of coverMap) {
+        const cover = packageValue.covers?.[name];
+        const image = byId(imageId), link = byId(linkId);
+        if (cover?.url) {
+          image.src = `${videoApiBase}${cover.pngUrl || cover.url}?t=${Date.now()}`;
+          image.classList.remove("is-hidden");
+          link.href = `${videoApiBase}${cover.pngUrl || cover.url}`;
+          link.classList.remove("is-hidden");
+        } else {
+          image.removeAttribute("src");
+          image.classList.add("is-hidden");
+          link.classList.add("is-hidden");
+        }
+      }
+      if (packageValue.artifacts?.zip) {
+        download.href = `${videoApiBase}${packageValue.artifacts.zip}`;
+        download.classList.remove("is-hidden");
+      } else download.classList.add("is-hidden");
+    } else {
+      publishPackageDraft = null;
+      state.classList.remove("is-ready");
+      state.innerHTML = currentVideoJob?.status === "approved" && packageValue?.status === "error"
+        ? `<strong>发布素材包生成失败</strong><span>${htmlEscape(packageValue.error || "可以点击重新生成后再试")}</span>`
+        : `<strong>等待成片</strong><span>审核通过最终成片后，这里会自动生成统一品牌封面、标题、发布文案和关联话题。</span>`;
+      byId("publish-package-meta").textContent = currentVideoJob?.output ? `当前成片 v${currentVideoJob.output.version} 尚未完成最终发布准备` : "尚未绑定已审核成片";
+      titleSection.classList.add("is-hidden");
+      coverSection.classList.add("is-hidden");
+      actions.classList.toggle("is-hidden", !(currentVideoJob?.status === "approved"));
+      byId("save-publish-package").disabled = true;
+      byId("regenerate-publish-package").disabled = currentVideoJob?.status !== "approved";
+      download.classList.add("is-hidden");
+    }
     setPlatform(platform, false);
   }
 
+  function capturePublishDraft() {
+    if (!publishPackageDraft) return;
+    const platform = persisted.platform || "douyin";
+    publishPackageDraft.selectedTitle = byId("publish-title").value.trim() || publishPackageDraft.selectedTitle;
+    publishPackageDraft.platforms ||= {};
+    publishPackageDraft.platforms[platform] ||= { label: platform };
+    publishPackageDraft.platforms[platform].body = byId("publish-text").value.trim();
+    publishPackageDraft.platforms[platform].hashtags = byId("publish-hashtags").value.trim().split(/[\s,，、]+/).filter(Boolean);
+    publishPackageDraft.hashtags = publishPackageDraft.platforms[platform].hashtags;
+  }
+
   function setPlatform(platform, save = true) {
-    const labels = { douyin: "抖音发布文案", xiaohongshu: "小红书发布文案", weibo: "微博发布文案" };
+    if (save) capturePublishDraft();
+    const labels = { douyin: "抖音发布文案", xiaohongshu: "小红书发布文案", wechat: "视频号发布文案" };
+    if (!labels[platform]) platform = "douyin";
     persisted.platform = platform;
     $$(".platform-tab").forEach(button => button.classList.toggle("is-active", button.dataset.platform === platform));
     byId("platform-name").textContent = labels[platform];
-    byId("publish-text").value = currentItem.publish?.[platform] || "旧定位基线发布文案请打开原素材包查看。";
+    const packageCopy = publishPackageDraft?.platforms?.[platform];
+    const legacyCopy = currentItem.publish?.[platform] || (platform === "wechat" ? currentItem.publish?.weibo : "") || currentItem.platformCopy?.[platform];
+    byId("publish-text").value = packageCopy?.body || legacyCopy || "审核通过成片后，将在这里生成与最终版本绑定的发布文案。";
+    byId("publish-hashtags").value = (packageCopy?.hashtags || publishPackageDraft?.hashtags || []).join(" ");
+    byId("publish-text").readOnly = !publishPackageDraft;
+    byId("publish-hashtags").readOnly = !publishPackageDraft;
     if (save) saveState();
+  }
+
+  function selectPublishTitle(title) {
+    if (!publishPackageDraft) return;
+    byId("publish-title").value = title;
+    publishPackageDraft.selectedTitle = title;
+    $$('[data-publish-title]', byId("publish-title-options")).forEach(button => button.classList.toggle("is-active", button.dataset.publishTitle === title));
+  }
+
+  function publishRequestBody(mode) {
+    capturePublishDraft();
+    const body = {
+      expectedVersion: Number(currentVideoJob?.output?.version),
+      mode,
+      selectedTitle: byId("publish-title").value.trim(),
+      syncCovers: true,
+    };
+    if (mode === "save") {
+      body.hashtags = publishPackageDraft?.hashtags || [];
+      body.platforms = publishPackageDraft?.platforms || {};
+    }
+    return body;
+  }
+
+  async function updatePublishPackage(mode) {
+    if (!currentVideoJob?.id || currentVideoJob.status !== "approved") return toast("请先审核通过最终成片");
+    const button = mode === "save" ? byId("save-publish-package") : byId("regenerate-publish-package");
+    const idleText = button.textContent;
+    button.disabled = true;
+    button.textContent = mode === "save" ? "正在保存并同步封面…" : "正在重新生成…";
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/publish-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(publishRequestBody(mode)),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "发布素材包生成失败");
+      currentVideoJob = payload.job;
+      upsertAvailableVideoJob(currentVideoJob);
+      renderPublish();
+      toast(mode === "save" ? "发布素材包已保存，封面已同步" : "发布素材包已重新生成");
+    } catch (error) {
+      toast(`发布素材包失败：${error.message}`);
+    } finally {
+      button.disabled = false;
+      button.textContent = idleText;
+    }
+  }
+
+  function copyCurrentPublishCopy() {
+    const body = byId("publish-text").value.trim();
+    const topics = byId("publish-hashtags").value.trim();
+    copyText([body, topics].filter(Boolean).join("\n\n"), "发布文案和话题已复制");
   }
 
   function renderEvidence() {
@@ -2121,6 +2437,7 @@
     renderDemoPreview(job);
     upsertAvailableVideoJob(job);
     renderVideoJobPicker();
+    renderPublish();
     if (job.status === "error") setAnalyzeVideoDisabled(!(videoServiceOnline && selectedVideoFile));
   }
 
@@ -2464,7 +2781,7 @@
         <div class="asset-preview">${previewHtml}<span>${htmlEscape(sourceLabels[asset.sourceType] || asset.sourceType || "素材")}</span></div>
         <div class="asset-detail"><div class="asset-title"><div><strong>${htmlEscape(asset.title || asset.fileName || "补充素材")}</strong><small>${status === "approved" ? "已批准，下一次渲染会使用" : status === "rejected" ? "已拒绝，不会进入成片" : "待审核，尚不会进入成片"}</small></div>${sourceLink}</div>
           <p>${htmlEscape(asset.requestedAsset || asset.usagePurpose || asset.sourceLabel || "")}</p>
-          <div class="asset-placement"><label>成片开始秒<input data-media-start type="number" min="0" step="0.1" value="${htmlEscape(asset.placement?.start ?? "")}"></label><label>成片结束秒<input data-media-end type="number" min="0" step="0.1" value="${htmlEscape(asset.placement?.end ?? "")}"></label><label>画面方式<select data-media-mode><option value="broll" ${asset.placement?.mode === "broll" ? "selected" : ""}>全屏B-roll</option><option value="pip" ${asset.placement?.mode === "pip" ? "selected" : ""}>右上画中画</option><option value="comparison-left" ${asset.placement?.mode === "comparison-left" ? "selected" : ""}>前后对比左侧</option><option value="comparison-right" ${asset.placement?.mode === "comparison-right" ? "selected" : ""}>前后对比右侧</option></select></label></div>
+          <div class="asset-placement"><label>成片开始秒<input data-media-start type="number" min="0" step="0.1" value="${htmlEscape(asset.placement?.start ?? "")}"></label><label>成片结束秒<input data-media-end type="number" min="0" step="0.1" value="${htmlEscape(asset.placement?.end ?? "")}"></label><label>画面方式<select data-media-mode><option value="broll" ${asset.placement?.mode === "broll" ? "selected" : ""}>主证据画面</option><option value="pip" ${asset.placement?.mode === "pip" ? "selected" : ""}>右上画中画</option><option value="comparison-left" ${asset.placement?.mode === "comparison-left" ? "selected" : ""}>前后对比左侧</option><option value="comparison-right" ${asset.placement?.mode === "comparison-right" ? "selected" : ""}>前后对比右侧</option><option value="montage-left" ${asset.placement?.mode === "montage-left" ? "selected" : ""}>证据蒙太奇左</option><option value="montage-center" ${asset.placement?.mode === "montage-center" ? "selected" : ""}>证据蒙太奇中</option><option value="montage-right" ${asset.placement?.mode === "montage-right" ? "selected" : ""}>证据蒙太奇右</option><option value="ui-main" ${asset.placement?.mode === "ui-main" ? "selected" : ""}>界面演示主层</option><option value="proof-primary" ${asset.placement?.mode === "proof-primary" ? "selected" : ""}>全屏核心证据</option></select></label></div>
           ${externalFields}
           ${asset.paymentRequired ? `<label class="payment-confirm"><input data-payment-confirmed type="checkbox" ${asset.paymentConfirmed ? "checked" : ""}> 我已看到预计费用并确认本次付费调用</label>` : ""}
           <div class="asset-actions"><label class="btn btn-secondary file-replace">${preview ? "替换文件" : "附加片段"}<input data-asset-replacement type="file" accept="image/*,video/*"></label><button class="btn btn-secondary" data-reject-media>拒绝</button><button class="btn btn-primary" data-approve-media>${status === "approved" ? "更新并保持批准" : "确认并批准"}</button></div>
@@ -2635,6 +2952,17 @@
   byId("review-notes").addEventListener("input", event => { itemState().notes = event.target.value; saveState(); });
   byId("copy-review-summary").addEventListener("click", () => copyText(reviewSummary(), "审核意见已复制"));
   byId("export-review").addEventListener("click", exportReview);
+  byId("expert-library-refresh").addEventListener("click", refreshExpertKnowledgeLibrary);
+  byId("expert-library-search").addEventListener("input", renderExpertKnowledgeRecords);
+  byId("expert-library-domain").addEventListener("change", renderExpertKnowledgeRecords);
+  byId("expert-library-status").addEventListener("change", renderExpertKnowledgeRecords);
+  byId("expert-library-usage").addEventListener("change", renderExpertKnowledgeRecords);
+  byId("expert-domain-summary").addEventListener("click", event => {
+    const button = event.target.closest("[data-expert-domain]");
+    if (!button) return;
+    byId("expert-library-domain").value = button.dataset.expertDomain;
+    renderExpertKnowledgeRecords();
+  });
 
   // Script actions
   $$(".segment").forEach(button => button.addEventListener("click", () => setScriptMode(button.dataset.scriptMode)));
@@ -2760,7 +3088,13 @@
 
   // Publish
   $$(".platform-tab").forEach(button => button.addEventListener("click", () => setPlatform(button.dataset.platform)));
-  byId("copy-publish").addEventListener("click", () => copyText(byId("publish-text").value, "发布文案已复制"));
+  byId("copy-publish").addEventListener("click", copyCurrentPublishCopy);
+  byId("save-publish-package").addEventListener("click", () => updatePublishPackage("save"));
+  byId("regenerate-publish-package").addEventListener("click", () => updatePublishPackage("regenerate"));
+  byId("publish-title-options").addEventListener("click", event => {
+    const button = event.target.closest("[data-publish-title]");
+    if (button) selectPublishTitle(button.dataset.publishTitle);
+  });
 
   // Roadmap and library
   byId("library-search").addEventListener("input", renderLibrary);

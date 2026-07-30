@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "published-video-retro-douyin-obsidian-v1-sources.v1",
+  "status": "project_evidence_catalog",
+  "createdAt": "2026-07-30T00:00:00+08:00",
+  "productionEligible": false,
+  "usageBoundary": "project-local-approved-render-analysis",
+  "sources": [
+    {
+      "id": "douyin-obsidian-approved-master-v1",
+      "type": "approved-local-render",
+      "path": "videos/douyin-obsidian-old-favorite-proof-v1/renders/douyin-obsidian-old-favorite-proof-v1-approved-v2-3s-master.mp4",
+      "durationSeconds": 93,
+      "width": 1080,
+      "height": 1920,
+      "mediaSha256": "37caabf2ac20cb9bc08e385d2fa6286f15f2ff3b9c549defc73fddbbc9074e7e",
+      "reviewStatus": "user-approved-and-published",
+      "outcomeBoundary": "Production quality and user approval are known. Retention, click-through, completion, saves, comments, and follower conversion have not been supplied."
+    },
+    {
+      "id": "douyin-obsidian-composition-v1",
+      "type": "local-composition-source",
+      "path": "videos/douyin-obsidian-old-favorite-proof-v1/index.html",
+      "reviewStatus": "source-inspected",
+      "evidenceScope": ["scene timing", "caption tracks", "voice segments", "sound events", "brand sting placement"]
+    },
+    {
+      "id": "douyin-obsidian-user-review-v1",
+      "type": "human-review-lineage",
+      "reviewStatus": "accepted-production-revisions",
+      "evidenceScope": ["voice emotion", "remove stray utterance", "rewrite audience-identification copy", "sentence captions", "one-line captions", "voice starts at 0.01 seconds", "real Douyin page", "three-second post-opening brand sting", "real-person cover background", "oversized conflict copy may cover the face", "four independently laid out cover ratios", "versioned review filenames"]
+    },
+    {
+      "id": "douyin-obsidian-publish-package-v3",
+      "type": "local-release-package",
+      "path": "videos/douyin-obsidian-old-favorite-proof-v1/publish/v3/publish-package-v3.zip",
+      "reviewStatus": "generated-after-user-approved-cover-direction",
+      "mediaSha256": "37caabf2ac20cb9bc08e385d2fa6286f15f2ff3b9c549defc73fddbbc9074e7e",
+      "coverSource": {
+        "fileName": "new.mp4",
+        "mediaSha256": "f74471df81b33edc56ee75af64b5f9963af8ebe3554e6607530a51ba7bd80be5",
+        "sourceTimeSeconds": 16
+      },
+      "evidenceScope": ["9:16 cover", "3:4 cover", "16:9 cover", "4:3 cover", "title candidates", "platform copy", "hashtags", "ZIP archive", "autoPublish false"]
+    }
+  ]
+}

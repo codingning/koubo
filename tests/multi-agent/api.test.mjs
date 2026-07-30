@@ -158,6 +158,16 @@ async function apiFixture(t, overrides = {}) {
       namespace: "caption.private",
       apiKey: "must-not-survive",
     }],
+    listKnowledgeLibrary: async () => ({
+      schemaVersion: 1,
+      readOnly: true,
+      summary: { total: 2, trial: 1, inbox: 1, approved: 0, promoted: 0, defaultCallable: 0 },
+      catalogs: [{ id: "fixture", layer: "trial", recordCount: 1 }],
+      records: [
+        { id: "caption.pop.v1", title: "关键词弹入", status: "trial", domain: "caption", apiKey: "must-not-survive" },
+        { id: "cover.conflict.v1", title: "冲突封面", status: "inbox", domain: "cover" },
+      ],
+    }),
     memory: {
       transition(input) {
         transitions.push(input);
@@ -1069,6 +1079,17 @@ test("memory listing redacts secret-shaped fields", async t => {
   const response = await request("GET", "/api/multi-agent/memory");
 
   assert.equal(response.status, 200);
+  assert.equal(JSON.stringify(response.data).includes("must-not-survive"), false);
+});
+
+test("expert knowledge library is readable while multi-agent mutations remain separately governed", async t => {
+  const { request } = await apiFixture(t, { enabled: false });
+  const response = await request("GET", "/api/multi-agent/knowledge-library");
+
+  assert.equal(response.status, 200);
+  assert.equal(response.data.readOnly, true);
+  assert.equal(response.data.summary.total, 2);
+  assert.equal(response.data.records.length, 2);
   assert.equal(JSON.stringify(response.data).includes("must-not-survive"), false);
 });
 

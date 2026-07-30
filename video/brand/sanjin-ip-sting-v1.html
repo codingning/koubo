@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script></head>
+  <body>
+    <template>
+      <style>
+        @font-face { font-family:"Noto Sans SC"; src:url("assets/fonts/NotoSansSC-Regular.ttf"); font-weight:400; }
+        @font-face { font-family:"Noto Sans SC"; src:url("assets/fonts/NotoSansSC-Black.ttf"); font-weight:900; }
+        @font-face { font-family:"IBM Plex Mono"; src:url("assets/fonts/IBMPlexMono-Medium.ttf"); font-weight:700; }
+        #sanjin-ip-root { position:absolute; inset:0; width:1080px; height:1920px; overflow:hidden; color:#f2eee5; font-family:"Noto Sans SC"; }
+        .ip-panel { position:absolute; inset:0; overflow:hidden; background:#111827; }
+        .ip-glow { position:absolute; left:-180px; top:420px; width:920px; height:920px; border-radius:50%; background:radial-gradient(circle,rgba(36,87,245,.48) 0%,rgba(36,87,245,.12) 44%,rgba(36,87,245,0) 72%); }
+        .ip-grid { position:absolute; inset:0; opacity:.16; background-image:linear-gradient(rgba(242,238,229,.3) 1px,transparent 1px),linear-gradient(90deg,rgba(242,238,229,.3) 1px,transparent 1px); background-size:64px 64px; }
+        .ip-ghost { position:absolute; left:-42px; top:560px; font:900 246px/.82 "IBM Plex Mono"; letter-spacing:-.09em; color:rgba(242,238,229,.07); transform:rotate(-5deg); white-space:nowrap; }
+        .ip-scan { position:absolute; left:-100px; top:0; width:22px; height:1920px; background:#2457f5; box-shadow:0 0 54px rgba(36,87,245,.9); }
+        .ip-corners { position:absolute; inset:56px; border:2px solid rgba(242,238,229,.26); }
+        .ip-corners::before,.ip-corners::after { content:""; position:absolute; width:110px; height:10px; background:#2457f5; }
+        .ip-corners::before { left:-2px; top:-6px; }
+        .ip-corners::after { right:-2px; bottom:-6px; }
+        .ip-content { position:absolute; left:82px; right:82px; top:448px; height:760px; }
+        .ip-meta { display:flex; justify-content:space-between; align-items:center; font:700 19px/1.2 "IBM Plex Mono"; letter-spacing:.12em; color:#8aa6ff; }
+        .ip-rule { margin-top:26px; height:3px; background:linear-gradient(90deg,#2457f5 0 62%,rgba(242,238,229,.22) 62% 100%); transform-origin:left center; }
+        .ip-lockup { position:relative; margin-top:82px; height:350px; display:flex; align-items:center; }
+        .ip-mark { position:relative; width:210px; height:250px; flex:0 0 auto; }
+        .ip-bar { position:absolute; left:0; width:178px; height:28px; background:#2457f5; transform-origin:left center; }
+        .ip-bar:nth-child(1) { top:34px; }
+        .ip-bar:nth-child(2) { top:102px; width:210px; }
+        .ip-bar:nth-child(3) { top:170px; width:145px; }
+        .ip-dot { position:absolute; right:0; bottom:6px; width:42px; height:42px; background:#f2eee5; transform:rotate(45deg); }
+        .ip-name-wrap { margin-left:34px; overflow:hidden; }
+        .ip-name { font-size:190px; line-height:.92; font-weight:900; letter-spacing:-.075em; white-space:nowrap; }
+        .ip-ai { position:absolute; left:244px; top:262px; padding:15px 26px 18px; color:#f2eee5; background:#2457f5; border:3px solid #f2eee5; box-shadow:10px 10px 0 rgba(242,238,229,.18); font-size:54px; line-height:1; font-weight:900; letter-spacing:.08em; transform-origin:left center; }
+        .ip-tagline { position:absolute; left:0; right:0; top:548px; display:flex; align-items:flex-end; justify-content:space-between; }
+        .ip-tagline-main { font-size:54px; line-height:1.05; font-weight:900; letter-spacing:-.035em; }
+        .ip-tagline-main em { color:#8aa6ff; font-style:normal; }
+        .ip-tagline-side { text-align:right; font:700 18px/1.45 "IBM Plex Mono"; color:rgba(242,238,229,.62); letter-spacing:.08em; }
+        .ip-flash { position:absolute; inset:0; background:#f2eee5; opacity:0; }
+      </style>
+
+      <div data-hf-id="hf-sanjin-ip-root" id="sanjin-ip-root" data-start="0" data-composition-id="sanjin-ip-sting-v1" data-width="1080" data-height="1920" data-duration="1" data-layout-allow-overlap="">
+        <div data-hf-id="hf-ip-panel" class="ip-panel" id="ip-panel">
+          <div data-hf-id="hf-ip-glow" class="ip-glow" id="ip-glow"></div>
+          <div data-hf-id="hf-ip-grid" class="ip-grid"></div>
+          <div data-hf-id="hf-ip-ghost" class="ip-ghost" id="ip-ghost">SANJIN</div>
+          <div data-hf-id="hf-ip-scan" class="ip-scan" id="ip-scan"></div>
+          <div data-hf-id="hf-ip-corners" class="ip-corners"></div>
+          <div data-hf-id="hf-ip-content" class="ip-content" id="ip-content">
+            <div data-hf-id="hf-ip-meta" class="ip-meta" id="ip-meta"><span data-hf-id="hf-stms">SANJIN / AI BUILDER</span><span data-hf-id="hf-k1yw">EPISODE IDENTITY</span></div>
+            <div data-hf-id="hf-ip-rule" class="ip-rule" id="ip-rule"></div>
+            <div data-hf-id="hf-ip-lockup" class="ip-lockup" data-layout-allow-overlap="">
+              <div data-hf-id="hf-ip-mark" class="ip-mark" id="ip-mark"><span data-hf-id="hf-kqm2" class="ip-bar"></span><span data-hf-id="hf-fbry" class="ip-bar"></span><span data-hf-id="hf-fq2z" class="ip-bar"></span><span data-hf-id="hf-8aav" class="ip-dot" id="ip-dot"></span></div>
+              <div data-hf-id="hf-ip-name-wrap" class="ip-name-wrap"><div data-hf-id="hf-ip-name" class="ip-name" id="ip-name">三金</div></div>
+              <div data-hf-id="hf-ip-ai" class="ip-ai" id="ip-ai">AI 实战</div>
+            </div>
+            <div data-hf-id="hf-ip-tagline" class="ip-tagline" id="ip-tagline">
+              <div data-hf-id="hf-ip-tagline-main" class="ip-tagline-main">从<em data-hf-id="hf-x6v3">知道</em>到<em data-hf-id="hf-n64l">做到</em></div>
+              <div data-hf-id="hf-ip-tagline-side" class="ip-tagline-side">REAL ACTION<br data-hf-id="hf-x5px">REAL RESULT</div>
+            </div>
+          </div>
+        </div>
+        <div data-hf-id="hf-ip-flash" class="ip-flash" id="ip-flash"></div>
+      </div>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+        const tl = gsap.timeline({ paused:true });
+        tl.fromTo("#ip-panel", { x:1080 }, { x:0, duration:.16, ease:"expo.out" }, 0);
+        tl.fromTo("#ip-scan", { x:0, opacity:1 }, { x:1240, opacity:.8, duration:.27, ease:"power4.out" }, .01);
+        tl.fromTo("#ip-meta", { y:-30, opacity:0 }, { y:0, opacity:1, duration:.22, ease:"power3.out" }, .08);
+        tl.fromTo("#ip-rule", { scaleX:0 }, { scaleX:1, duration:.25, ease:"circ.out" }, .1);
+        tl.fromTo(".ip-bar", { scaleX:0 }, { scaleX:1, duration:.16, stagger:.045, ease:"expo.out" }, .11);
+        tl.fromTo("#ip-dot", { scale:0, rotation:135 }, { scale:1, rotation:45, duration:.22, ease:"back.out(1.7)" }, .2);
+        tl.fromTo("#ip-name", { x:-260, scaleX:1.12, opacity:0 }, { x:0, scaleX:1, opacity:1, duration:.26, ease:"power4.out" }, .14);
+        tl.fromTo("#ip-ai", { scale:1.45, rotation:-6, opacity:0 }, { scale:1, rotation:0, opacity:1, duration:.24, ease:"back.out(1.5)" }, .31);
+        tl.fromTo("#ip-tagline", { y:38, opacity:0 }, { y:0, opacity:1, duration:.2, ease:"power2.out" }, .4);
+        tl.fromTo("#ip-glow", { scale:.78, opacity:.15 }, { scale:1.08, opacity:1, duration:.48, ease:"sine.out" }, .08);
+        tl.fromTo("#ip-flash", { opacity:.76 }, { opacity:0, duration:.1, ease:"power3.out" }, .02);
+        tl.to("#ip-flash", { opacity:.34, duration:.045, ease:"power2.in" }, .69);
+        tl.to("#ip-flash", { opacity:0, duration:.055, ease:"power2.out" }, .735);
+        tl.to("#ip-content", { x:-90, opacity:0, duration:.18, ease:"power3.in" }, .76);
+        tl.to("#ip-panel", { x:-1080, duration:.24, ease:"expo.in" }, .76);
+        window.__timelines["sanjin-ip-sting-v1"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

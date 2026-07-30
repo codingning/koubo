@@ -12,6 +12,7 @@ process.env.KOUBO_MULTI_AGENT_DATA_ROOT = dataRoot;
 const serverModule = await import(`../video/server.mjs?hyperframes-master-audio-test=${Date.now()}`);
 const {
   closeServerResourcesForTests,
+  integratedHyperframesSafeAreaChecks,
   normalizeHyperframesMaster,
 } = serverModule;
 
@@ -67,6 +68,18 @@ function videoStreamHash(file) {
     "-",
   ]).stdout.trim();
 }
+
+test("integrated HyperFrames master uses composition validation instead of transparent-track metadata", () => {
+  assert.deepEqual(integratedHyperframesSafeAreaChecks({
+    packaging: { engine: "hyperframes", safeArea: true, validatedBy: "hyperframes-check" },
+    captionPackaging: { engine: "hyperframes", integrated: true, safeArea: true, validatedBy: "hyperframes-check" },
+    dimensions: { width: 1920, height: 1080 },
+  }), {
+    captionSafeArea: true,
+    dynamicCaptionTrack: true,
+    cardSafeArea: true,
+  });
+});
 
 test("HyperFrames master packaging normalizes audio without re-encoding a compatible video stream", async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "koubo-hyperframes-master-audio-"));
