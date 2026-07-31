@@ -158,7 +158,7 @@ test("Creator Vault adapter accepts only complete Content Strategist private tas
   });
   const result = await adapter.retrieve({
     agentId: "content-strategist",
-    query: "失败经验如何改善下一次输出",
+    query: "失败经验回写需要可比较的前后输出、后续真实输出和人工审核结果",
     includeTrial: true,
     topK: 3,
   });
@@ -166,4 +166,13 @@ test("Creator Vault adapter accepts only complete Content Strategist private tas
   assert.equal(result.principles[0].knowledgeKind, "content-task-contract");
   assert.equal(result.principles[0].timecodes.length, 0);
   assert.equal(result.principles[0].sourceRefs[0].sourceId, "content-training-evaluation.fixture");
+
+  const irrelevant = await adapter.retrieve({
+    agentId: "content-strategist",
+    query: "选择开源配音工具并检查许可证",
+    includeTrial: true,
+    topK: 3,
+  });
+  assert.deepEqual(irrelevant.principles, []);
+  assert.deepEqual(irrelevant.audit.records, []);
 });

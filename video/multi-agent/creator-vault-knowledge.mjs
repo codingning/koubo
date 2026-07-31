@@ -73,12 +73,20 @@ export function selectDiversePrinciples(principles, { query, topK }) {
     baseScore: contextualScore(principle, queryTokens),
     tokens: principleTokens(principle),
   }));
+  const privateScores = candidates
+    .filter(item => item.principle.namespace === "content.private")
+    .map(item => item.baseScore);
+  const privateThreshold = privateScores.length === 0
+    ? 0
+    : Math.max(40, Math.max(...privateScores) * 0.6);
+  const eligibleCandidates = candidates.filter(item => item.principle.namespace !== "content.private"
+    || item.baseScore >= privateThreshold);
   const sourceCount = new Map();
-  const distinctSources = new Set(candidates.map(item => sourceKey(item.principle))).size;
+  const distinctSources = new Set(eligibleCandidates.map(item => sourceKey(item.principle))).size;
   const sourceCap = Math.max(1, Math.ceil(topK / Math.max(1, Math.min(3, distinctSources))));
   const selected = [];
-  const remaining = new Set(candidates);
-  while (selected.length < Math.min(topK, candidates.length)) {
+  const remaining = new Set(eligibleCandidates);
+  while (selected.length < Math.min(topK, eligibleCandidates.length)) {
     let eligible = [...remaining].filter(item => (sourceCount.get(sourceKey(item.principle)) || 0) < sourceCap);
     if (eligible.length === 0) eligible = [...remaining];
     eligible.sort((left, right) => {
