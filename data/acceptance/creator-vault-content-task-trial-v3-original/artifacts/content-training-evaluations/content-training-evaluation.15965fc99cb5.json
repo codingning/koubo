@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.bd6e6ffd40ee",
+      "contentHash": "ce6017d47a1db476d584e9154d85704cf89eaa14728ee5e9411f3244e4bfe8e1",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.2d472f8778ca",
+      "contentHash": "fd803602eb574da8dd734738cf1c70959df0054cbf1112d11edb7743773c06ac",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[评估时点] 第一份把下一步拆成可观察问题、候选规则、调用记录、对照输出和用户审核，执行路径比第二份具体。",
+      "[评估时点] 第一份明确要求控制主要变量，能更好防止把同时发生的变化误归因于候选经验。",
+      "[评估时点] 第一份纳入禁止条件、负面样本、降级与撤销；第二份虽提到撤回和晋升条件，但操作细节较少。",
+      "[评估时点] 第二份的“series”建议早于证据：其自身同时承认尚无跨任务结果，也未证明已有足够案例支撑系列化。",
+      "[评估时点] 两份均正确区分现有证据与缺失证据，且都以真实成片的用户审核而非Agent自评作为结果标准。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 1,
+          "boundaryAwareness": 1,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "准确理解复用经验与保存复盘的区别，也保留了用户审核和禁止单次成功自动固化的边界。但验证问题没有充分落实显式调用、主要变量控制、负面样本和撤销流程；在跨任务证据尚缺时直接建议“series”，依据不足。",
+        "total": 6
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "紧扣“后续真实任务能否复用”这一方向，并将验证落实为候选规则、显式调用、变量控制、真实成片对照、用户审核及撤销条件。已知、缺失和不确定性区分清楚，未将相关性表述为因果。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "未提供实际失败案例、候选经验文本或后续调用结果，因此无法评价两份分析提出的验证方法在真实案例中的有效性。",
+      "未提供内容载体、篇幅或案例数量约束，无法最终判断单篇与系列哪种形式更合适。",
+      "请求未提供可核验的绝对时间；异议仅标记为评估时点。"
+    ],
+    "winnerVariant": "trial"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "c0eaa8329190a4ee15368afda1853617d5206592cafcc4bf366b5c97a3d26afe",
+  "evaluatedAt": "2026-07-31T09:03:01.281Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

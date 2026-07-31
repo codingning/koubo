@@ -1,0 +1,132 @@
+{
+  "analysis": {
+    "audience": "反复让AI返修视频但同类问题仍会再次出现的创作者",
+    "directionRestatement": "分析如何将一次口播视频返修失败转化为可追溯、可验证且不能因单次成功而自动固化的Agent复用经验。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.failure-version",
+          "provenance": "user_provided",
+          "relevance": "支持精确区分失败版本、修改项和最终结果，为追踪经验来源与结果差异提供基础。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.failure-review",
+          "provenance": "user_provided",
+          "relevance": "支持以用户对真实成片效果的审核和整体否决作为结果判断，而非使用Agent自评。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "一条真实经验在后续口播视频任务中被调用、接受用户审核并产生可比较结果的记录。",
+        "候选经验被保留、修订、撤回或晋升的明确判定条件。"
+      ]
+    },
+    "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "nextQuestions": [
+      "你是否有一条完整案例，能展示失败版本、修改项、最终结果以及该经验在下一次任务中的实际调用结果？",
+      "你准备以什么条件判定经验可复用、需要修订或必须撤回？",
+      "你希望内容重点放在单次案例验证，还是经验从候选到跨任务验证的治理流程？"
+    ],
+    "principleCitations": [],
+    "recommendation": "series",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "痛点明确：保存复盘文档并不等于Agent能够在下一次任务中正确复用经验。",
+      "项目保留版本、失败原因和返修记录。",
+      "Agent不得把一次成功自动晋升为长期规则。",
+      "真实输出可以绑定媒体和转录哈希。",
+      "失败版本、修改项和最终结果可以被精确区分。",
+      "用户只审核真实成片效果并可整体否决。"
+    ],
+    "testableQuestion": "在绑定媒体和转录哈希、保留失败版本与修改记录，并由用户审核真实成片的条件下，某条候选经验能否在后续同类任务中减少同类返修，同时避免把单次成功误当成长期规则？",
+    "uncertainties": [
+      "尚不清楚是否已有跨任务复用结果可供比较。",
+      "尚不清楚“同类问题”和“同类任务”的边界如何定义。",
+      "尚不清楚经验晋升前需要多少次独立用户审核。"
+    ],
+    "viewerBenefit": "理解如何区分失败、修改与真实结果，并判断某条返修经验是否确实能在后续任务中复用。",
+    "weaknesses": [
+      "尚未给出一条经验从失败记录转化为候选规则、再经过后续任务验证的完整实例。",
+      "“能复用”的判定标准尚未明确，例如需要跨多少次任务、哪些条件一致，以及失败后如何撤回。",
+      "单次返修案例、经验治理机制和跨任务验证可能超出单篇内容的清晰承载范围。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:02:37.186Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "ce6017d47a1db476d584e9154d85704cf89eaa14728ee5e9411f3244e4bfe8e1",
+  "input": {
+    "audienceContext": "反复让AI返修视频但同类问题仍会再次出现的创作者",
+    "constraints": [
+      "不得隐藏失败版本",
+      "不得把相关性说成因果",
+      "不得用Agent自评代替用户结果审核"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.failure-version",
+        "kind": "version-history",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "失败版本、修改项和最终结果可以被精确区分"
+      },
+      {
+        "id": "evidence.failure-review",
+        "kind": "human-review",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "用户只审核真实成片效果并可整体否决"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "项目保留版本、失败原因和返修记录",
+      "Agent不得把一次成功自动晋升为长期规则",
+      "真实输出可以绑定媒体和转录哈希"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

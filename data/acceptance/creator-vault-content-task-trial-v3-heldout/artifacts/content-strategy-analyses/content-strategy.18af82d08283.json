@@ -1,0 +1,131 @@
+{
+  "analysis": {
+    "audience": "已经有本地音效库、但自动剪辑的音效时机经常不自然的短视频创作者",
+    "directionRestatement": "你希望分析如何利用同一真实转场的提前、对齐和滞后样片，以及候选音效的ID、起点和响度，让Agent学习更自然的音效时机；同时不得自动批准音效、不得只增加标签，并且必须允许整组音效都不合格。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.sfx-timeline",
+          "provenance": "user_provided",
+          "relevance": "支持在同一真实转场上比较提前、对齐和滞后三种音效时机。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.sfx-candidates",
+          "provenance": "user_provided",
+          "relevance": "支持将候选音效ID、起点和响度与每个样片绑定，用于稳定复现和评估。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "提前、对齐和滞后三种样片的人工偏好、合格或排序标注。",
+        "人工拒绝原因的结构化记录，至少需要区分时机不当与候选音效本身不合格。",
+        "需要训练和评估的转场或动作类型范围。"
+      ]
+    },
+    "lockedDirection": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+    "nextQuestions": [
+      "提前、对齐和滞后三种样片中，是否已有人工选出的最佳项、排序或全部不合格标注？",
+      "你希望先覆盖一种明确的转场或动作类型，还是同时覆盖多种类型？",
+      "之后能否开始保存结构化拒绝原因，并区分时机、音色、响度和整组不合格？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已有同一真实转场上提前、对齐和滞后三种时间点样片，可直接进行时机对比。",
+      "每个样片可以绑定候选音效ID、起点和响度，具备稳定的训练与评估引用基础。",
+      "音效均有稳定ID和使用许可。",
+      "同一个转场可以召回多个候选。",
+      "约束明确包含不得自动批准音效，以及允许整组音效都不合格。"
+    ],
+    "testableQuestion": "在同一真实转场和同一候选集合下，加入人工时机偏好与“整组均不合格”标注后，Agent选择的音效起点是否比当前结果更接近人工判断，并减少动作之后才触发的情况？",
+    "uncertainties": [
+      "尚不清楚Agent当前错误来自训练目标、候选排序还是起点预测。",
+      "尚不清楚不同转场类型是否共享同一套时机标准。"
+    ],
+    "viewerBenefit": "观众能理解如何把音效时机从单纯检索问题转化为可比较、可拒绝的训练与评估问题。",
+    "weaknesses": [
+      "当前没有保存人工拒绝原因，难以区分因时机、音色、响度或整体不匹配而拒绝。",
+      "尚未提供人工对提前、对齐和滞后样片的偏好或合格标注，因此现有样片能支持比较，但不能单独确定正确时机。",
+      "“正确时机”可能随动作类型和音效类型变化，目前尚未明确目标是否针对单一转场类型。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:10:29.823Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "fb8dda68b3c021b712eb6b4532a8addb25acd32784be49252eda6db1d06ae521",
+  "input": {
+    "audienceContext": "已经有本地音效库、但自动剪辑的音效时机经常不自然的短视频创作者",
+    "constraints": [
+      "不得自动批准音效",
+      "不得只增加标签",
+      "必须允许整组音效都不合格"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.sfx-timeline",
+        "kind": "timeline-samples",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "已有同一真实转场上提前、对齐和滞后三种时间点样片"
+      },
+      {
+        "id": "heldout.evidence.sfx-candidates",
+        "kind": "candidate-set",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "每个样片可以绑定候选音效ID、起点和响度"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "音效均有稳定ID和使用许可",
+      "同一个转场可以召回多个候选",
+      "当前没有保存人工拒绝原因"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

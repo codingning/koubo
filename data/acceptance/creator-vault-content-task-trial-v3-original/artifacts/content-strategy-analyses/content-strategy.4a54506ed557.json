@@ -1,0 +1,129 @@
+{
+  "analysis": {
+    "audience": "对AI视频工具感兴趣，但已经看腻功能列表和夸张宣传的普通观众",
+    "directionRestatement": "你希望围绕自己的AI口播工作台，用真实结果和清晰边界证明它解决了口播制作问题，而不是罗列功能或夸大为一键自主剪辑任意视频。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.workbench-before-after",
+          "provenance": "user_provided",
+          "relevance": "同一条口播可以展示原片、样片和返修结果，支持用真实前后差异而非功能列表呈现效果。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.workbench-boundary",
+          "provenance": "user_provided",
+          "relevance": "工作台仍需要用户提供方向、证据和最终审核，支持准确说明人工参与和产品能力边界。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "需要明确本次最想证明的一个核心问题及其具体表现。",
+        "需要明确观众据以判断改进有效的可观察标准，例如错误是否被修正、表达是否更连贯或返修是否更可控。"
+      ]
+    },
+    "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+    "nextQuestions": [
+      "这条内容最优先要证明工作台解决了哪一个具体问题？",
+      "你有哪些可直接对比的改动记录或审核标准，能够说明返修结果比原片更好？",
+      "你希望观众看完后形成的首要判断是什么：效果更好、返修更可控，还是制作流程更清晰？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已有原片、样片、返修版本和最终输出，可形成完整且可核对的结果链路。",
+      "工作台可以完成转录、语义剪辑、字幕动效和人工审核，具备展示实际工作过程与结果的基础。",
+      "明确说明工具仍不能一键剪好任意视频，有助于避免夸张宣传并建立可信边界。"
+    ],
+    "testableQuestion": "不先展示功能名称时，观众能否仅依据原片、样片、返修结果和最终输出，准确说出工作台解决的核心问题，并识别用户仍需提供方向、证据和最终审核？",
+    "uncertainties": [
+      "核心问题的优先级尚未确定。",
+      "前后差异的评价标准尚未确定。",
+      "尚不清楚现有素材能否清楚呈现每次返修的原因与结果。"
+    ],
+    "viewerBenefit": "观众能通过同一条口播从原片到最终输出的真实差异，判断工作台解决了什么问题、效果如何以及仍需哪些人工参与。",
+    "weaknesses": [
+      "尚未明确这条内容要证明解决的首要问题，例如修改效率、表达连贯性、字幕质量或审核可控性。",
+      "目前没有给出判断“问题已解决”的具体标准，前后差异可能只能证明结果发生变化，不能自动证明变化具有价值。",
+      "转录、语义剪辑、字幕动效和人工审核涉及多个价值点，单条内容若全部并列呈现，仍可能退化成功能介绍。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:04:14.306Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "ec5f30aaf09f6274745b2aa5fa28461b672d250c13ebe3dc67a021be680e2ded",
+  "input": {
+    "audienceContext": "对AI视频工具感兴趣，但已经看腻功能列表和夸张宣传的普通观众",
+    "constraints": [
+      "不得只罗列功能",
+      "不得宣称一键自主剪辑任意视频",
+      "必须让观众看到真实前后差异"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.workbench-before-after",
+        "kind": "media-comparison",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "同一条口播可以展示原片、样片和返修结果"
+      },
+      {
+        "id": "evidence.workbench-boundary",
+        "kind": "product-boundary",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "工作台仍需要用户提供方向、证据和最终审核"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "工作台可以完成转录、语义剪辑、字幕动效和人工审核",
+      "已有原片、样片、返修版本和最终输出",
+      "工具仍不能一键剪好任意视频"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

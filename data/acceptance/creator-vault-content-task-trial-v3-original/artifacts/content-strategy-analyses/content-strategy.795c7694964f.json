@@ -1,0 +1,131 @@
+{
+  "analysis": {
+    "audience": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+    "directionRestatement": "你要分析的不是如何继续扩充素材总库，而是为什么素材已经具备稳定ID、哈希、授权和项目冻结后，视频Agent仍无法在具体时间线中选对素材，以及现阶段应优先补齐哪一层能力。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.asset-vault",
+          "provenance": "user_provided",
+          "relevance": "支持Creator Vault已经具备资产ID、哈希、授权和项目冻结，说明当前问题不能简单归因于素材资产缺少基础治理。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.asset-agent-gap",
+          "provenance": "user_provided",
+          "relevance": "支持Sound Agent尚未接入Vault语义检索和真实片段反馈，直接指向Agent无法稳定选材的运行链路缺口。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "trial中每个真实片段的候选素材、Agent选择、人工最终选择及效果反馈记录",
+        "“选对素材”的具体评价标准与可接受阈值",
+        "语义检索接入和真实片段反馈两项能力分别对选择结果造成何种影响的对照结果"
+      ]
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "nextQuestions": [
+      "你准备使用什么指标定义Agent“选对素材”，以及可接受阈值是多少？",
+      "当前少量trial中，是否保存了Agent候选、最终选择、人工替换和真实片段效果反馈？",
+      "你希望优先验证语义检索接入，还是检索后基于真实片段效果形成反馈闭环？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "问题直接命中常见误区：不得把素材数量当成Agent能力。",
+      "现有证据明确区分了资产库基础设施与Agent运行能力之间的缺口。",
+      "素材总库与项目时间线是两个系统，因此方向具备清晰的系统边界。",
+      "素材拥有稳定ID和授权证据不等于Agent知道何时使用，这为优先级分析提供了明确依据。"
+    ],
+    "testableQuestion": "在保持同一批真实片段和候选素材不变时，接入Vault语义检索并记录真实片段反馈，是否能降低人工替换率并提高按既定标准判定的素材选择正确率？",
+    "uncertainties": [
+      "语义检索缺失与真实片段反馈缺失各自对结果不稳定的影响比例未知。",
+      "当前trial规模和片段类型覆盖范围未知。",
+      "视频Agent与Sound Agent在当前系统中的职责边界尚未说明。"
+    ],
+    "viewerBenefit": "帮助创作者区分“素材资产已治理”与“Agent会在具体片段中正确调用素材”，并确定下一步验证重点。",
+    "weaknesses": [
+      "当前只有少量音效进入trial，尚不足以判断错误主要来自语义检索、时间线情境理解、候选排序还是反馈闭环。",
+      "尚未定义“选对素材”的可测量标准，例如匹配准确率、人工替换率或真实片段效果。",
+      "在不得跳过真实片段效果验证的约束下，现有信息还不能支持稳定的优先级结论。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:01:20.089Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "bd0c27ad081e1b19f974f704d3d86c58b3fddbd894f6f71e63324c4e59d861aa",
+  "input": {
+    "audienceContext": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+    "constraints": [
+      "不得把素材数量当成Agent能力",
+      "不得自动批准素材",
+      "不得跳过真实片段效果验证"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.asset-vault",
+        "kind": "vault-state",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "Creator Vault已经支持资产ID、哈希、授权和项目冻结"
+      },
+      {
+        "id": "evidence.asset-agent-gap",
+        "kind": "runtime-gap",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "Sound Agent尚未接入Vault语义检索和真实片段反馈"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "素材总库与项目时间线是两个系统",
+      "素材拥有稳定ID和授权证据不等于Agent知道何时使用",
+      "当前只有少量音效进入trial"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

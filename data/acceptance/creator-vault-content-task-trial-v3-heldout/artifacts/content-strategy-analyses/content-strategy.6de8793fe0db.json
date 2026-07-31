@@ -1,0 +1,247 @@
+{
+  "analysis": {
+    "audience": "反复调整字幕动效、但同一种规则在不同口播中表现不稳定的创作者",
+    "directionRestatement": "你要分析的不是如何永久禁用关键词放大，而是如何利用第二条真实样片的失败、可追溯的规则调用记录和用户否决结果，建立能在后续相似任务中被正确调用、验证及撤销的Agent经验。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.caption-versions",
+          "provenance": "user_provided",
+          "relevance": "支持比较第二条视频调用旧规则前后的真实字幕输出。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.caption-rejection",
+          "provenance": "user_provided",
+          "relevance": "支持确认第二条真实样片被用户否决，且具体问题是关键词放大过密并抢夺注意力。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "第一条视频中旧规则有效的对应样片及人工审核结果，用于完整保留成功样本并建立可比较基线。",
+        "将失败经验改写为适用条件、禁止条件或停止条件后的明确版本记录。",
+        "修改后的经验在后续相似任务中的调用记录、真实输出及用户样片审核结果。",
+        "无效或负面样本，用于判断修改后的经验何时应降级或撤销。"
+      ]
+    },
+    "lockedDirection": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+    "nextQuestions": [
+      "第一条视频中，什么人工审核结果证明关键词放大字幕当时有效？",
+      "你准备把“过密并抢夺注意力”转写成哪些可观察的适用条件、禁止条件或停止条件？",
+      "是否已有或计划使用一个后续相似口播样片，对修改前后输出进行用户审核？"
+    ],
+    "principleCitations": [
+      {
+        "applicabilityCheck": "当前方向属于Agent训练和失败经验回写，且已有失败输出、调用记录与人工否决，符合其适用条件。",
+        "appliedJudgment": "将当前状态判定为需要补充后续调用、真实输出和人工审核证据，而不是仅凭规则可追溯和一次失败记录进入脚本阶段。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "b745791f78934e19fc396a28aeb941586ef538f7d763bf3e67324ec52dac5779",
+        "counterexampleCheck": "不存在为了验证而制造发布风险的要求；后续验证可以在样片审核阶段完成。安全、隐私和合规规则的预防性例外与本字幕动效问题无关。",
+        "knowledgeKind": "content-task-contract",
+        "namespace": "content.private",
+        "principleId": "content-task.experience-reuse-needs-output-comparison.v1",
+        "relevance": "该候选原则直接区分了“经验被保存”和“经验被实际学会”，适用于本方向对Agent经验复用的判断。",
+        "sourceRefs": [
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "71d6ac08f4ca06693d77097cc0af3a028bf633f5e01079606467f0c6542aa5ab",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.e26658426bae.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.e26658426bae"
+          },
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "2611e38d274c3cf0327b074c08d6e3b0ca5ade8f9a275fb1a909cd96b74b92b3",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.eeec5b0675af.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.eeec5b0675af"
+          }
+        ],
+        "sourceVideoId": "",
+        "timecodes": []
+      },
+      {
+        "applicabilityCheck": "当前已有旧规则调用前后版本和明确失败结果，符合版本复盘与Agent评测记录场景；来源时段为06:04–07:08及07:50–08:40。",
+        "appliedJudgment": "将该方向收窄为一次可核验的版本复盘，并把修改后结果列为缺失证据，避免只讲失败或只展示成功结论。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "5309796372ebd790b28e3c6c1321047a838ae7690c69f5c832a5c7059acc047e",
+        "counterexampleCheck": "其反例指出无真实样本和结果时不能包装成已验证方法；当前已有真实失败样本，但尚无修改后的验证结果，因此该反例限制了现阶段结论强度。",
+        "knowledgeKind": "content-principle",
+        "namespace": "shared.content-principles",
+        "principleId": "content-principle.version-failures-and-results.v1",
+        "relevance": "该候选原则支持把原判断、实际修改、结果和淘汰理由作为同一案例的必要证据链。",
+        "sourceRefs": [],
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "07:08",
+            "endSeconds": 428,
+            "startLabel": "06:04",
+            "startSeconds": 364
+          },
+          {
+            "endLabel": "08:40",
+            "endSeconds": 520,
+            "startLabel": "07:50",
+            "startSeconds": 470
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已有旧规则调用前后的真实字幕样片，可呈现同一规则在第二条视频中的实际影响。",
+      "已有明确人工否决结论及原因：关键词放大过密并抢夺注意力。",
+      "旧规则的触发记录可以追溯，具备检查Agent是否调用规则的基础。",
+      "两条视频的话题和语速不同，为分析规则适用条件提供了具体差异。",
+      "约束明确：保留成功与失败样本、不因一次否决全面禁用关键词强调、不用Agent自评替代用户审核。"
+    ],
+    "testableQuestion": "在保留关键词强调能力的前提下，加入明确适用条件和停止条件后，Agent能否在后续可比较口播任务中减少关键词放大过密与注意力争夺，并获得用户样片审核通过？",
+    "uncertainties": [
+      "尚不清楚第一条视频的成功是否有可引用的样片和人工审核依据。",
+      "尚不清楚话题、语速或其他未提供变量中，哪些因素触发了规则失效。",
+      "尚未获得修改后经验在后续任务中的真实调用与人工审核结果。"
+    ],
+    "viewerBenefit": "学会把一次字幕规则迁移失败转化为可验证、可限制适用范围且可撤销的Agent经验，而不是形成新的僵化规则。",
+    "weaknesses": [
+      "现有证据能够证明旧规则在第二条真实样片中失败，但尚不能证明修改后的经验已在后续可比较任务中改善输出。",
+      "两条视频的话题和语速同时不同，若不区分关键变量，容易把失败原因过度归因于单一因素。",
+      "若只展示经验被记录或触发，而没有后续输出和人工审核对照，内容无法回答Agent是否真正会用。",
+      "当前案例适合聚焦一次规则迁移失败；若同时扩展到通用Agent训练方法，单条内容可能范围过大。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:14:35.996Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "deafa7a517d5564dd43e05a629bb26af71949c3fdc9b31fa9a8b58783758549f",
+  "input": {
+    "audienceContext": "反复调整字幕动效、但同一种规则在不同口播中表现不稳定的创作者",
+    "constraints": [
+      "不得隐藏旧规则的成功和失败样本",
+      "不得因一次否决永久禁用所有关键词强调",
+      "不得用Agent自评代替用户样片审核"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.caption-versions",
+        "kind": "version-comparison",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "保留了第二条视频调用旧规则前后的字幕样片"
+      },
+      {
+        "id": "heldout.evidence.caption-rejection",
+        "kind": "human-review",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "用户否决原因为关键词放大过密并抢夺注意力"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "两条视频的话题和语速不同",
+      "旧规则的触发记录可以追溯",
+      "第二条真实样片已被用户否决"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "candidateLimit": 20,
+    "candidatePoolSize": 19,
+    "includeTrial": true,
+    "mode": "trial-opt-in-contextual-diversity-v2",
+    "query": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验\n反复调整字幕动效、但同一种规则在不同口播中表现不稳定的创作者\n两条视频的话题和语速不同\n旧规则的触发记录可以追溯\n第二条真实样片已被用户否决\n保留了第二条视频调用旧规则前后的字幕样片\n用户否决原因为关键词放大过密并抢夺注意力\n不得隐藏旧规则的成功和失败样本\n不得因一次否决永久禁用所有关键词强调\n不得用Agent自评代替用户样片审核",
+    "records": [
+      {
+        "contentHash": "b9bd95c0fec2f192c12232172f8fef88fe0d645f0a7c67be24ac2cc7e725b194",
+        "contextualScore": 108,
+        "id": "content-task.experience-reuse-needs-output-comparison.v1",
+        "namespace": "content.private",
+        "rank": 1,
+        "retrievalRank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "4d4b516ce32ca3950924f7da8fcf1342d2ba701f81e04f26be8f6c1e46270498",
+        "contextualScore": 17,
+        "id": "content-principle.version-failures-and-results.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "retrievalRank": 3,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f029b7f6ee3e8be972dd155dbb6631c9fc71e263dd053466d8e4ae6f699de7a6",
+        "contextualScore": 13,
+        "id": "content-principle.generic-copy-is-fragile.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "retrievalRank": 5,
+        "status": "trial"
+      },
+      {
+        "contentHash": "1061d17d8249b42840f85b9ca54189a1af037094fa3394da151a8507ba96f13e",
+        "contextualScore": 11,
+        "id": "content-principle.asset-survives-tomorrow.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "retrievalRank": 15,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f8427d87fde6e6f1afe981c6e9a308a6ece0e8c91306ecc56473a4c139198501",
+        "contextualScore": 10,
+        "id": "content-principle.real-use-directs-next-version.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "retrievalRank": 6,
+        "status": "trial"
+      }
+    ],
+    "selectionPolicy": "contextual-diversity-v2",
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-task.experience-reuse-needs-output-comparison.v1",
+    "content-principle.version-failures-and-results.v1",
+    "content-principle.generic-copy-is-fragile.v1",
+    "content-principle.asset-survives-tomorrow.v1",
+    "content-principle.real-use-directs-next-version.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

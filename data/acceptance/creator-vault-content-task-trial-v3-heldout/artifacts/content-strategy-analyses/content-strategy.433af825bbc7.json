@@ -1,0 +1,131 @@
+{
+  "analysis": {
+    "audience": "希望自动选择BGM但不愿牺牲口播清晰度和内容气质的个人创作者",
+    "directionRestatement": "分析情绪标签无法单独保证混音效果的原因，并明确应记录哪些听感反馈，帮助Agent区分人声清晰度、内容气质与节奏适配问题。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.bgm-mixes",
+          "provenance": "user_provided",
+          "relevance": "已有同一口播搭配不同BGM、响度和ducking参数的真实混音，可用于比较选曲与混音变量对听感的影响。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.bgm-review",
+          "provenance": "user_provided",
+          "relevance": "用户可以标记听不清、情绪冲突、节奏不合或整组不接受，为建立分类型反馈提供了人工审核依据。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "各候选混音中哪些变量保持不变、哪些变量被单独改变的对照记录。",
+        "反馈是否需要关联到具体口播段落、时间点以及问题严重程度。",
+        "同类反馈在不同口播内容或不同审核轮次中是否稳定复现。"
+      ]
+    },
+    "lockedDirection": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+    "nextQuestions": [
+      "你目前能否把反馈定位到具体时间点，还是只能评价整段混音？",
+      "不同候选混音是否保存了BGM ID、响度和ducking参数，便于逐项对照？",
+      "你希望反馈优先改善人声清晰度、内容气质匹配，还是两者采用同等否决权？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "问题具体，直接对应自动选曲中常见的清晰度与气质冲突。",
+      "BGM有稳定ID、情绪标签和授权证据，便于把反馈关联到具体音乐。",
+      "同一段口播可以输出多个候选混音，具备进行受控听感比较的条件。",
+      "最终选择仍由用户决定，适合以人工听感审核作为反馈依据。"
+    ],
+    "testableQuestion": "在同一段口播中每次只改变BGM、响度或ducking中的一个变量，并记录具体时间点及“听不清、情绪冲突、节奏不合、整组不接受”反馈，能否稳定识别导致候选混音被拒绝的主要因素？",
+    "uncertainties": [
+      "尚不清楚现有候选混音是否采用单变量对照。",
+      "尚不清楚反馈记录的粒度和严重程度标准。",
+      "尚不清楚同一问题是否已在多段口播中重复出现。"
+    ],
+    "viewerBenefit": "学会记录可复用且能区分问题来源的反馈，而不是只给出笼统的喜欢或不喜欢。",
+    "weaknesses": [
+      "情绪标签、BGM响度和ducking参数可能同时影响结果；若同时改变所有变量，就无法判断某个标签是否有效。",
+      "“整组不接受”能够表达结果，但单独使用时难以区分是听不清、情绪冲突还是节奏不合。",
+      "授权合格只能说明可用性，不能证明音乐与口播的实际效果合格。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:12:29.667Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "689f489b2bddee4e962339c33a698a0c81ea63f2665b9cb5686f13f4e7be7fa9",
+  "input": {
+    "audienceContext": "希望自动选择BGM但不愿牺牲口播清晰度和内容气质的个人创作者",
+    "constraints": [
+      "不得把授权合格等同于效果合格",
+      "不得同时改变所有变量后宣称某个标签有效",
+      "不得用模型自评替代听感审核"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.bgm-mixes",
+        "kind": "audio-comparison",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "已有同一口播搭配不同BGM、响度和ducking参数的真实混音"
+      },
+      {
+        "id": "heldout.evidence.bgm-review",
+        "kind": "human-review",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "用户可以标记听不清、情绪冲突、节奏不合或整组不接受"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "BGM有稳定ID、情绪标签和授权证据",
+      "同一段口播可以输出多个候选混音",
+      "最终选择仍由用户决定"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

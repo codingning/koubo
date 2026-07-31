@@ -1,0 +1,133 @@
+{
+  "analysis": {
+    "audience": "想提高配音效率但担心硬件、权限、声音授权和维护成本的个人创作者",
+    "directionRestatement": "分析如何在工具已于隔离环境运行、正式流程已有可用配音方案的前提下，依据真实增量、硬件与权限成本、声音授权、维护和退出成本，决定是否将该本地配音工具加入视频工作流。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.voice-runtime",
+          "provenance": "user_provided",
+          "relevance": "记录了安装时间、显存占用、生成时长和失败日志，可支持评估部署成本、运行效率、资源需求和稳定性。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.voice-rights",
+          "provenance": "user_provided",
+          "relevance": "模型和声线授权仍有待确认项目，可用于界定当前不能进入生产的权利风险与待核实范围。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "新工具与当前正式流程在同一批文本、同一质量标准下的生成时长、人工修正时间和成品可用率对比",
+        "模型与声线授权待确认项目的最终结论、商业使用范围和输出内容限制",
+        "所需较高权限的具体权限项、必要性、隔离措施以及撤销权限后的可用性",
+        "模型更新、依赖升级、故障恢复、项目迁移和停用退出所需的长期成本"
+      ]
+    },
+    "lockedDirection": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+    "nextQuestions": [
+      "在同一批代表性文本上，新工具与当前可用配音方案的生成时长、人工修正时间和最终可用率分别是多少？",
+      "模型和声线授权仍待确认的具体项目是什么，哪些项目会阻止商业发布或生产使用？",
+      "工具具体要求哪些较高权限，这些权限能否通过降权、容器化或离线隔离消除？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "工具已在隔离环境运行",
+      "当前正式流程已有可用配音方案",
+      "记录了安装时间、显存占用、生成时长和失败日志",
+      "方向包含效果、资源、权限、授权、维护与退出成本之间的明确决策冲突"
+    ],
+    "testableQuestion": "在授权明确且权限风险可接受的前提下，新工具相对当前正式流程带来的质量或效率增量，是否足以覆盖额外模型文件、显卡资源、维护和退出成本？",
+    "uncertainties": [
+      "效果惊艳是否能在代表性任务和持续使用中稳定复现",
+      "真实效率增量是否高于现有可用配音方案",
+      "授权、权限及长期维护风险能否降至可接受范围"
+    ],
+    "viewerBenefit": "获得一套可与现有方案比较的采用判断方法，避免仅因效果惊艳而承担不明确的授权、权限和维护风险。",
+    "weaknesses": [
+      "模型和声线授权仍有待确认项目，因此按约束暂不能得出进入生产的结论",
+      "尚未提供新工具与当前正式流程在相同任务下的质量、耗时和人工修正成本对比",
+      "较高权限的具体范围、必要性和可降低程度尚不明确",
+      "新工具需要额外模型文件和显卡资源，但长期维护频率、升级成本与退出路径尚未量化"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:08:18.471Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "536dd1bbd1828b9b48b91ed2600b06523f46a5ea346537db689c9fd3ff5d10e4",
+  "input": {
+    "audienceContext": "想提高配音效率但担心硬件、权限、声音授权和维护成本的个人创作者",
+    "constraints": [
+      "授权不明确时不得进入生产",
+      "不得因效果惊艳忽略维护和退出成本",
+      "必须与现有方案比较真实增量"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.voice-runtime",
+        "kind": "runtime-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "记录了安装时间、显存占用、生成时长和失败日志"
+      },
+      {
+        "id": "heldout.evidence.voice-rights",
+        "kind": "rights-audit",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "模型和声线授权仍有待确认项目"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "工具已在隔离环境运行",
+      "当前正式流程已有可用配音方案",
+      "新工具需要额外模型文件和显卡资源"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

@@ -1,0 +1,33 @@
+{
+  "caseId": "heldout.subtitle-aligner-audit",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.b42f3e93b967",
+  "trialAnalysisArtifactId": "content-strategy.68ac1dd0691b",
+  "evaluationArtifactId": "content-training-evaluation.d0b23e9a224d",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "两份分析都没有把安装或生成字幕误判为准确率合格，也没有虚构维护状态。",
+    "第一份更强调扩充常见边界条件、失败恢复成本和环境兼容性，覆盖面略广。",
+    "第二份更明确提出替换、暂缓、放弃阈值以及固定版本稳定性记录，决策操作性略强。",
+    "两份均保留回退到人工流程的要求，没有越权批准进入正式生产。"
+  ],
+  "uncertainties": [
+    "未提供四个维度更细的分档锚点，因此两份在满分区间内的细微差异主要通过文字说明表达。",
+    "三段样本的实际量化结果未提供，无法评价候选提出的阈值最终是否足够严格。",
+    "未提供绝对时钟，异议使用相对时间戳标注。"
+  ]
+}

@@ -1,0 +1,220 @@
+{
+  "analysis": {
+    "audience": "想提高配音效率但担心硬件、权限、声音授权和维护成本的个人创作者",
+    "directionRestatement": "分析这个开源本地配音工具在效果、硬件、权限、声音授权、维护与退出成本上的取舍，并判断它相对现有配音方案是否具有足够的真实增量，值得进入视频工作流。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.voice-runtime",
+          "provenance": "user_provided",
+          "relevance": "支持评估安装成本、显存占用、生成效率和运行失败情况，并可作为与现有方案比较的基础。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.voice-rights",
+          "provenance": "user_provided",
+          "relevance": "确认模型和声线授权仍有待确认项目，直接关联不得在授权不明确时进入生产的约束。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "模型、声线及相关依赖的明确许可证结论和允许使用边界。",
+        "使用同一真实配音任务与现有方案比较后的质量、总耗时、失败率和人工修正成本结论。",
+        "高权限需求的具体范围、必要性、可撤销性及最小权限替代方案。",
+        "更新维护、模型文件管理、卸载回退和项目迁移成本。",
+        "预先定义的加入、暂缓或放弃阈值，以及试用结果对阈值的触发情况。"
+      ]
+    },
+    "lockedDirection": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+    "nextQuestions": [
+      "模型、声线和依赖分别采用什么许可证，商业视频、声音生成及分发是否被明确允许？",
+      "与现有方案执行同一真实任务时，新工具在质量、总耗时、失败率和人工修正成本上分别改善了多少？",
+      "你能接受的显存占用、高权限范围、维护时间和退出成本上限分别是什么？"
+    ],
+    "principleCitations": [
+      {
+        "applicabilityCheck": "工具已在隔离环境运行，已有运行记录，且用户明确要求判断是否加入正式视频工作流，符合开源Skill审计、AI工具选型和隔离试用的适用条件。",
+        "appliedJudgment": "将分析门槛设为：先解决授权和权限的一票否决项，再与现有方案比较真实增量，并用预设阈值形成加入、暂缓或放弃结论；因此当前应暂缓进入脚本阶段。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "b7f3c72520e1ba702f0c5acaef12d691fd806b76f00b5712226ef2a84f53b6b8",
+        "counterexampleCheck": "这不是只做概念介绍，而是要求作出是否加入工作流的决策，因此需要决策阈值；同时授权仍有待确认项目，符合高风险条件可直接暂停生产采用、不必为比较完整而继续扩大权限试用的限制。",
+        "knowledgeKind": "content-task-contract",
+        "namespace": "content.private",
+        "principleId": "content-task.tool-audit-needs-decision-thresholds.v1",
+        "relevance": "该方向属于开源工具审计和真实工作流选型，不能以安装成功或效果展示代替采用决策。",
+        "sourceRefs": [
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "fa79234b98175e3a04cc1a21fc2335f3c9471f1e37858403d54973baac4378ff",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.ad2eb2f626f4.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.ad2eb2f626f4"
+          },
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "7054f22699026b7a42ac7f7142eec52d658c8ef285d4ab988b8170ca1605195b",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.7edc9bf4b987.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.7edc9bf4b987"
+          }
+        ],
+        "sourceVideoId": "",
+        "timecodes": []
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "工具已在隔离环境运行。",
+      "记录了安装时间、显存占用、生成时长和失败日志。",
+      "当前正式流程已有可用配音方案，因此可以比较新工具的真实增量。",
+      "已明确授权不明确时不得进入生产，并要求考虑维护和退出成本。"
+    ],
+    "testableQuestion": "在授权明确且权限可接受的前提下，新工具在同一真实任务中的质量、总耗时或人工修正成本，是否相对现有可用配音方案达到预设增量阈值，并且其显卡、维护和退出成本仍在可接受范围内？",
+    "uncertainties": [
+      "效果“惊艳”尚未转化为相对现有方案的可量化工作流收益。",
+      "高权限的具体内容及其是否能够缩减尚不明确。",
+      "授权待确认项目是否构成永久阻断或仅需补充核验尚不明确。"
+    ],
+    "viewerBenefit": "获得一套基于真实试用和现有方案对比的加入、暂缓或放弃决策方法，避免仅因效果惊艳而承担不必要风险。",
+    "weaknesses": [
+      "模型和声线授权仍有待确认项目，当前不满足进入生产的约束。",
+      "新工具需要额外模型文件和显卡资源，必须证明其收益足以覆盖新增资源与维护成本。",
+      "尚未提供新工具与现有方案在同一真实任务下的质量、耗时、稳定性和人工修正成本对比结论。",
+      "尚未形成可执行的加入、暂缓或放弃阈值。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:08:05.416Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "22e3c13f5b5d69a290c2a35e862cc885f4051131e47abc4b01e92df4779a014d",
+  "input": {
+    "audienceContext": "想提高配音效率但担心硬件、权限、声音授权和维护成本的个人创作者",
+    "constraints": [
+      "授权不明确时不得进入生产",
+      "不得因效果惊艳忽略维护和退出成本",
+      "必须与现有方案比较真实增量"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.voice-runtime",
+        "kind": "runtime-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "记录了安装时间、显存占用、生成时长和失败日志"
+      },
+      {
+        "id": "heldout.evidence.voice-rights",
+        "kind": "rights-audit",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "模型和声线授权仍有待确认项目"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "工具已在隔离环境运行",
+      "当前正式流程已有可用配音方案",
+      "新工具需要额外模型文件和显卡资源"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "candidateLimit": 20,
+    "candidatePoolSize": 19,
+    "includeTrial": true,
+    "mode": "trial-opt-in-contextual-diversity-v2",
+    "query": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流\n想提高配音效率但担心硬件、权限、声音授权和维护成本的个人创作者\n工具已在隔离环境运行\n当前正式流程已有可用配音方案\n新工具需要额外模型文件和显卡资源\n记录了安装时间、显存占用、生成时长和失败日志\n模型和声线授权仍有待确认项目\n授权不明确时不得进入生产\n不得因效果惊艳忽略维护和退出成本\n必须与现有方案比较真实增量",
+    "records": [
+      {
+        "contentHash": "0e6a22d71c9922faabffb158c1d93158b9ab4312d34c45a5ca748330805a1b3c",
+        "contextualScore": 122,
+        "id": "content-task.tool-audit-needs-decision-thresholds.v1",
+        "namespace": "content.private",
+        "rank": 1,
+        "retrievalRank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "1061d17d8249b42840f85b9ca54189a1af037094fa3394da151a8507ba96f13e",
+        "contextualScore": 35,
+        "id": "content-principle.asset-survives-tomorrow.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "retrievalRank": 3,
+        "status": "trial"
+      },
+      {
+        "contentHash": "cb0f6a3f46b9908f82c6332c8c610d620d4119cdaae48c650b49400bdfc0b7b9",
+        "contextualScore": 34,
+        "id": "content-principle.production-is-not-distribution.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "retrievalRank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "da849b82ff6d9ee7c8cc3bab76d2cccba9da0e7d0d0e2ee47922274cacaf32be",
+        "contextualScore": 24,
+        "id": "content-principle.rough-v1-solves-recurring-problem.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "retrievalRank": 6,
+        "status": "trial"
+      },
+      {
+        "contentHash": "c457740b81301b420f2418e7c82f87e6ece8c38c22feb154fd55c30cf5fad811",
+        "contextualScore": 16,
+        "id": "content-principle.start-with-low-variable-baseline.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "retrievalRank": 11,
+        "status": "trial"
+      }
+    ],
+    "selectionPolicy": "contextual-diversity-v2",
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-task.tool-audit-needs-decision-thresholds.v1",
+    "content-principle.asset-survives-tomorrow.v1",
+    "content-principle.production-is-not-distribution.v1",
+    "content-principle.rough-v1-solves-recurring-problem.v1",
+    "content-principle.start-with-low-variable-baseline.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

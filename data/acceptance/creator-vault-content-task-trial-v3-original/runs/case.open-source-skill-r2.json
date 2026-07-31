@@ -1,0 +1,33 @@
+{
+  "caseId": "case.open-source-skill",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.3ada9ff05ffc",
+  "trialAnalysisArtifactId": "content-strategy.ac892aa0b73d",
+  "evaluationArtifactId": "content-training-evaluation.b46d4b9d78c4",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 第一份更严格地要求固定版本或提交、对照标准及安装/暂缓/放弃阈值，可复核性略强。",
+    "[T+00:01] 第二份要求补充Skill类型和运行环境，更关注受众差异与兼容性的适用条件。",
+    "[T+00:02] 第一份提出不同Skill可能需要拆分系列；该判断被明确标为不确定性，没有越权改变内容方向。",
+    "[T+00:03] 第二份指出单篇信息密度风险，但没有给出用于判断是否必须拆分的具体标准。",
+    "[T+00:04] 两份都完整保留共享事实，未虚构维护状态，也未出现声明范围内的硬失败。"
+  ],
+  "uncertainties": [
+    "未提供绝对时钟信息，因此异议使用相对时间戳。",
+    "两份分析都缺少实际案例材料，当前无法验证其建议的问题能否获得可公开、可复核的回答。"
+  ]
+}

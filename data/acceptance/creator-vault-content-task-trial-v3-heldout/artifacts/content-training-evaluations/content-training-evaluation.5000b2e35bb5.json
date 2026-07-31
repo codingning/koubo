@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.a2cab4477dcd",
+      "contentHash": "77956bbb0d7edc5133e6d9dd1df09dabd65eb1210649682a842afdb035781fcf",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.6de8793fe0db",
+      "contentHash": "deafa7a517d5564dd43e05a629bb26af71949c3fdc9b31fa9a8b58783758549f",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:00] 两份分析均未偏离方向，也都保留了成功与失败样本、禁止全面禁用以及用户审核优先等边界。",
+      "[T+00:01] 第一份更侧重利用现有跨样片差异和触发记录诊断失效边界；第二份进一步给出了条件改写、版本记录、后续调用和人工审核的验证链。",
+      "[T+00:02] 第二份的下一步更具体，但并未把尚未验证的改进描述为既成事实，因此没有形成不受支持的结论。",
+      "[T+00:03] 两份都识别了话题与语速同时变化造成的混杂归因，第二份还明确提出负面样本与撤销机制，边界描述略更完整。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持既定方向，并把现有证据、缺失的首条成功样片和待验证归因明确分开。异议：后续验证步骤不如第二份具体，尚未明确如何记录条件修改及用新样片验证。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确围绕将失败转化为可条件化、可验证且可撤销的经验，清楚要求后续真实输出与用户审核。异议：提出适用、禁止和停止条件，但现有证据尚不足以确定这些条件的具体内容。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "缺少第一条视频的真实样片及人工审核依据，无法核实所谓成功基线。",
+      "无法从现有材料区分话题、语速、关键词数量、强调频率或其他变量的独立影响。",
+      "尚无修改后经验在后续可比较任务中的真实输出和用户审核结果。",
+      "相对时间戳仅表示本次评估中的记录顺序，因为输入未提供可核验的绝对时间。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "12962e476a7ca4ce0e6072f41a9e19e148e61fba2c10bb0b6d1587c159b3cf66",
+  "evaluatedAt": "2026-07-31T09:14:56.868Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

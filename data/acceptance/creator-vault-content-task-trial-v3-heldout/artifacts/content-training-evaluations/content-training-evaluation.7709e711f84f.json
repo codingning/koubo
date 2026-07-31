@@ -1,0 +1,78 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.a270b33b4b3a",
+      "contentHash": "9e1623c077451292c89111ec0eb7f0a5694b4694813642643ca47e8e4109bf3b",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.0fec0fdb7d6f",
+      "contentHash": "013c876461c36376e55faba083a8b8c33a9a368f9e22697ecade9b5f07f5e5d0",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:01] 两者都完整保留了“必须比较现有方案真实增量”和“授权不明确不得进入生产”的约束。",
+      "[T+00:02] 第一份把授权、同任务对照、最小权限、维护及回退成本都纳入下一步问题，决策路径更完整。",
+      "[T+00:03] 第二份对固定版本、卸载清理和回退成本识别更细，但这些项目没有进入 nextQuestions。",
+      "[T+00:04] 第一份的 defer 与当前证据状态一致；第二份的 single_piece 含义不透明，削弱下一步行动指向。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保留真实增量、授权、权限、硬件、维护与退出成本等决策主线；明确建议暂缓，并将缺失证据转化为可执行的对照测试和核查问题。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 1,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 对方向、证据缺口和生产边界把握准确；但 recommendation 为“single_piece”，与 needs_evidence 及采用决策缺乏清晰对应关系，未直接说明当前应暂缓、放弃还是继续验证。",
+        "total": 7
+      }
+    },
+    "uncertainties": [
+      "[T+00:05] “single_piece”可能是内容形态标签而非采用建议；因字段语义未提供，只能评价其对当前决策的不明确性。",
+      "[T+00:06] 未提供运行记录和授权审计的原文，因此无法核验两份分析是否遗漏了证据中的更细事实。"
+    ],
+    "winnerVariant": "control"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 1,
+    "controlCitationCount": 0,
+    "correctCitations": 1,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "cd4da16cd5f6d8c0154451d8ef8eb828d195ad52c24170a8f8ac522ca6bb0c91",
+  "evaluatedAt": "2026-07-31T09:10:29.825Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

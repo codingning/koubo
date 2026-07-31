@@ -1,0 +1,81 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.6b0609e02bba",
+      "contentHash": "8cb56c6bd50ea6aea255e00f8dc0397b9a69f9f3754a4cefbccc75b34d8ace49",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.59fdd0982799",
+      "contentHash": "c6c19c88d0bcb698fbca32215ad17e63e93cd96b0f0d7895feb29c328487b898",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:00] 两者都准确区分了授权合格与实际听感合格，没有用标签或模型判断替代人工审核。",
+      "[T+00:00] 第一份更完整地覆盖最终接受候选及其选择原因，适合形成对称的正负反馈记录。",
+      "[T+00:00] 第二份更明确要求一次只改变一个变量，因此对失败原因的归因设计更强。",
+      "[T+00:00] 第一份的改善率问题更贴近后续效果，但需要补足反馈被实际用于下一轮选择的条件；第二份的问题更适合先做诊断。",
+      "[T+00:00] 第二份对已锁定方向提出再次确认，证据纪律弱于第一份，但尚未构成方向漂移。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 1
+        },
+        "summary": "[T+00:00] 单变量对照方案更利于区分选曲、响度和ducking问题，归因限制识别清楚。主要异议：把“尚未获得用户对分析方向的确认”列为不确定性，与已经明确锁定的方向不一致；重新询问优先方向也会不必要地重开已锁定范围。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持用户方向，并将反馈落实到BGM稳定ID、响度、ducking、时间位置和接受/拒绝原因。主要异议：测试问题要求验证下一轮候选比例下降，但尚未说明反馈如何进入后续选择机制，因此因果链略有缺口。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00:00] 未知现有候选是否保留了可复现的完整参数和版本。",
+      "[T+00:00] 未知人工反馈能否绑定到具体口播时间段。",
+      "[T+00:00] 未知反馈是否会进入后续自动选择流程，因此无法确认其对下一轮错误率的影响。",
+      "[T+00:00] 未知现有样本量是否足以比较反馈结构或单变量对照的稳定效果。"
+    ],
+    "winnerVariant": "trial"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "8f05718b7357f3b1e3db054727fabf1a82fcd917253e07be372faf89758a1cf3",
+  "evaluatedAt": "2026-07-31T09:12:05.570Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

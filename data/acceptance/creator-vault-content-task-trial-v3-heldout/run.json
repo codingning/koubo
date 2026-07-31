@@ -1,0 +1,462 @@
+{
+  "schemaVersion": 1,
+  "runId": "creator-vault-content-task-trial-v3-heldout",
+  "suiteId": "content-strategist-task-knowledge-heldout-suite.v1",
+  "suiteHash": "66f6525a80461d6222f02a6305c661f03c468a40f2882ac55e1d9190851c2dc2",
+  "server": "http://127.0.0.1:8791",
+  "startedWithRepeats": 2,
+  "concurrency": 2,
+  "reuseAnalyses": false,
+  "evaluationRevision": "v3",
+  "runs": [
+    {
+      "caseId": "heldout.subtitle-aligner-audit",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.10a62c53098a",
+      "trialAnalysisArtifactId": "content-strategy.4d27e4bf4d8c",
+      "evaluationArtifactId": "content-training-evaluation.4d891b6fbb70",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 2,
+        "controlCitationCount": 0,
+        "correctCitations": 2,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:00] 两者均未把安装或字幕生成成功误判为准确率合格，也未虚构项目维护状态。",
+        "[T+00:00] 第一份更系统地拆分错误类型、同口径耗时、正式环境兼容性、失败恢复及卸载回退，行动检查项更完整。",
+        "[T+00:00] 第二份更简洁地聚焦替代阈值、高风险样本覆盖和退出条件，但对稳定性测试及回退实施细节较少。",
+        "[T+00:00] 第一份明确指出“完全取消人工校对”与“减少人工工作量”的目标歧义；第二份未单独提出这一关键边界。",
+        "[T+00:00] 两份分析均保持建议权边界，没有批准替换正式流程或作出超出证据的生产决策。"
+      ],
+      "uncertainties": [
+        "[T+00:00] 未提供候选分析之外的实际错误统计和耗时数据，因此只能评价分析质量，不能判断工具是否达标。",
+        "[T+00:00] 三段样本对正式视频分布的代表性仍未知。",
+        "[T+00:00] 评分不涉及候选来源、知识库、Agent或实验组身份。"
+      ]
+    },
+    {
+      "caseId": "heldout.subtitle-aligner-audit",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.b42f3e93b967",
+      "trialAnalysisArtifactId": "content-strategy.68ac1dd0691b",
+      "evaluationArtifactId": "content-training-evaluation.d0b23e9a224d",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 2,
+        "controlCitationCount": 0,
+        "correctCitations": 2,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "两份分析都没有把安装或生成字幕误判为准确率合格，也没有虚构维护状态。",
+        "第一份更强调扩充常见边界条件、失败恢复成本和环境兼容性，覆盖面略广。",
+        "第二份更明确提出替换、暂缓、放弃阈值以及固定版本稳定性记录，决策操作性略强。",
+        "两份均保留回退到人工流程的要求，没有越权批准进入正式生产。"
+      ],
+      "uncertainties": [
+        "未提供四个维度更细的分档锚点，因此两份在满分区间内的细微差异主要通过文字说明表达。",
+        "三段样本的实际量化结果未提供，无法评价候选提出的阈值最终是否足够严格。",
+        "未提供绝对时钟，异议使用相对时间戳标注。"
+      ]
+    },
+    {
+      "caseId": "heldout.voice-tool-audit",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.b9d498a39d2b",
+      "trialAnalysisArtifactId": "content-strategy.14c675634299",
+      "evaluationArtifactId": "content-training-evaluation.1b7df06dbdb4",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "trial",
+      "controlTotal": 7,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 1,
+        "controlCitationCount": 0,
+        "correctCitations": 1,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[评估时点 T0] 两者均未偏离锁定方向，也都保留了授权不明确时不得进入生产的约束。",
+        "[评估时点 T0] 两者均正确使用运行记录和授权审计，没有把待确认事项改写为已确认结论。",
+        "[评估时点 T0] 第二份明确把“预设增量阈值”和加入、暂缓、放弃条件列为缺失项，行动闭环比第一份更完整。",
+        "[评估时点 T0] 第一份更具体地提出容器化、降权和离线隔离等权限风险缓解手段，但未说明这些手段已可行，因此未构成无依据断言。",
+        "[评估时点 T0] 两者都覆盖维护与退出成本；第二份进一步拆分模型文件管理、卸载回退和项目迁移，边界描述稍具体。"
+      ],
+      "uncertainties": [
+        "[评估时点 T0] 共享证据仅提供摘要，无法判断运行日志是否足以计算稳定性或失败率。",
+        "[评估时点 T0] 授权审计中待确认项目的具体内容未知，无法评价候选是否遗漏某项特定权利风险。",
+        "[评估时点 T0] 用户可接受的资源、权限和维护上限未给出，因此无法检验任何具体采用阈值。"
+      ]
+    },
+    {
+      "caseId": "heldout.voice-tool-audit",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.a270b33b4b3a",
+      "trialAnalysisArtifactId": "content-strategy.0fec0fdb7d6f",
+      "evaluationArtifactId": "content-training-evaluation.7709e711f84f",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "control",
+      "controlTotal": 8,
+      "trialTotal": 7,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 1,
+        "controlCitationCount": 0,
+        "correctCitations": 1,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:01] 两者都完整保留了“必须比较现有方案真实增量”和“授权不明确不得进入生产”的约束。",
+        "[T+00:02] 第一份把授权、同任务对照、最小权限、维护及回退成本都纳入下一步问题，决策路径更完整。",
+        "[T+00:03] 第二份对固定版本、卸载清理和回退成本识别更细，但这些项目没有进入 nextQuestions。",
+        "[T+00:04] 第一份的 defer 与当前证据状态一致；第二份的 single_piece 含义不透明，削弱下一步行动指向。"
+      ],
+      "uncertainties": [
+        "[T+00:05] “single_piece”可能是内容形态标签而非采用建议；因字段语义未提供，只能评价其对当前决策的不明确性。",
+        "[T+00:06] 未提供运行记录和授权审计的原文，因此无法核验两份分析是否遗漏了证据中的更细事实。"
+      ]
+    },
+    {
+      "caseId": "heldout.sfx-timing-feedback",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.18af82d08283",
+      "trialAnalysisArtifactId": "content-strategy.a91bab8002bb",
+      "evaluationArtifactId": "content-training-evaluation.230e24653df8",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 3,
+        "controlCitationCount": 0,
+        "correctCitations": 3,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "T+00: 第一份把明确动作触发点、人工认可时间窗和未参与训练的真实转场验证连成更具体的评估路径。",
+        "T+01: 第一份明确指出若同时改变音效、起点和响度将无法可靠归因，变量控制更严格。",
+        "T+02: 第二份更完整地显式保留三项共享约束，尤其是不得自动批准和允许整组不合格。",
+        "T+03: 第二份能区分时机、音色、响度及整体不匹配等拒绝原因，但其测试问题未给出明确认可时间窗或留出集规模。",
+        "T+04: 两份都没有把现有样片误称为已证明正确时机，也都没有出现越权批准或偏离主题。"
+      ],
+      "uncertainties": [
+        "未提供人工标注结果，无法判断两套提问路径在实际数据上的区分能力。",
+        "共享上下文只说明样片可绑定候选音效、起点和响度，未明确三种时机样片是否仅改变时间点。",
+        "T+编号为本次评估内的相对时间标记，因为输入未提供绝对时间戳。"
+      ]
+    },
+    {
+      "caseId": "heldout.sfx-timing-feedback",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.16e161bf58a3",
+      "trialAnalysisArtifactId": "content-strategy.05f74590031e",
+      "evaluationArtifactId": "content-training-evaluation.e85e80c600b2",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 2,
+        "controlCitationCount": 0,
+        "correctCitations": 2,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:02] 第一份更直接提出独立测试集和“落入人工认可时间窗的比例”，更贴近最终训练效果评估。",
+        "[T+00:03] 第二份更明确识别候选音效与响度变化造成的归因混杂，实验变量控制更严谨。",
+        "[T+00:04] 第一份更重视跨转场类型覆盖和泛化；第二份更重视审核者一致性与单一变量比较。",
+        "[T+00:05] 两份均严格区分已有证据、缺失信息和不确定性，且没有越权批准、发布或强制选择候选。"
+      ],
+      "uncertainties": [
+        "[T+00:06] 未提供人工审核数据，无法判断哪种评估设计实际具有更高信度。",
+        "[T+00:07] 未说明样本规模、审核者数量及跨转场分布，因此无法比较两方案的统计可行性。",
+        "[T+00:08] T+时间为本次评估内的相对时间戳，因为输入未提供绝对评估时间。"
+      ]
+    },
+    {
+      "caseId": "heldout.bgm-selection-feedback",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.6b0609e02bba",
+      "trialAnalysisArtifactId": "content-strategy.59fdd0982799",
+      "evaluationArtifactId": "content-training-evaluation.1dddfc53b01e",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "trial",
+      "controlTotal": 7,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 2,
+        "controlCitationCount": 0,
+        "correctCitations": 2,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:00] 两者都准确区分了授权合格与实际听感合格，没有用标签或模型判断替代人工审核。",
+        "[T+00:00] 第一份更完整地覆盖最终接受候选及其选择原因，适合形成对称的正负反馈记录。",
+        "[T+00:00] 第二份更明确要求一次只改变一个变量，因此对失败原因的归因设计更强。",
+        "[T+00:00] 第一份的改善率问题更贴近后续效果，但需要补足反馈被实际用于下一轮选择的条件；第二份的问题更适合先做诊断。",
+        "[T+00:00] 第二份对已锁定方向提出再次确认，证据纪律弱于第一份，但尚未构成方向漂移。"
+      ],
+      "uncertainties": [
+        "[T+00:00] 未知现有候选是否保留了可复现的完整参数和版本。",
+        "[T+00:00] 未知人工反馈能否绑定到具体口播时间段。",
+        "[T+00:00] 未知反馈是否会进入后续自动选择流程，因此无法确认其对下一轮错误率的影响。",
+        "[T+00:00] 未知现有样本量是否足以比较反馈结构或单变量对照的稳定效果。"
+      ]
+    },
+    {
+      "caseId": "heldout.bgm-selection-feedback",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.433af825bbc7",
+      "trialAnalysisArtifactId": "content-strategy.66f1c0f01570",
+      "evaluationArtifactId": "content-training-evaluation.c1f8f4e24ad4",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 2,
+        "controlCitationCount": 0,
+        "correctCitations": 2,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[timestamp: evaluation_time_not_provided] 第一份更明确要求记录问题严重程度、跨口播及跨审核轮次的复现性，有利于判断反馈是否稳定。",
+        "[timestamp: evaluation_time_not_provided] 第二份更强调BGM ID、时间线位置和参数版本之间的结构化关联，数据记录方案更具体。",
+        "[timestamp: evaluation_time_not_provided] 第一份明确指出授权合格不能证明实际效果合格；第二份未重申该边界，但也没有将授权证据误作效果证据。",
+        "[timestamp: evaluation_time_not_provided] 第二份进一步区分反馈可能用于召回、排序或参数调整；第一份则更集中于受控比较和拒绝原因归因。",
+        "[timestamp: evaluation_time_not_provided] 两份都遵守单变量归因限制、保留人工听感审核，并未出现方向漂移、无依据断言、越权或泛化不可执行问题。"
+      ],
+      "uncertainties": [
+        "请求未提供可用的当前时间，因此无法生成真实时钟时间戳，以上使用明确的占位时间标记。",
+        "两份分析都未获得实际混音记录样例，无法验证其建议字段是否已存在或能否稳定复现。",
+        "尚不能判断“内容气质”应采用预定义标签、自由描述还是混合标准。"
+      ]
+    },
+    {
+      "caseId": "heldout.caption-rule-reuse",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.98363b9e0def",
+      "trialAnalysisArtifactId": "content-strategy.fbf0b7e30390",
+      "evaluationArtifactId": "content-training-evaluation.2b952c83c5a0",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "trial",
+      "controlTotal": 7,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 2,
+        "controlCitationCount": 0,
+        "correctCitations": 2,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:02] 两份分析都完整保留共享事实，没有把单次否决扩张为全面禁用，也没有用Agent自评替代用户样片审核。",
+        "[T+00:03] 第一份明确要求后续可比较任务的调用记录、真实输出、用户审核以及经验降级或撤销标准，因此形成了更完整的验证闭环。",
+        "[T+00:04] 第二份识别了额外样片和复核结果的缺口，但其下一步问题未明确落实测试时间、审核主体及无效时的处置条件。",
+        "[T+00:05] 第二份将“可追溯触发记录的具体内容”列为缺失是合理细化，并未否认共享上下文中“记录可以追溯”的事实。"
+      ],
+      "uncertainties": [
+        "[T+00:06] 未提供recommendation字段的选择标准，因此无法仅据“series”与“single_piece”的差异判定方向优劣。",
+        "[T+00:07] 两份分析都缺少第一条视频的成功样片与人工审核依据，当前不能确认失败的主导变量。"
+      ]
+    },
+    {
+      "caseId": "heldout.caption-rule-reuse",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.a2cab4477dcd",
+      "trialAnalysisArtifactId": "content-strategy.6de8793fe0db",
+      "evaluationArtifactId": "content-training-evaluation.5000b2e35bb5",
+      "priorEvaluationArtifactId": null,
+      "evaluationRevision": "v3",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 2,
+        "controlCitationCount": 0,
+        "correctCitations": 2,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:00] 两份分析均未偏离方向，也都保留了成功与失败样本、禁止全面禁用以及用户审核优先等边界。",
+        "[T+00:01] 第一份更侧重利用现有跨样片差异和触发记录诊断失效边界；第二份进一步给出了条件改写、版本记录、后续调用和人工审核的验证链。",
+        "[T+00:02] 第二份的下一步更具体，但并未把尚未验证的改进描述为既成事实，因此没有形成不受支持的结论。",
+        "[T+00:03] 两份都识别了话题与语速同时变化造成的混杂归因，第二份还明确提出负面样本与撤销机制，边界描述略更完整。"
+      ],
+      "uncertainties": [
+        "缺少第一条视频的真实样片及人工审核依据，无法核实所谓成功基线。",
+        "无法从现有材料区分话题、语速、关键词数量、强调频率或其他变量的独立影响。",
+        "尚无修改后经验在后续可比较任务中的真实输出和用户审核结果。",
+        "相对时间戳仅表示本次评估中的记录顺序，因为输入未提供可核验的绝对时间。"
+      ]
+    }
+  ],
+  "summary": {
+    "schemaVersion": 1,
+    "suiteId": "content-strategist-task-knowledge-heldout-suite.v1",
+    "caseCount": 5,
+    "runCount": 10,
+    "thresholds": {
+      "minimumTrialDirectionWins": 4,
+      "minimumAverageScoreDelta": 1,
+      "minimumCitationAccuracy": 0.9,
+      "minimumConsistentDirections": 4,
+      "maximumRegressions": 0
+    },
+    "results": {
+      "trialDirectionWins": 0,
+      "averageScoreDelta": 0.2,
+      "citationAccuracy": 1,
+      "consistentDirections": 2,
+      "regressions": 0
+    },
+    "byCase": [
+      {
+        "caseId": "heldout.subtitle-aligner-audit",
+        "direction": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+        "repeats": 2,
+        "winners": [
+          "tie",
+          "tie"
+        ],
+        "averageControlScore": 8,
+        "averageTrialScore": 8,
+        "averageDelta": 0,
+        "consistent": true,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      },
+      {
+        "caseId": "heldout.voice-tool-audit",
+        "direction": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+        "repeats": 2,
+        "winners": [
+          "trial",
+          "control"
+        ],
+        "averageControlScore": 7.5,
+        "averageTrialScore": 7.5,
+        "averageDelta": 0,
+        "consistent": false,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      },
+      {
+        "caseId": "heldout.sfx-timing-feedback",
+        "direction": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+        "repeats": 2,
+        "winners": [
+          "tie",
+          "tie"
+        ],
+        "averageControlScore": 8,
+        "averageTrialScore": 8,
+        "averageDelta": 0,
+        "consistent": true,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      },
+      {
+        "caseId": "heldout.bgm-selection-feedback",
+        "direction": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+        "repeats": 2,
+        "winners": [
+          "trial",
+          "tie"
+        ],
+        "averageControlScore": 7.5,
+        "averageTrialScore": 8,
+        "averageDelta": 0.5,
+        "consistent": false,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      },
+      {
+        "caseId": "heldout.caption-rule-reuse",
+        "direction": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+        "repeats": 2,
+        "winners": [
+          "trial",
+          "tie"
+        ],
+        "averageControlScore": 7.5,
+        "averageTrialScore": 8,
+        "averageDelta": 0.5,
+        "consistent": false,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      }
+    ],
+    "passed": false,
+    "recommendation": "keep_trial_and_do_not_advance",
+    "authority": {
+      "grantsApproval": false,
+      "promotesMemory": false,
+      "changesProductionDefault": false
+    }
+  },
+  "authority": {
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "changesProductionDefault": false
+  }
+}

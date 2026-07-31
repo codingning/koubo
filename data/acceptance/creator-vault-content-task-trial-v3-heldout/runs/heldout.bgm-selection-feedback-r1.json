@@ -1,0 +1,35 @@
+{
+  "caseId": "heldout.bgm-selection-feedback",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.6b0609e02bba",
+  "trialAnalysisArtifactId": "content-strategy.59fdd0982799",
+  "evaluationArtifactId": "content-training-evaluation.1dddfc53b01e",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 两者都准确区分了授权合格与实际听感合格，没有用标签或模型判断替代人工审核。",
+    "[T+00:00] 第一份更完整地覆盖最终接受候选及其选择原因，适合形成对称的正负反馈记录。",
+    "[T+00:00] 第二份更明确要求一次只改变一个变量，因此对失败原因的归因设计更强。",
+    "[T+00:00] 第一份的改善率问题更贴近后续效果，但需要补足反馈被实际用于下一轮选择的条件；第二份的问题更适合先做诊断。",
+    "[T+00:00] 第二份对已锁定方向提出再次确认，证据纪律弱于第一份，但尚未构成方向漂移。"
+  ],
+  "uncertainties": [
+    "[T+00:00] 未知现有候选是否保留了可复现的完整参数和版本。",
+    "[T+00:00] 未知人工反馈能否绑定到具体口播时间段。",
+    "[T+00:00] 未知反馈是否会进入后续自动选择流程，因此无法确认其对下一轮错误率的影响。",
+    "[T+00:00] 未知现有样本量是否足以比较反馈结构或单变量对照的稳定效果。"
+  ]
+}

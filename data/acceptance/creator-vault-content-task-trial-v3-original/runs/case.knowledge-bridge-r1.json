@@ -1,0 +1,33 @@
+{
+  "caseId": "case.knowledge-bridge",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.91fe8b34b50c",
+  "trialAnalysisArtifactId": "content-strategy.20b62304665b",
+  "evaluationArtifactId": "content-training-evaluation.b3ab2f50f127",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[00:01] 第一份对证据链要求更严，额外要求运行日志、盲评方法及原则ID与来源时间码的追溯验证。",
+    "[00:02] 第一份更明确警示把流畅度或自信度误判为能力提升，并纳入模仿、越权晋升和无依据引用风险。",
+    "[00:03] 第二份的下一步组织更直接，提供系列拆分方案，并明确可先验证单项能力。",
+    "[00:04] 第二份更明确要求检查原则适用性、稳定性、可重复性及被原则误导的反例。",
+    "[00:05] 两份都没有把doctor通过夸大为生产Agent已读取或能力已提升，也未批准、发布或晋升trial知识。"
+  ],
+  "uncertainties": [
+    "[00:06] 未提供候选分析所依据的更完整上游任务材料，因此只能按当前共享上下文评价。",
+    "[00:07] 两份建议尚未经过实际执行，无法判断其评测设计在现有工作流中的实施成本。"
+  ]
+}

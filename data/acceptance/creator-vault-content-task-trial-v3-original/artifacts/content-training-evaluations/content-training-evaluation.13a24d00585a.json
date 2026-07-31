@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.d93131035488",
+      "contentHash": "c39f4c5761986edd4bb11997c54c386fb779d81afcf18a14700d68534f73670a",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.8715ab4453fd",
+      "contentHash": "cc5fabc17b5aa570ee4833ada835427bc9b54c380e9c0cac8b0f7e50155ff1c8",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[评估时点 T0] 两份分析均完整保留受众、真实版本对比和必须人工审核的共享事实，没有方向漂移或无依据宣称。",
+      "[评估时点 T0] 第一份更细致地区分返修原因、具体修改、最终审核结果及观众体验评价依据；第二份将这些缺口压缩为问题定义和评价标准。",
+      "[评估时点 T0] 第一份明确指出单案例不能证明对任意口播或视频有效，归因与泛化边界更具体。",
+      "[评估时点 T0] 第二份更直接要求区分工具处理与人工审核各自的作用，有助于避免把最终效果全部归因于自动化。",
+      "[评估时点 T0] 两份追问都能直接决定后续证据收集与案例叙事重点，未触发任何硬失败。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[评估时点 T0] 准确围绕真实前后差异而非功能罗列；正确标注缺失的问题定义和评价标准，并提出可决定下一步的追问。明确人工参与和非全自动边界，但对单案例泛化限制的表述不如第一份直接。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[评估时点 T0] 准确保持“用真实对比证明解决问题”的方向；清楚区分现有素材、缺失标准与不确定性。问题定义、返修原因和审核依据均转化为可执行追问，并明确单案例的归因与泛化限制。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[评估时点 T0] 未提供真实素材内容，因此无法验证候选所提判断标准是否能由现有版本实际支持。",
+      "[评估时点 T0] 共享上下文未给出效率、质量或返修可控性中的首要目标，无法据此进一步拉开行动性评分。",
+      "[评估时点 T0] 未提供评价反馈或审核记录，无法判断工具处理与人工干预的贡献能否被可靠拆分。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "032be7812180d5104d822c52d9489d5e1b2adb3c1624b6759177b40665d7c8ef",
+  "evaluatedAt": "2026-07-31T09:04:09.362Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

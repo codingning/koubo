@@ -1,0 +1,34 @@
+{
+  "caseId": "case.failure-learning",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.bd6e6ffd40ee",
+  "trialAnalysisArtifactId": "content-strategy.2d472f8778ca",
+  "evaluationArtifactId": "content-training-evaluation.15965fc99cb5",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "trial",
+  "controlTotal": 6,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[评估时点] 第一份把下一步拆成可观察问题、候选规则、调用记录、对照输出和用户审核，执行路径比第二份具体。",
+    "[评估时点] 第一份明确要求控制主要变量，能更好防止把同时发生的变化误归因于候选经验。",
+    "[评估时点] 第一份纳入禁止条件、负面样本、降级与撤销；第二份虽提到撤回和晋升条件，但操作细节较少。",
+    "[评估时点] 第二份的“series”建议早于证据：其自身同时承认尚无跨任务结果，也未证明已有足够案例支撑系列化。",
+    "[评估时点] 两份均正确区分现有证据与缺失证据，且都以真实成片的用户审核而非Agent自评作为结果标准。"
+  ],
+  "uncertainties": [
+    "未提供实际失败案例、候选经验文本或后续调用结果，因此无法评价两份分析提出的验证方法在真实案例中的有效性。",
+    "未提供内容载体、篇幅或案例数量约束，无法最终判断单篇与系列哪种形式更合适。",
+    "请求未提供可核验的绝对时间；异议仅标记为评估时点。"
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "content-strategist-task-knowledge-heldout-suite.v1",
+  "caseCount": 5,
+  "runCount": 10,
+  "thresholds": {
+    "minimumTrialDirectionWins": 4,
+    "minimumAverageScoreDelta": 1,
+    "minimumCitationAccuracy": 0.9,
+    "minimumConsistentDirections": 4,
+    "maximumRegressions": 0
+  },
+  "results": {
+    "trialDirectionWins": 0,
+    "averageScoreDelta": 0.2,
+    "citationAccuracy": 1,
+    "consistentDirections": 2,
+    "regressions": 0
+  },
+  "byCase": [
+    {
+      "caseId": "heldout.subtitle-aligner-audit",
+      "direction": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+      "repeats": 2,
+      "winners": [
+        "tie",
+        "tie"
+      ],
+      "averageControlScore": 8,
+      "averageTrialScore": 8,
+      "averageDelta": 0,
+      "consistent": true,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    },
+    {
+      "caseId": "heldout.voice-tool-audit",
+      "direction": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+      "repeats": 2,
+      "winners": [
+        "trial",
+        "control"
+      ],
+      "averageControlScore": 7.5,
+      "averageTrialScore": 7.5,
+      "averageDelta": 0,
+      "consistent": false,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    },
+    {
+      "caseId": "heldout.sfx-timing-feedback",
+      "direction": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+      "repeats": 2,
+      "winners": [
+        "tie",
+        "tie"
+      ],
+      "averageControlScore": 8,
+      "averageTrialScore": 8,
+      "averageDelta": 0,
+      "consistent": true,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    },
+    {
+      "caseId": "heldout.bgm-selection-feedback",
+      "direction": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+      "repeats": 2,
+      "winners": [
+        "trial",
+        "tie"
+      ],
+      "averageControlScore": 7.5,
+      "averageTrialScore": 8,
+      "averageDelta": 0.5,
+      "consistent": false,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    },
+    {
+      "caseId": "heldout.caption-rule-reuse",
+      "direction": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+      "repeats": 2,
+      "winners": [
+        "trial",
+        "tie"
+      ],
+      "averageControlScore": 7.5,
+      "averageTrialScore": 8,
+      "averageDelta": 0.5,
+      "consistent": false,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    }
+  ],
+  "passed": false,
+  "recommendation": "keep_trial_and_do_not_advance",
+  "authority": {
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "changesProductionDefault": false
+  }
+}

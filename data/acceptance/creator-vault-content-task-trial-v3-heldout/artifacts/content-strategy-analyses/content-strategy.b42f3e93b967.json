@@ -1,0 +1,133 @@
+{
+  "analysis": {
+    "audience": "经常制作口播字幕、希望减少校对时间但担心中文准确率和环境兼容性的创作者",
+    "directionRestatement": "评估这个开源字幕对齐工具在真实中文口播中能否稳定减少人工校对，而不是把生成成功或少量演示效果等同于准确率合格。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.subtitle-license",
+          "provenance": "user_provided",
+          "relevance": "支持核查许可证、依赖版本和本地运行权限，为环境兼容性与可持续使用评估提供基础。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.subtitle-sample",
+          "provenance": "user_provided",
+          "relevance": "提供三段不同语速中文口播的工具输出和人工校对稿，可用于比较错误类型、修改量与校对时间。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "每段样本的字词错误、时间轴偏移、断句和标点修改数量。",
+        "使用现有人工流程与工具辅助流程完成同一批素材时的校对耗时对比。",
+        "覆盖实际常见边界条件的补充样本，以及工具失败时恢复原流程所需的步骤和成本。"
+      ]
+    },
+    "lockedDirection": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+    "nextQuestions": [
+      "你愿意用什么可量化标准定义“可以替代”，例如校对耗时下降比例、每千字错误数或时间轴偏移上限？",
+      "三段样本分别有多长，人工校对具体改了哪些内容、各用了多长时间？",
+      "正式视频中最常见且最不能出错的边界条件是什么，例如专有名词、数字、快语速、噪声或多人声？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已经在隔离目录完成安装",
+      "工具能生成字幕文件",
+      "尚未进入正式视频流程",
+      "许可证、依赖版本和本地运行权限已经记录",
+      "已有三段不同语速中文口播的工具输出和人工校对稿"
+    ],
+    "testableQuestion": "在覆盖不同语速及常见边界条件的真实中文口播样本中，该工具能否在预先设定的准确率与时间轴标准内，持续降低人工校对耗时，并能在失败时安全退出而不影响正式流程？",
+    "uncertainties": [
+      "“替代人工校对”是指完全免校对，还是保留人工抽检但显著减少时间，尚未明确。",
+      "当前三段样本是否代表正式视频的长度、语速、词汇和录音环境，尚未明确。",
+      "工具的维护状态未提供，因此不能据此判断长期可用性。"
+    ],
+    "viewerBenefit": "获得一套基于真实样本、校对成本、环境兼容性和退出路径判断工具是否值得进入正式流程的方法。",
+    "weaknesses": [
+      "现有三段样本尚不足以支持工具能够普遍替代人工校对的结论。",
+      "还没有量化工具输出相对人工校对稿的错误类型、错误数量与校对耗时。",
+      "尚未验证长视频、专有名词、数字、停顿、多人声或噪声等真实边界条件。",
+      "尚未形成进入正式流程前的合格阈值和失败后的退出路径。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:07:08.620Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "23d4610c441551df13c97b06a40571918e845f78d5a71d4008d89c6965ac6f78",
+  "input": {
+    "audienceContext": "经常制作口播字幕、希望减少校对时间但担心中文准确率和环境兼容性的创作者",
+    "constraints": [
+      "不得把生成成功说成准确率合格",
+      "不得虚构维护状态",
+      "不得在没有退出路径时替换正式流程"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.subtitle-license",
+        "kind": "audit-record",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "许可证、依赖版本和本地运行权限已经记录"
+      },
+      {
+        "id": "heldout.evidence.subtitle-sample",
+        "kind": "local-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "已有三段不同语速中文口播的工具输出和人工校对稿"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "已经在隔离目录完成安装",
+      "工具能生成字幕文件",
+      "尚未进入正式视频流程"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

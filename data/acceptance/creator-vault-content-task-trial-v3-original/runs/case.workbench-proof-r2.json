@@ -1,0 +1,33 @@
+{
+  "caseId": "case.workbench-proof",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.4a54506ed557",
+  "trialAnalysisArtifactId": "content-strategy.db5f64fd39cd",
+  "evaluationArtifactId": "content-training-evaluation.3fddbfccb6a5",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 两者均准确理解方向，均未退化为功能介绍或全自动宣传。",
+    "[T+00:01] 第一份要求可观察标准，但第二份进一步要求各版本采用统一审核标准并提供审核结果，可比性更强。",
+    "[T+00:02] 第二份要求记录关键修改、无效修改和撤销项，更有助于建立修改与结果之间的对应关系。",
+    "[T+00:03] 第一份提到多价值点可能造成内容失焦；第二份进一步指出版本间变量混杂会限制归因。",
+    "[T+00:04] 第二份明确限制单案例的适用范围；第一份主要强调人工参与边界，对外推限制着墨较少。"
+  ],
+  "uncertainties": [
+    "[T+00:05] 未提供实际版本素材、审核记录或结果数据，因此只能评价分析质量，不能判断工作台是否确实有效。",
+    "[T+00:06] 固定量表仅有0至2分，无法用分数表达第二份在证据设计和归因边界上的细微优势。"
+  ]
+}

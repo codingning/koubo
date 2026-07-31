@@ -1,0 +1,33 @@
+{
+  "caseId": "case.failure-learning",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.a8ca607007e5",
+  "trialAnalysisArtifactId": "content-strategy.e7091504c1e4",
+  "evaluationArtifactId": "content-training-evaluation.36d223e60444",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[timestamp unavailable] 两者均准确区分现有证据、缺失证据与不确定性，未将相关性表述为因果，也未用Agent自评替代用户审核。",
+    "[timestamp unavailable] 第一份更强调经验从候选规则到保留、修订或撤销的治理流程，以及独立任务中的对照验证。",
+    "[timestamp unavailable] 第二份更强调触发、禁止、停止条件、主要变量控制和负面样本，执行检查项略更具体。",
+    "[timestamp unavailable] 第一份明确提出“既定对照”和长期规则晋升标准；第二份则更直接要求调用前后真实成片记录及跨任务一致的审核标准。",
+    "[timestamp unavailable] 两者均未越权批准生产、发布内容或将单次结果提升为长期记忆，且均无声明的硬失败。"
+  ],
+  "uncertainties": [
+    "请求未提供可用于标注异议的实际时间戳，因此使用“timestamp unavailable”，未虚构时间。",
+    "现有材料不足以判断任一方案所要求的后续调用、对照或用户审核记录是否真实存在。"
+  ]
+}

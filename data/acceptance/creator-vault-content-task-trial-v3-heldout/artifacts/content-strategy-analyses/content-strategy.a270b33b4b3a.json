@@ -1,0 +1,133 @@
+{
+  "analysis": {
+    "audience": "想提高配音效率但担心硬件、权限、声音授权和维护成本的个人创作者",
+    "directionRestatement": "分析该工具相对当前可用配音方案的真实增量，并结合硬件、权限、声音授权、维护和退出成本，判断是否应加入正式视频工作流。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.voice-runtime",
+          "provenance": "user_provided",
+          "relevance": "记录了安装时间、显存占用、生成时长和失败日志，可支持评估部署负担、资源需求、运行效率和稳定性。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.voice-rights",
+          "provenance": "user_provided",
+          "relevance": "模型和声线授权仍有待确认项目，直接决定该工具是否具备进入生产流程的前提。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "新工具与当前正式流程已有可用配音方案在同一批文本、同一质量标准下的对照结果",
+        "较高权限的具体用途、最小权限方案及隔离措施",
+        "模型文件更新、故障恢复、迁移回现有方案所需的持续维护和退出成本"
+      ]
+    },
+    "lockedDirection": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+    "nextQuestions": [
+      "模型和声线分别允许哪些商业使用、再分发或生成内容用途，哪些授权项目仍未确认？",
+      "用同一批代表性文本测试时，新工具与当前方案在质量、人工修正时间、生成时长和失败率上的结果分别是什么？",
+      "该工具要求哪些具体权限，能否降权运行；更新、故障恢复和退回当前方案各需多少时间与资源？"
+    ],
+    "principleCitations": [],
+    "recommendation": "defer",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "工具已在隔离环境运行",
+      "当前正式流程已有可用配音方案，因此可以进行直接对照",
+      "记录了安装时间、显存占用、生成时长和失败日志",
+      "方向包含效果、硬件、权限、授权、维护及退出成本等真实决策因素"
+    ],
+    "testableQuestion": "在授权全部明确且权限风险可接受的前提下，新工具能否在相同配音任务中，相比当前正式流程已有可用配音方案提供足以覆盖额外模型文件、显卡资源、维护和退出成本的质量或效率增量？",
+    "uncertainties": [
+      "授权未确认项是否会阻断商业视频生产",
+      "效果优势能否转化为相对当前方案的可量化增量",
+      "较高权限能否缩减或通过持续隔离控制",
+      "长期维护成本是否会抵消配音效率收益"
+    ],
+    "viewerBenefit": "获得一套基于实测、授权与总成本的采用判断方法，避免仅因效果惊艳而贸然更换现有方案。",
+    "weaknesses": [
+      "模型和声线授权仍有待确认项目，按约束不得进入生产",
+      "尚未提供新工具与当前正式方案在相同任务下的质量、效率和成本对照结果",
+      "较高权限的具体范围、必要性及可否长期隔离尚未说明",
+      "新工具需要额外模型文件和显卡资源，但尚未给出持续维护与退出成本"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:09:10.356Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "9e1623c077451292c89111ec0eb7f0a5694b4694813642643ca47e8e4109bf3b",
+  "input": {
+    "audienceContext": "想提高配音效率但担心硬件、权限、声音授权和维护成本的个人创作者",
+    "constraints": [
+      "授权不明确时不得进入生产",
+      "不得因效果惊艳忽略维护和退出成本",
+      "必须与现有方案比较真实增量"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.voice-runtime",
+        "kind": "runtime-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "记录了安装时间、显存占用、生成时长和失败日志"
+      },
+      {
+        "id": "heldout.evidence.voice-rights",
+        "kind": "rights-audit",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "模型和声线授权仍有待确认项目"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "工具已在隔离环境运行",
+      "当前正式流程已有可用配音方案",
+      "新工具需要额外模型文件和显卡资源"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

@@ -1,0 +1,133 @@
+{
+  "analysis": {
+    "audience": "反复让AI返修视频但同类问题仍会再次出现的创作者",
+    "directionRestatement": "分析如何将一次口播视频返修失败转化为可在后续任务中调用、验证和撤销的Agent经验，同时避免把单次成功误当成长期规则。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.failure-version",
+          "provenance": "user_provided",
+          "relevance": "支持精确区分失败版本、修改项和最终结果，为提取及回查经验提供版本依据。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.failure-review",
+          "provenance": "user_provided",
+          "relevance": "支持以用户对真实成片效果的审核与整体否决作为结果判定，而非依赖Agent自评。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "同一经验在后续独立口播视频任务中被实际调用的可核验记录。",
+        "复用后结果与未复用或不同处理方式的对照信息，用于避免把相关性表述为因果。",
+        "经验从候选规则到保留、修订或撤销的明确判定标准。"
+      ]
+    },
+    "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "nextQuestions": [
+      "你能否提供一次“后续独立任务实际调用该经验”的完整记录，包括触发内容、对应版本和用户审核结果？",
+      "你准备以什么作为对照，判断复用后的变化，而不把相关性表述为因果？",
+      "候选经验需要经过多少次、哪些类型的用户审核，才会被保留、修订或撤销？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "问题具体，明确区分“保存复盘文档”和“下次实际复用”。",
+      "已有可追溯基础：项目保留版本、失败原因和返修记录（user-fact-1）。",
+      "失败版本、修改项和最终结果可以被精确区分（evidence.failure-version）。",
+      "用户只审核真实成片效果并可整体否决（evidence.failure-review），符合不得用Agent自评代替用户结果审核的约束。",
+      "Agent不得把一次成功自动晋升为长期规则（user-fact-2）。",
+      "真实输出可以绑定媒体和转录哈希（user-fact-3），有利于将经验与实际产物对应。"
+    ],
+    "testableQuestion": "一条从失败版本中提取的候选经验，能否在后续独立口播视频任务中被准确触发，并经用户对真实成片的审核确认其结果优于既定对照，同时保留否决和撤销能力？",
+    "uncertainties": [
+      "尚不清楚是否已有跨任务复用实例。",
+      "尚不清楚候选经验的适用边界是否只限于同类口播视频。",
+      "尚不清楚长期规则的晋升、降级和撤销标准。"
+    ],
+    "viewerBenefit": "理解如何建立从失败记录、真实成片审核到下次复用验证的闭环。",
+    "weaknesses": [
+      "当前材料证明了失败可追踪、结果可审核，但尚未展示某条经验在后续独立任务中被调用并改善结果。",
+      "“可复用经验”的最小结构、触发条件、失效条件和撤销方式尚未明确。",
+      "必须避免仅凭复用前后的相关性断言经验导致了改进。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:03:19.354Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "0e3acdd919804342e340ffab1254c4d2e7ebbda7751a6515d9b1b14aaaca347a",
+  "input": {
+    "audienceContext": "反复让AI返修视频但同类问题仍会再次出现的创作者",
+    "constraints": [
+      "不得隐藏失败版本",
+      "不得把相关性说成因果",
+      "不得用Agent自评代替用户结果审核"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.failure-version",
+        "kind": "version-history",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "失败版本、修改项和最终结果可以被精确区分"
+      },
+      {
+        "id": "evidence.failure-review",
+        "kind": "human-review",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "用户只审核真实成片效果并可整体否决"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "项目保留版本、失败原因和返修记录",
+      "Agent不得把一次成功自动晋升为长期规则",
+      "真实输出可以绑定媒体和转录哈希"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

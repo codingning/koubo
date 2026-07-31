@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.10a62c53098a",
+      "contentHash": "9ad02c4bd0acafdec9cea8509e6ceb4b6fcd635b369b4e5af2154b775d345dcf",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.4d27e4bf4d8c",
+      "contentHash": "b251dffd06807086069577f975332ae3210e59334e523ca9be574a10ec266dd9",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:00] 两者均未把安装或字幕生成成功误判为准确率合格，也未虚构项目维护状态。",
+      "[T+00:00] 第一份更系统地拆分错误类型、同口径耗时、正式环境兼容性、失败恢复及卸载回退，行动检查项更完整。",
+      "[T+00:00] 第二份更简洁地聚焦替代阈值、高风险样本覆盖和退出条件，但对稳定性测试及回退实施细节较少。",
+      "[T+00:00] 第一份明确指出“完全取消人工校对”与“减少人工工作量”的目标歧义；第二份未单独提出这一关键边界。",
+      "[T+00:00] 两份分析均保持建议权边界，没有批准替换正式流程或作出超出证据的生产决策。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 同样准确把握替代判断目标，严格区分已有证据、缺失数据与未知维护状态。问题聚焦阈值、风险样本和退出条件，可执行但对连续运行稳定性及具体恢复机制的展开略少。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确维持“真实替代人工校对”的方向，明确区分生成成功与准确率合格。完整列出量化错误、耗时阈值、环境稳定性和回退路径等缺口，并提出可直接决定下一步的问题。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00:00] 未提供候选分析之外的实际错误统计和耗时数据，因此只能评价分析质量，不能判断工具是否达标。",
+      "[T+00:00] 三段样本对正式视频分布的代表性仍未知。",
+      "[T+00:00] 评分不涉及候选来源、知识库、Agent或实验组身份。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "b32c94b79b23bea5a03e049f77baac0d19a6922f0207dcddb4c2164cc7f22daa",
+  "evaluatedAt": "2026-07-31T09:07:34.415Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

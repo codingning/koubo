@@ -1,0 +1,266 @@
+{
+  "analysis": {
+    "audience": "已经有本地音效库、但自动剪辑的音效时机经常不自然的短视频创作者",
+    "directionRestatement": "分析如何利用同一真实转场的提前、对齐和滞后样片及人工反馈，训练Agent改善音效时机，而不是更换主题或继续增加标签。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.sfx-timeline",
+          "provenance": "user_provided",
+          "relevance": "支持在同一真实转场上比较提前、对齐和滞后三种时间点。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.sfx-candidates",
+          "provenance": "user_provided",
+          "relevance": "支持把候选音效ID、起点和响度绑定到样片，形成可追踪的比较记录。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "人工对各样片作出接受、拒绝或整组不合格判断的结果及原因",
+        "用于判断时机的明确动作或叙事触发点",
+        "比较时其他音轨与画面组合状态的记录"
+      ]
+    },
+    "lockedDirection": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+    "nextQuestions": [
+      "人工判断音效时机时，以哪个可观察的动作或叙事瞬间作为触发点？",
+      "人工拒绝样片时，准备记录哪些标准化原因，例如过早、滞后、遮盖原声或感知不匹配？",
+      "成功标准采用多大的人工认可时间窗，以及用多少个未参与训练的真实转场进行验证？"
+    ],
+    "principleCitations": [
+      {
+        "applicabilityCheck": "现有证据包含真实时间线样片、稳定音效ID、许可、候选集合、起点和响度，符合该候选原则针对时间线反馈训练的适用条件。",
+        "appliedJudgment": "将当前缺口判定为缺少人工拒绝原因、明确触发点和组合状态记录，而不是缺少素材ID、许可、候选集合或时间点样片。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "ddf343d42c9b2650bf7e71e88dd83f3ca319ed2ef6efca8e9dce613dc1f40864",
+        "counterexampleCheck": "这不是纯归档或人工浏览场景；音效均有稳定ID和使用许可，因此两个反例均不阻止使用。",
+        "knowledgeKind": "content-task-contract",
+        "namespace": "content.private",
+        "principleId": "content-task.asset-selection-needs-timeline-feedback.v1",
+        "relevance": "该方向属于音效选择与自动剪辑，并且核心问题是时间线位置而非素材召回。",
+        "sourceRefs": [
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "b49396bb56920f09d3977b6c29a5089cc812bda025822fff5ac0d242ecc2b4cb",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.c7440b05eed9.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.c7440b05eed9"
+          },
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "a8ee3dc44df452af7117bbdb344de3285a93e6bf887e5d7a07569a63cbb8b992",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.ed0c7752b9df.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.ed0c7752b9df"
+          }
+        ],
+        "sourceVideoId": "",
+        "timecodes": []
+      },
+      {
+        "applicabilityCheck": "该方向是Agent候选比较，且现有样片能够绑定音效ID、起点和响度，具备控制主要变量的条件。",
+        "appliedJudgment": "把测试限定为固定转场、候选音效和响度，只改变时间点，避免把结果错误归因于时机。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "b054a90b3af2030df2762114301b8a1aa8ce3a3be87b22050d58976cb892b3cb",
+        "counterexampleCheck": "当前不是紧急修复；即使同时修复多个缺陷，也不能据此声称获得音效时机的单变量结论。",
+        "knowledgeKind": "content-principle",
+        "namespace": "shared.content-principles",
+        "principleId": "content-principle.change-one-main-variable.v1",
+        "relevance": "提前、对齐和滞后样片可用于隔离比较音效时间点。来源时间码：05:14–06:04。",
+        "sourceRefs": [],
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "06:04",
+            "endSeconds": 364,
+            "startLabel": "05:14",
+            "startSeconds": 314
+          }
+        ]
+      },
+      {
+        "applicabilityCheck": "该方向明确涉及Agent迭代，且已有三种时间点样片可用于识别和修正滞后错误。",
+        "appliedJudgment": "将学习问题收窄为Agent能否提高落入人工认可时间窗的比例，并要求记录拒绝原因以区分具体错误。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "907227cd8aa580e5f7f14039828cc45ecff6fefef5ac2ad84b6ab7275482cf08",
+        "counterexampleCheck": "适量重复可能帮助形成基本熟练度，但不能替代明确错误分类和结果记录，因此不阻止使用。",
+        "knowledgeKind": "content-principle",
+        "namespace": "shared.content-principles",
+        "principleId": "content-principle.learning-corrects-errors.v1",
+        "relevance": "训练目标需要落到可识别的时机错误，而不是仅增加重复样片数量。来源时间码：00:33–01:12、08:42–08:59。",
+        "sourceRefs": [],
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "01:12",
+            "endSeconds": 72,
+            "startLabel": "00:33",
+            "startSeconds": 33
+          },
+          {
+            "endLabel": "08:59",
+            "endSeconds": 539,
+            "startLabel": "08:42",
+            "startSeconds": 522
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "音效均有稳定ID和使用许可",
+      "同一个转场可以召回多个候选",
+      "已有同一真实转场上提前、对齐和滞后三种时间点样片",
+      "每个样片可以绑定候选音效ID、起点和响度",
+      "问题聚焦于音效放置时机，可形成明确的比较任务"
+    ],
+    "testableQuestion": "在固定同一真实转场、候选音效和响度的条件下，加入基于明确动作触发点的人工接受、拒绝及整组不合格反馈后，Agent把音效放在人工认可时间窗内的比例是否提高？",
+    "uncertainties": [
+      "尚不清楚人工认可的时间窗口范围。",
+      "尚不清楚现有样片是否固定了候选音效与响度，仅改变时间点。",
+      "尚不清楚训练效果将如何在未参与训练的转场上验证。"
+    ],
+    "viewerBenefit": "学会把音效时机错误转化为可比较、可记录的训练反馈，同时保留人工否决和整组不合格的权利。",
+    "weaknesses": [
+      "当前没有保存人工拒绝原因",
+      "如果比较时同时改变音效、起点和响度，将难以判断改进来自时机还是其他变量",
+      "尚未明确人工判断正确时机时采用的动作触发点和接受标准"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:10:35.847Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "839726396f019ea8462c0eabe1a2d1a39149a1be4144af83ff04999a949d5bea",
+  "input": {
+    "audienceContext": "已经有本地音效库、但自动剪辑的音效时机经常不自然的短视频创作者",
+    "constraints": [
+      "不得自动批准音效",
+      "不得只增加标签",
+      "必须允许整组音效都不合格"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.sfx-timeline",
+        "kind": "timeline-samples",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "已有同一真实转场上提前、对齐和滞后三种时间点样片"
+      },
+      {
+        "id": "heldout.evidence.sfx-candidates",
+        "kind": "candidate-set",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "每个样片可以绑定候选音效ID、起点和响度"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "音效均有稳定ID和使用许可",
+      "同一个转场可以召回多个候选",
+      "当前没有保存人工拒绝原因"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "candidateLimit": 20,
+    "candidatePoolSize": 19,
+    "includeTrial": true,
+    "mode": "trial-opt-in-contextual-diversity-v2",
+    "query": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机\n已经有本地音效库、但自动剪辑的音效时机经常不自然的短视频创作者\n音效均有稳定ID和使用许可\n同一个转场可以召回多个候选\n当前没有保存人工拒绝原因\n已有同一真实转场上提前、对齐和滞后三种时间点样片\n每个样片可以绑定候选音效ID、起点和响度\n不得自动批准音效\n不得只增加标签\n必须允许整组音效都不合格",
+    "records": [
+      {
+        "contentHash": "b500485c7bceceab7e9b4c69aeb80d78838f172c8fc9b860fba9c92ba3cac341",
+        "contextualScore": 131,
+        "id": "content-task.asset-selection-needs-timeline-feedback.v1",
+        "namespace": "content.private",
+        "rank": 1,
+        "retrievalRank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "187f2fb83bc4a76a64dc3a167cb32bd48a0422e35a87b035d02134307997d742",
+        "contextualScore": 22,
+        "id": "content-principle.change-one-main-variable.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "retrievalRank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "2a98a4e3c5fbb2032c1bbbfadb9cac87421226b2bf20c75377d0a42a6c7b34b7",
+        "contextualScore": 19,
+        "id": "content-principle.manual-fallback-teaches-automation.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "retrievalRank": 9,
+        "status": "trial"
+      },
+      {
+        "contentHash": "ac60246b90ee4ff11c267565e98955a7d99b84ecb19010857818dad206f07a3b",
+        "contextualScore": 17,
+        "id": "content-principle.learning-corrects-errors.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "retrievalRank": 6,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f3db400e79376dc05dc3b5136f2f75bc8e38b6b139008e270a0f20408fd4989c",
+        "contextualScore": 17,
+        "id": "content-principle.versions-compound-with-maintenance.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "retrievalRank": 5,
+        "status": "trial"
+      }
+    ],
+    "selectionPolicy": "contextual-diversity-v2",
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-task.asset-selection-needs-timeline-feedback.v1",
+    "content-principle.change-one-main-variable.v1",
+    "content-principle.manual-fallback-teaches-automation.v1",
+    "content-principle.learning-corrects-errors.v1",
+    "content-principle.versions-compound-with-maintenance.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

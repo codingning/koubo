@@ -1,0 +1,34 @@
+{
+  "caseId": "heldout.caption-rule-reuse",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.a2cab4477dcd",
+  "trialAnalysisArtifactId": "content-strategy.6de8793fe0db",
+  "evaluationArtifactId": "content-training-evaluation.5000b2e35bb5",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 两份分析均未偏离方向，也都保留了成功与失败样本、禁止全面禁用以及用户审核优先等边界。",
+    "[T+00:01] 第一份更侧重利用现有跨样片差异和触发记录诊断失效边界；第二份进一步给出了条件改写、版本记录、后续调用和人工审核的验证链。",
+    "[T+00:02] 第二份的下一步更具体，但并未把尚未验证的改进描述为既成事实，因此没有形成不受支持的结论。",
+    "[T+00:03] 两份都识别了话题与语速同时变化造成的混杂归因，第二份还明确提出负面样本与撤销机制，边界描述略更完整。"
+  ],
+  "uncertainties": [
+    "缺少第一条视频的真实样片及人工审核依据，无法核实所谓成功基线。",
+    "无法从现有材料区分话题、语速、关键词数量、强调频率或其他变量的独立影响。",
+    "尚无修改后经验在后续可比较任务中的真实输出和用户审核结果。",
+    "相对时间戳仅表示本次评估中的记录顺序，因为输入未提供可核验的绝对时间。"
+  ]
+}

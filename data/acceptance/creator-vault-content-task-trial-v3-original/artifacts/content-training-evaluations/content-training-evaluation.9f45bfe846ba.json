@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.795c7694964f",
+      "contentHash": "bd0c27ad081e1b19f974f704d3d86c58b3fddbd894f6f71e63324c4e59d861aa",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.4959a704075b",
+      "contentHash": "616a431bf4c8e1a511e067b7be24bc28bea317eab82a236f060ff6e64d26863d",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+0] 两者均完整保留共享事实、约束和证据边界，没有把素材数量等同于Agent能力。",
+      "[T+0] 第一份提出结果指标，但把两个能力改动合并测试，因果归因和优先级判断较弱。",
+      "[T+0] 第二份把缺失记录转化为更具体的受控诊断步骤，因此下一步更可执行。",
+      "[T+0] 两者都明确需要真实片段验证，且未自动批准素材或越权作出生产结论。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 1,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+0] 准确保持了问题方向，并清楚区分资产治理与Agent选材能力。异议：测试问题同时引入语义检索和反馈记录，难以分离两者影响，也未真正决定应先补哪一层能力。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+0] 准确保持方向，并将下一步收敛为固定片段、完整候选和人工判定记录，可用于定位召回、排序、时点、混音或感知问题。异议：该诊断仍不能直接量化语义检索与反馈闭环各自的影响。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "请求未提供绝对时间戳，因此使用相对时间标记“T+0”。",
+      "共享上下文没有给出trial样本规模、错误分布或评价阈值，无法判断任一诊断路径的实际收益。",
+      "视频Agent与Sound Agent是否为同一执行链路未明确。"
+    ],
+    "winnerVariant": "trial"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "373ddf757f0331312ba1632e3615f901668927055d511a4f49f0bda252febc1d",
+  "evaluatedAt": "2026-07-31T09:02:30.418Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

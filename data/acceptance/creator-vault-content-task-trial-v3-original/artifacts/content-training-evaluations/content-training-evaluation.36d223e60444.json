@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.a8ca607007e5",
+      "contentHash": "0e3acdd919804342e340ffab1254c4d2e7ebbda7751a6515d9b1b14aaaca347a",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.e7091504c1e4",
+      "contentHash": "bee9a4aecbba8204af3165ccad3f00c59bb39507e7582e0ec482a850583b6eff",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[timestamp unavailable] 两者均准确区分现有证据、缺失证据与不确定性，未将相关性表述为因果，也未用Agent自评替代用户审核。",
+      "[timestamp unavailable] 第一份更强调经验从候选规则到保留、修订或撤销的治理流程，以及独立任务中的对照验证。",
+      "[timestamp unavailable] 第二份更强调触发、禁止、停止条件、主要变量控制和负面样本，执行检查项略更具体。",
+      "[timestamp unavailable] 第一份明确提出“既定对照”和长期规则晋升标准；第二份则更直接要求调用前后真实成片记录及跨任务一致的审核标准。",
+      "[timestamp unavailable] 两者均未越权批准生产、发布内容或将单次结果提升为长期记忆，且均无声明的硬失败。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[timestamp unavailable] 无实质性反对意见：紧扣“从失败记录到可调用、验证、撤销的经验”这一方向；明确要求独立任务调用记录、对照、用户成片审核及规则撤销标准。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[timestamp unavailable] 无实质性反对意见：保持既定方向，并将下一步具体化为调用记录、变量控制、真实输出比较、用户审核、负面样本及停止/撤销条件。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "请求未提供可用于标注异议的实际时间戳，因此使用“timestamp unavailable”，未虚构时间。",
+      "现有材料不足以判断任一方案所要求的后续调用、对照或用户审核记录是否真实存在。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "951970e644300ad0bd894a51463f2d33ec6af685d7b029336a9f28b28b345c90",
+  "evaluatedAt": "2026-07-31T09:03:54.328Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

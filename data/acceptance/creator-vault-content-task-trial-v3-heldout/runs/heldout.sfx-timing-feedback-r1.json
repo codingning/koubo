@@ -1,0 +1,34 @@
+{
+  "caseId": "heldout.sfx-timing-feedback",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.18af82d08283",
+  "trialAnalysisArtifactId": "content-strategy.a91bab8002bb",
+  "evaluationArtifactId": "content-training-evaluation.230e24653df8",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "T+00: 第一份把明确动作触发点、人工认可时间窗和未参与训练的真实转场验证连成更具体的评估路径。",
+    "T+01: 第一份明确指出若同时改变音效、起点和响度将无法可靠归因，变量控制更严格。",
+    "T+02: 第二份更完整地显式保留三项共享约束，尤其是不得自动批准和允许整组不合格。",
+    "T+03: 第二份能区分时机、音色、响度及整体不匹配等拒绝原因，但其测试问题未给出明确认可时间窗或留出集规模。",
+    "T+04: 两份都没有把现有样片误称为已证明正确时机，也都没有出现越权批准或偏离主题。"
+  ],
+  "uncertainties": [
+    "未提供人工标注结果，无法判断两套提问路径在实际数据上的区分能力。",
+    "共享上下文只说明样片可绑定候选音效、起点和响度，未明确三种时机样片是否仅改变时间点。",
+    "T+编号为本次评估内的相对时间标记，因为输入未提供绝对时间戳。"
+  ]
+}

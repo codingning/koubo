@@ -1,0 +1,32 @@
+{
+  "caseId": "heldout.voice-tool-audit",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.a270b33b4b3a",
+  "trialAnalysisArtifactId": "content-strategy.0fec0fdb7d6f",
+  "evaluationArtifactId": "content-training-evaluation.7709e711f84f",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "control",
+  "controlTotal": 8,
+  "trialTotal": 7,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 1,
+    "controlCitationCount": 0,
+    "correctCitations": 1,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:01] 两者都完整保留了“必须比较现有方案真实增量”和“授权不明确不得进入生产”的约束。",
+    "[T+00:02] 第一份把授权、同任务对照、最小权限、维护及回退成本都纳入下一步问题，决策路径更完整。",
+    "[T+00:03] 第二份对固定版本、卸载清理和回退成本识别更细，但这些项目没有进入 nextQuestions。",
+    "[T+00:04] 第一份的 defer 与当前证据状态一致；第二份的 single_piece 含义不透明，削弱下一步行动指向。"
+  ],
+  "uncertainties": [
+    "[T+00:05] “single_piece”可能是内容形态标签而非采用建议；因字段语义未提供，只能评价其对当前决策的不明确性。",
+    "[T+00:06] 未提供运行记录和授权审计的原文，因此无法核验两份分析是否遗漏了证据中的更细事实。"
+  ]
+}

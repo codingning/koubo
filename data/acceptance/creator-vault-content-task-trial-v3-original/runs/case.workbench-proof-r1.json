@@ -1,0 +1,34 @@
+{
+  "caseId": "case.workbench-proof",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.d93131035488",
+  "trialAnalysisArtifactId": "content-strategy.8715ab4453fd",
+  "evaluationArtifactId": "content-training-evaluation.13a24d00585a",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[评估时点 T0] 两份分析均完整保留受众、真实版本对比和必须人工审核的共享事实，没有方向漂移或无依据宣称。",
+    "[评估时点 T0] 第一份更细致地区分返修原因、具体修改、最终审核结果及观众体验评价依据；第二份将这些缺口压缩为问题定义和评价标准。",
+    "[评估时点 T0] 第一份明确指出单案例不能证明对任意口播或视频有效，归因与泛化边界更具体。",
+    "[评估时点 T0] 第二份更直接要求区分工具处理与人工审核各自的作用，有助于避免把最终效果全部归因于自动化。",
+    "[评估时点 T0] 两份追问都能直接决定后续证据收集与案例叙事重点，未触发任何硬失败。"
+  ],
+  "uncertainties": [
+    "[评估时点 T0] 未提供真实素材内容，因此无法验证候选所提判断标准是否能由现有版本实际支持。",
+    "[评估时点 T0] 共享上下文未给出效率、质量或返修可控性中的首要目标，无法据此进一步拉开行动性评分。",
+    "[评估时点 T0] 未提供评价反馈或审核记录，无法判断工具处理与人工干预的贡献能否被可靠拆分。"
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "analysis": {
+    "audience": "经常制作口播字幕、希望减少校对时间但担心中文准确率和环境兼容性的创作者",
+    "directionRestatement": "你想基于真实中文口播、人工校对对照和运行环境，建立可验证的替代判断，而不把“工具能生成字幕文件”等同于准确率合格，也不在缺少退出路径时替换正式流程。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.subtitle-license",
+          "provenance": "user_provided",
+          "relevance": "许可证、依赖版本和本地运行权限已经记录，可用于判断工具是否具备进入实际工作环境的基础条件。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.subtitle-sample",
+          "provenance": "user_provided",
+          "relevance": "已有三段不同语速中文口播的工具输出和人工校对稿，可直接比较字幕错误、人工修改量与不同语速下的表现。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "预先设定的替代合格阈值，包括准确性、校对耗时和严重错误容忍度。",
+        "更接近正式视频分布的样本覆盖说明，以及各类错误的统计结果。",
+        "工具失败、环境异常或结果不达标时的退出条件与人工流程恢复方式。"
+      ]
+    },
+    "lockedDirection": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+    "nextQuestions": [
+      "你认定“能替代”的最低标准是什么：允许哪些错误、严重错误上限多少、校对时间至少减少多少？",
+      "三段样本是否覆盖专有名词、数字、口音或含混发音、停顿、噪声和长时口播等实际高风险场景？",
+      "如果工具输出不达标或环境出现问题，恢复现有人工校对流程的退出条件是什么？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已经在隔离目录完成安装",
+      "工具能生成字幕文件",
+      "尚未进入正式视频流程",
+      "已有三段不同语速中文口播的工具输出和人工校对稿，可用于比较实际错误与校对工作量。",
+      "许可证、依赖版本和本地运行权限已经记录，可支撑环境兼容性与使用边界核查。"
+    ],
+    "testableQuestion": "在预先定义的中文准确性、严重错误和校对耗时阈值下，该工具在覆盖正式口播风险场景的样本中，是否能稳定达标并保留可执行的人工退出路径？",
+    "uncertainties": [
+      "三段样本与正式视频内容分布的代表性未知。",
+      "当前工具输出相对人工校对稿的错误数量、错误类型和校对耗时尚未量化。",
+      "工具的维护状态没有 supplied evidence，不能据此判断长期可用性。"
+    ],
+    "viewerBenefit": "获得一套判断字幕对齐工具能否安全减少人工校对工作的验证思路。",
+    "weaknesses": [
+      "尚未定义“替代人工校对”的量化合格标准，例如错误率、时间节省比例和不可接受错误类型。",
+      "三段样本覆盖不同语速，但是否覆盖专有名词、数字、口音、停顿、噪声和长视频等高风险场景尚不明确。",
+      "尚未提供失败时退出并恢复人工流程的具体条件。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:06:55.510Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "9ad02c4bd0acafdec9cea8509e6ceb4b6fcd635b369b4e5af2154b775d345dcf",
+  "input": {
+    "audienceContext": "经常制作口播字幕、希望减少校对时间但担心中文准确率和环境兼容性的创作者",
+    "constraints": [
+      "不得把生成成功说成准确率合格",
+      "不得虚构维护状态",
+      "不得在没有退出路径时替换正式流程"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.subtitle-license",
+        "kind": "audit-record",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "许可证、依赖版本和本地运行权限已经记录"
+      },
+      {
+        "id": "heldout.evidence.subtitle-sample",
+        "kind": "local-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "已有三段不同语速中文口播的工具输出和人工校对稿"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "已经在隔离目录完成安装",
+      "工具能生成字幕文件",
+      "尚未进入正式视频流程"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

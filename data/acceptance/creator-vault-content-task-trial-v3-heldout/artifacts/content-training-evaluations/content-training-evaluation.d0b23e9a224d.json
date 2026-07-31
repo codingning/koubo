@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.b42f3e93b967",
+      "contentHash": "23d4610c441551df13c97b06a40571918e845f78d5a71d4008d89c6965ac6f78",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.68ac1dd0691b",
+      "contentHash": "f78cf5a26edfa417a85da7d8686f1e6dc5d429a73e9415781a5e13cc0886b9a4",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "两份分析都没有把安装或生成字幕误判为准确率合格，也没有虚构维护状态。",
+      "第一份更强调扩充常见边界条件、失败恢复成本和环境兼容性，覆盖面略广。",
+      "第二份更明确提出替换、暂缓、放弃阈值以及固定版本稳定性记录，决策操作性略强。",
+      "两份均保留回退到人工流程的要求，没有越权批准进入正式生产。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持“真实替代人工校对”的方向，明确区分生成成功与质量合格，并提出量化标准、基准耗时、边界样本和退出路径。轻微不足是行动重点较分散，尚未像第二份那样直接要求预设“替换、暂缓、放弃”三类决策阈值。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 紧扣替代决策，清楚区分已知证据、缺失数据与维护状态等不确定性；将下一步集中到基准耗时、错误统计、决策阈值和回退条件，执行路径更直接。[T+00:01] 轻微不足是测试问题主要围绕已有三段样本，对长时长、噪声等代表性边界的验证在其他字段中体现，但未充分纳入核心测试问题。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "未提供四个维度更细的分档锚点，因此两份在满分区间内的细微差异主要通过文字说明表达。",
+      "三段样本的实际量化结果未提供，无法评价候选提出的阈值最终是否足够严格。",
+      "未提供绝对时钟，异议使用相对时间戳标注。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "788bd8806cf02a77499a17f440faf8b45af86f948ede47203a02c12488f45804",
+  "evaluatedAt": "2026-07-31T09:10:04.827Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

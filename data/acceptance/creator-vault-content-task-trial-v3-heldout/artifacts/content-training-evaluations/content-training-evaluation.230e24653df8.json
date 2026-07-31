@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.18af82d08283",
+      "contentHash": "fb8dda68b3c021b712eb6b4532a8addb25acd32784be49252eda6db1d06ae521",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.a91bab8002bb",
+      "contentHash": "839726396f019ea8462c0eabe1a2d1a39149a1be4144af83ff04999a949d5bea",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "T+00: 第一份把明确动作触发点、人工认可时间窗和未参与训练的真实转场验证连成更具体的评估路径。",
+      "T+01: 第一份明确指出若同时改变音效、起点和响度将无法可靠归因，变量控制更严格。",
+      "T+02: 第二份更完整地显式保留三项共享约束，尤其是不得自动批准和允许整组不合格。",
+      "T+03: 第二份能区分时机、音色、响度及整体不匹配等拒绝原因，但其测试问题未给出明确认可时间窗或留出集规模。",
+      "T+04: 两份都没有把现有样片误称为已证明正确时机，也都没有出现越权批准或偏离主题。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "准确保持用户方向，并更明确复述不得自动批准、不得只增加标签及允许整组不合格的约束。提出收集偏好、排序和结构化拒绝原因，但验证指标和因果隔离设计略少于第一份。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "准确聚焦音效时机训练，并提出动作触发点、标准化拒绝原因、认可时间窗和留出转场验证。清楚区分现有证据与缺失标注，也注意到同时改变音效、起点和响度会妨碍归因。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "未提供人工标注结果，无法判断两套提问路径在实际数据上的区分能力。",
+      "共享上下文只说明样片可绑定候选音效、起点和响度，未明确三种时机样片是否仅改变时间点。",
+      "T+编号为本次评估内的相对时间标记，因为输入未提供绝对时间戳。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "22ee9ad15a44c547a2a51ea25802f185a0e78b29ccf4494d0e4bed2d854561cf",
+  "evaluatedAt": "2026-07-31T09:11:00.991Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

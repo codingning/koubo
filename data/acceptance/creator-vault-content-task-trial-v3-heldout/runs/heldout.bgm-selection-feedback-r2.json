@@ -1,0 +1,34 @@
+{
+  "caseId": "heldout.bgm-selection-feedback",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.433af825bbc7",
+  "trialAnalysisArtifactId": "content-strategy.66f1c0f01570",
+  "evaluationArtifactId": "content-training-evaluation.c1f8f4e24ad4",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[timestamp: evaluation_time_not_provided] 第一份更明确要求记录问题严重程度、跨口播及跨审核轮次的复现性，有利于判断反馈是否稳定。",
+    "[timestamp: evaluation_time_not_provided] 第二份更强调BGM ID、时间线位置和参数版本之间的结构化关联，数据记录方案更具体。",
+    "[timestamp: evaluation_time_not_provided] 第一份明确指出授权合格不能证明实际效果合格；第二份未重申该边界，但也没有将授权证据误作效果证据。",
+    "[timestamp: evaluation_time_not_provided] 第二份进一步区分反馈可能用于召回、排序或参数调整；第一份则更集中于受控比较和拒绝原因归因。",
+    "[timestamp: evaluation_time_not_provided] 两份都遵守单变量归因限制、保留人工听感审核，并未出现方向漂移、无依据断言、越权或泛化不可执行问题。"
+  ],
+  "uncertainties": [
+    "请求未提供可用的当前时间，因此无法生成真实时钟时间戳，以上使用明确的占位时间标记。",
+    "两份分析都未获得实际混音记录样例，无法验证其建议字段是否已存在或能否稳定复现。",
+    "尚不能判断“内容气质”应采用预定义标签、自由描述还是混合标准。"
+  ]
+}

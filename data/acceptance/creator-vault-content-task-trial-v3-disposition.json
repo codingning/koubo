@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "decision": "rejected_no_stable_lift",
+  "decidedAt": "2026-07-31",
+  "actor": {
+    "type": "controller",
+    "id": "content-task-trial-v3-evaluator"
+  },
+  "preImportSnapshot": "G:/CreatorVault-Backups/vault-snapshots/20260731-165450-before-private-task-import",
+  "evaluations": [
+    {
+      "suiteId": "content-strategist-vault-trial-suite.v1",
+      "summary": "data/acceptance/creator-vault-content-task-trial-v3-original/summary.json",
+      "summarySha256": "ec3d738bb230c719a8e775c59c11b5f13862337612fa7d9ed2a05731f064366a",
+      "passed": false,
+      "trialDirectionWins": 0,
+      "averageScoreDelta": 0.4,
+      "consistentDirections": 2,
+      "regressions": 0
+    },
+    {
+      "suiteId": "content-strategist-task-knowledge-heldout-suite.v1",
+      "summary": "data/acceptance/creator-vault-content-task-trial-v3-heldout/summary.json",
+      "summarySha256": "5d733717ab8d22f9d7a558f50abb342d66c8f65b2119a81255431e1d49d573fa",
+      "passed": false,
+      "trialDirectionWins": 0,
+      "averageScoreDelta": 0.2,
+      "consistentDirections": 2,
+      "regressions": 0
+    }
+  ],
+  "cards": [
+    {
+      "id": "content-task.tool-audit-needs-decision-thresholds.v1",
+      "status": "rejected",
+      "transitionId": "transition.7009656a-de35-46c0-a41b-812620d6655d",
+      "contentHash": "98e1c36c5d06a677a15369bc91971de5f19c68485c4c5e36217c22eb6ea783ac"
+    },
+    {
+      "id": "content-task.asset-selection-needs-timeline-feedback.v1",
+      "status": "rejected",
+      "transitionId": "transition.ed3dc99e-6abb-44d5-a09c-d1d90eca0445",
+      "contentHash": "7c8440e44b83c4106a0ed9b3522e74bb5fff388a20ddb7acdd5095136ad4af68"
+    },
+    {
+      "id": "content-task.experience-reuse-needs-output-comparison.v1",
+      "status": "rejected",
+      "transitionId": "transition.5a1ac2eb-318a-4453-adbd-08c164329ff0",
+      "contentHash": "bf1c0167f436d6a7d8af335fac30367b4437710edc752ee205c646e29d19cfe8"
+    }
+  ],
+  "authority": {
+    "grantsApproval": false,
+    "publishes": false,
+    "promotesMemory": false,
+    "changesProductionDefault": false
+  },
+  "rollback": {
+    "available": true,
+    "requiresExplicitTransitionRollback": true,
+    "automaticReimportReactivatesRejectedCards": false
+  }
+}

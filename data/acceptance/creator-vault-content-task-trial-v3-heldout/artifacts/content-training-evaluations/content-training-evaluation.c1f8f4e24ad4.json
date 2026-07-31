@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.433af825bbc7",
+      "contentHash": "689f489b2bddee4e962339c33a698a0c81ea63f2665b9cb5686f13f4e7be7fa9",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.66f1c0f01570",
+      "contentHash": "fd29538b2fe02729a82f8848393af5c85923559eb346db014056f2b88401512a",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[timestamp: evaluation_time_not_provided] 第一份更明确要求记录问题严重程度、跨口播及跨审核轮次的复现性，有利于判断反馈是否稳定。",
+      "[timestamp: evaluation_time_not_provided] 第二份更强调BGM ID、时间线位置和参数版本之间的结构化关联，数据记录方案更具体。",
+      "[timestamp: evaluation_time_not_provided] 第一份明确指出授权合格不能证明实际效果合格；第二份未重申该边界，但也没有将授权证据误作效果证据。",
+      "[timestamp: evaluation_time_not_provided] 第二份进一步区分反馈可能用于召回、排序或参数调整；第一份则更集中于受控比较和拒绝原因归因。",
+      "[timestamp: evaluation_time_not_provided] 两份都遵守单变量归因限制、保留人工听感审核，并未出现方向漂移、无依据断言、越权或泛化不可执行问题。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[timestamp: evaluation_time_not_provided] 准确保持了“情绪标签为何不足、应记录何种反馈”的方向；明确区分现有证据、缺失信息与不确定性，并提出单变量对照、时间点和严重程度等可执行记录方式。归因限制及“授权不等于效果合格”也表达清楚。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[timestamp: evaluation_time_not_provided] 准确围绕人声清晰度、内容气质和节奏适配展开；把BGM ID、时间线、参数版本、错误类型及接受/拒绝结果组合成较完整的记录方案，并识别反馈可能作用于召回、排序或混音调整等不同环节。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "请求未提供可用的当前时间，因此无法生成真实时钟时间戳，以上使用明确的占位时间标记。",
+      "两份分析都未获得实际混音记录样例，无法验证其建议字段是否已存在或能否稳定复现。",
+      "尚不能判断“内容气质”应采用预定义标签、自由描述还是混合标准。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "b2d4dd7e304952bbd2d3a1cc7438828ba894a8b9868540048eb4ea8d2d5cbd17",
+  "evaluatedAt": "2026-07-31T09:13:57.863Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

@@ -1,0 +1,129 @@
+{
+  "analysis": {
+    "audience": "反复调整字幕动效、但同一种规则在不同口播中表现不稳定的创作者",
+    "directionRestatement": "分析同一条关键词放大字幕规则为何在话题和语速不同的下一条视频中被否决，以及如何将可追溯的成功与失败样本转化为Agent可条件化使用、仍需用户样片审核的经验。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.caption-versions",
+          "provenance": "user_provided",
+          "relevance": "支持比较第二条视频调用旧规则前后的实际字幕表现。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.caption-rejection",
+          "provenance": "user_provided",
+          "relevance": "支持确认第二条真实样片被用户否决，并锁定原因为关键词放大过密且抢夺注意力。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "第一条视频中关键词放大字幕被判定有效的真实样片及用户审核依据。",
+        "可追溯触发记录中与两条视频分别对应的触发条件和执行结果。"
+      ]
+    },
+    "lockedDirection": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+    "nextQuestions": [
+      "第一条视频中“有效”是否有可引用的真实样片和用户审核结论？",
+      "旧规则的触发记录能否对应到两条视频各自的具体触发条件与结果？",
+      "除话题和语速外，两条视频在关键词数量、强调频率或字幕节奏上是否还有已记录差异？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "第二条视频保留了调用旧规则前后的字幕样片，可进行直接版本比较。",
+      "第二条真实样片已被用户否决，且否决原因明确为关键词放大过密并抢夺注意力。",
+      "旧规则的触发记录可以追溯，有条件检查规则如何被调用。",
+      "两条视频的话题和语速不同，为分析规则适用条件提供了明确差异。"
+    ],
+    "testableQuestion": "在保留关键词强调的前提下，Agent能否根据两条视频的真实样片、话题与语速差异及可追溯触发记录，识别会造成放大过密和注意力争夺的适用边界，并始终将结果交由用户样片审核？",
+    "uncertainties": [
+      "尚不能判断话题、语速、关键词数量、强调频率中哪一项或哪几项导致第二条样片显得很吵。",
+      "尚不能确认第一条视频的成功标准是否与第二条视频的用户审核标准一致。"
+    ],
+    "viewerBenefit": "学会用跨样片对照和用户否决原因，让Agent区分规则的适用条件，而不是永久禁用关键词强调或依赖自评。",
+    "weaknesses": [
+      "现有证据集中在第二条视频，尚未提供第一条视频中该规则有效的样片及用户审核依据。",
+      "话题和语速同时不同，当前材料不足以分别判断它们与放大密度、注意力争夺之间的关系。",
+      "单次失败只能支持修正该规则的适用条件，不能支持永久禁用所有关键词强调。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:14:25.124Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "77956bbb0d7edc5133e6d9dd1df09dabd65eb1210649682a842afdb035781fcf",
+  "input": {
+    "audienceContext": "反复调整字幕动效、但同一种规则在不同口播中表现不稳定的创作者",
+    "constraints": [
+      "不得隐藏旧规则的成功和失败样本",
+      "不得因一次否决永久禁用所有关键词强调",
+      "不得用Agent自评代替用户样片审核"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.caption-versions",
+        "kind": "version-comparison",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "保留了第二条视频调用旧规则前后的字幕样片"
+      },
+      {
+        "id": "heldout.evidence.caption-rejection",
+        "kind": "human-review",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "用户否决原因为关键词放大过密并抢夺注意力"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "两条视频的话题和语速不同",
+      "旧规则的触发记录可以追溯",
+      "第二条真实样片已被用户否决"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

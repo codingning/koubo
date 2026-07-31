@@ -1,0 +1,33 @@
+{
+  "caseId": "case.open-source-skill",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.f3a7e2e0306f",
+  "trialAnalysisArtifactId": "content-strategy.4178a96d855b",
+  "evaluationArtifactId": "content-training-evaluation.2903a09b9e3a",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 1,
+    "controlCitationCount": 0,
+    "correctCitations": 1,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:02] 第一份更强调可复核实验设计：固定版本、真实任务、量化指标、失败记录及安装／暂缓／放弃阈值。",
+    "[T+00:03] 第二份更强调受众可执行边界，明确追问普通创作者所需技术基础及无需专业安全知识时的检查边界。",
+    "[T+00:04] 对第一份的轻微异议：要求固定版本和预定义阈值虽有助于验证，但未说明哪些检查可先用低门槛定性标准完成。",
+    "[T+00:05] 对第二份的轻微异议：没有像第一份那样明确要求固定版本、具体试用任务、失败记录和稳定性指标，复核粒度稍弱。",
+    "[T+00:06] 两份均忠于既定方向、遵守证据边界，并提供了能决定下一步的问题；均不构成所列硬失败。"
+  ],
+  "uncertainties": [
+    "[T+00:07] 评分仅依据所提供文本；缺少更细的维度锚点，因此两份在满分区间内的细微差异无法用整数分进一步表达。",
+    "[T+00:08] 共享证据未说明案例公开限制，因此无法判断“可公开案例”是否现实可得。"
+  ]
+}

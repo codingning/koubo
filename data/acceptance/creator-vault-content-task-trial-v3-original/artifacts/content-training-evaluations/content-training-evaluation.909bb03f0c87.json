@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.10f6ff0b74a8",
+      "contentHash": "b5479ec24ad04e43d832dbfe7e10e3608a267067403c809be7a2534002bb419c",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.04519db49602",
+      "contentHash": "1657806881cb8f1b66e6e3e336a54977145e267bb45eb1e7170edc2be4e815e5",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:04] 两者都完整保留了“不把素材数量等同于Agent能力”的核心方向，也都未越权自动批准素材或跳过真实片段验证。",
+      "[T+00:05] 第二份比第一份更具体地定义了验证单元：固定片段、表达目标、候选稳定ID、时间点、组合状态及接受或拒绝原因。",
+      "[T+00:06] 第二份对错误层级的拆分更细，能区分召回、排序、放置时间点、混音和最终感知问题；第一份主要覆盖召回、语境、节奏和排序。",
+      "[T+00:07] 第一份更直接提出比较语义检索缺失与真实片段反馈缺失的相对贡献，但其验证设计不如第二份具体。",
+      "[T+00:08] 两者均严格区分现有证据、缺失证据和不确定性，未发现声明范围内的硬失败。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持既定方向，区分资产管理与自动选材能力，并将下一步落在语义检索、真实片段反馈和评价标准上。[T+00:01] 异议：错误分类和实验记录要求较宽泛，尚未明确到固定片段、候选集合、时间点与人工判定的可复现实验单元。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:02] 准确保持方向，并把共享事实转化为固定真实片段、候选集合、精确时间点、人工反馈和错误分层，下一步更可执行。[T+00:03] 异议：所列记录维度较多，在现有trial很少的条件下，仍未给出判断样本足够性的门槛。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00:09] 固定评分尺度较粗，两份分析均达到各维度要求，细微质量差异未转化为分数差。",
+      "[T+00:10] 共享上下文没有提供trial记录，无法验证任一候选提出的错误分类是否与实际分布一致。",
+      "[T+00:11] 当前无法判断所需样本量或评价者一致性，因此不能确认建议的验证方案能产生稳定结论。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "3d3b519212620d66567073e323864369c07477891d7ff516ed70970082a993b5",
+  "evaluatedAt": "2026-07-31T09:02:04.203Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

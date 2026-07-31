@@ -1,0 +1,251 @@
+{
+  "analysis": {
+    "audience": "经常制作口播字幕、希望减少校对时间但担心中文准确率和环境兼容性的创作者",
+    "directionRestatement": "评估该开源字幕对齐工具在真实中文口播任务中是否达到替代现有人工校对的条件，而非把安装成功或字幕生成成功当作准确率合格。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.subtitle-license",
+          "provenance": "user_provided",
+          "relevance": "支持许可证、依赖版本和本地运行权限边界的审计，避免把开源直接等同于安全或兼容。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.subtitle-sample",
+          "provenance": "user_provided",
+          "relevance": "支持在三段不同语速中文口播上比较工具输出与人工校对稿，并分析错误类型和校对成本。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "每段样本的总字数或字幕条目数，以及错字、漏字、专有名词、数字、断句和时间轴偏移等分类结果",
+        "当前纯人工校对耗时与工具生成后校对耗时的同口径对比",
+        "进入正式流程、暂缓或放弃的预设阈值",
+        "连续运行稳定性、目标正式环境兼容性及失败恢复记录",
+        "明确的卸载、回退和原流程保留方式"
+      ]
+    },
+    "lockedDirection": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+    "nextQuestions": [
+      "三段样本中，各类错误数量、严重程度以及修正所需时间分别是多少？",
+      "与当前纯人工校对相比，你准备把“可替代”定义为至少节省多少校对时间，并允许多高的严重错误率？",
+      "如果正式环境出现依赖冲突、结果退化或项目停止维护，具体如何卸载并回到现有流程？"
+    ],
+    "principleCitations": [
+      {
+        "applicabilityCheck": "已完成隔离安装，目标是判断工具是否进入正式工作流，符合其“开源Skill审计、AI工具选型、插件安装”适用条件。",
+        "appliedJudgment": "因此当前不能依据安装完成和字幕文件生成判定可替代人工校对；必须补充真实可用指标、预设阈值和退出路径后再下结论。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "b7f3c72520e1ba702f0c5acaef12d691fd806b76f00b5712226ef2a84f53b6b8",
+        "counterexampleCheck": "本方向明确涉及替代与流程采用，不属于只做概念介绍；若发现高风险权限或来源问题可直接停止，但现有证据仅说明权限已经记录，尚未提供需要立即停止的事实。",
+        "knowledgeKind": "content-task-contract",
+        "namespace": "content.private",
+        "principleId": "content-task.tool-audit-needs-decision-thresholds.v1",
+        "relevance": "该候选原则直接适用于开源工具选型与隔离试用，要求把试用结果连接到安装、暂缓或放弃阈值。",
+        "sourceRefs": [
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "fa79234b98175e3a04cc1a21fc2335f3c9471f1e37858403d54973baac4378ff",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.ad2eb2f626f4.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.ad2eb2f626f4"
+          },
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "7054f22699026b7a42ac7f7142eec52d658c8ef285d4ab988b8170ca1605195b",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.7edc9bf4b987.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.7edc9bf4b987"
+          }
+        ],
+        "sourceVideoId": "",
+        "timecodes": []
+      },
+      {
+        "applicabilityCheck": "已有工具输出和人工校对稿，可形成真实错误与修正记录，符合公开实验和工具评测记录场景。",
+        "appliedJudgment": "因此评估应保留三段样本中的失败类型、修正成本和放弃理由，不能只汇总表现最好的样例。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "5309796372ebd790b28e3c6c1321047a838ae7690c69f5c832a5c7059acc047e",
+        "counterexampleCheck": "其反例限制是假想复盘不能包装为验证方法；本次已有真实样本，但在量化结果完成前仍不能声称方法已经验证。",
+        "knowledgeKind": "content-principle",
+        "namespace": "shared.content-principles",
+        "principleId": "content-principle.version-failures-and-results.v1",
+        "relevance": "来源视频7665371144572177700的06:04–07:08及07:50–08:40候选原则强调保留原判断、具体修改、结果和淘汰理由，适合呈现字幕工具的真实试用过程。",
+        "sourceRefs": [],
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "07:08",
+            "endSeconds": 428,
+            "startLabel": "06:04",
+            "startSeconds": 364
+          },
+          {
+            "endLabel": "08:40",
+            "endSeconds": 520,
+            "startLabel": "07:50",
+            "startSeconds": 470
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已经在隔离目录完成安装",
+      "工具能生成字幕文件",
+      "尚未进入正式视频流程",
+      "许可证、依赖版本和本地运行权限已经记录",
+      "已有三段不同语速中文口播的工具输出和人工校对稿",
+      "方向聚焦于真实替代价值，而非演示效果或功能数量"
+    ],
+    "testableQuestion": "在同一组真实中文口播样本和固定运行环境下，该工具能否在不增加严重字幕错误及流程风险的前提下，把人工校对时间降低到预设阈值以内，并可在失败时无损回退到现有流程？",
+    "uncertainties": [
+      "三段不同语速样本对日常口播难点的代表性未知",
+      "工具在正式制作环境中的稳定性与兼容性未知",
+      "项目维护状态未提供，不能推断其活跃或停滞",
+      "尚不清楚替代目标是完全取消人工校对，还是减少人工校对工作量"
+    ],
+    "viewerBenefit": "获得一套基于真实样本、校对耗时、错误类型和退出条件的替代判断方法。",
+    "weaknesses": [
+      "现有材料尚未给出工具输出相对人工校对稿的量化错误结果",
+      "尚未记录使用工具后人工校对耗时是否低于当前流程",
+      "尚未定义可以进入正式流程的准确率、耗时、稳定性和兼容性阈值",
+      "尚未明确试用失败后的卸载、回退及字幕文件兼容路径",
+      "三段样本是否覆盖专有名词、数字、断句、噪声和多人声等常见难点尚不明确"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:07:14.567Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "b251dffd06807086069577f975332ae3210e59334e523ca9be574a10ec266dd9",
+  "input": {
+    "audienceContext": "经常制作口播字幕、希望减少校对时间但担心中文准确率和环境兼容性的创作者",
+    "constraints": [
+      "不得把生成成功说成准确率合格",
+      "不得虚构维护状态",
+      "不得在没有退出路径时替换正式流程"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.subtitle-license",
+        "kind": "audit-record",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "许可证、依赖版本和本地运行权限已经记录"
+      },
+      {
+        "id": "heldout.evidence.subtitle-sample",
+        "kind": "local-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "已有三段不同语速中文口播的工具输出和人工校对稿"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "已经在隔离目录完成安装",
+      "工具能生成字幕文件",
+      "尚未进入正式视频流程"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "candidateLimit": 20,
+    "candidatePoolSize": 19,
+    "includeTrial": true,
+    "mode": "trial-opt-in-contextual-diversity-v2",
+    "query": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准\n经常制作口播字幕、希望减少校对时间但担心中文准确率和环境兼容性的创作者\n已经在隔离目录完成安装\n工具能生成字幕文件\n尚未进入正式视频流程\n许可证、依赖版本和本地运行权限已经记录\n已有三段不同语速中文口播的工具输出和人工校对稿\n不得把生成成功说成准确率合格\n不得虚构维护状态\n不得在没有退出路径时替换正式流程",
+    "records": [
+      {
+        "contentHash": "0e6a22d71c9922faabffb158c1d93158b9ab4312d34c45a5ca748330805a1b3c",
+        "contextualScore": 122,
+        "id": "content-task.tool-audit-needs-decision-thresholds.v1",
+        "namespace": "content.private",
+        "rank": 1,
+        "retrievalRank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "4d4b516ce32ca3950924f7da8fcf1342d2ba701f81e04f26be8f6c1e46270498",
+        "contextualScore": 26,
+        "id": "content-principle.version-failures-and-results.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "retrievalRank": 3,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f3db400e79376dc05dc3b5136f2f75bc8e38b6b139008e270a0f20408fd4989c",
+        "contextualScore": 23,
+        "id": "content-principle.versions-compound-with-maintenance.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "retrievalRank": 5,
+        "status": "trial"
+      },
+      {
+        "contentHash": "cb0f6a3f46b9908f82c6332c8c610d620d4119cdaae48c650b49400bdfc0b7b9",
+        "contextualScore": 16,
+        "id": "content-principle.production-is-not-distribution.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "retrievalRank": 9,
+        "status": "trial"
+      },
+      {
+        "contentHash": "1061d17d8249b42840f85b9ca54189a1af037094fa3394da151a8507ba96f13e",
+        "contextualScore": 19,
+        "id": "content-principle.asset-survives-tomorrow.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "retrievalRank": 6,
+        "status": "trial"
+      }
+    ],
+    "selectionPolicy": "contextual-diversity-v2",
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-task.tool-audit-needs-decision-thresholds.v1",
+    "content-principle.version-failures-and-results.v1",
+    "content-principle.versions-compound-with-maintenance.v1",
+    "content-principle.production-is-not-distribution.v1",
+    "content-principle.asset-survives-tomorrow.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

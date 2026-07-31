@@ -1,0 +1,132 @@
+{
+  "analysis": {
+    "audience": "已经有本地音效库、但自动剪辑的音效时机经常不自然的短视频创作者",
+    "directionRestatement": "分析如何利用同一真实转场上提前、对齐和滞后的样片，以及候选音效的ID、起点和响度，让Agent学习音效与动作的正确时机，同时不得自动批准音效、不得只增加标签，并允许整组候选都不合格。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.sfx-timeline",
+          "provenance": "user_provided",
+          "relevance": "支持在同一真实转场上比较提前、对齐和滞后三种时机，而不是把问题仅归因于音效标签。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.sfx-candidates",
+          "provenance": "user_provided",
+          "relevance": "支持把候选音效ID、起点和响度作为可追踪变量，并比较多个候选及整组拒绝结果。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "人工选择或拒绝时对应的结构化原因记录。",
+        "正确时机相对于何种可观察动作事件的标注规则。",
+        "覆盖不同转场类型的样本数量与独立评估结果。"
+      ]
+    },
+    "lockedDirection": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+    "nextQuestions": [
+      "你希望用哪个可观察事件定义正确时机：动作开始、视觉冲击点、动作结束，还是按转场类型分别定义？",
+      "人工审核时是否能分别记录音效不匹配、时机不对、响度不对和整组不合格？",
+      "目前这些提前、对齐和滞后样片覆盖多少种转场类型，是否有未参与训练的测试样片？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已有同一真实转场上提前、对齐和滞后三种时间点样片，可直接比较时机差异。",
+      "每个样片可以绑定候选音效ID、起点和响度，具备形成结构化训练记录的基础。",
+      "音效均有稳定ID和使用许可。",
+      "同一个转场可以召回多个候选，适合同时判断候选音效与放置时机。",
+      "约束明确要求允许整组音效都不合格，可避免强制选择错误答案。"
+    ],
+    "testableQuestion": "在保留“整组候选均不合格”选项的独立测试集上，加入动作事件锚点、候选音效ID、起点、响度及人工拒绝原因后，Agent把音效放在人工认可时间窗内的比例，是否高于仅使用现有标签召回的方法？",
+    "uncertainties": [
+      "正确时机的事件锚点尚未确定。",
+      "现有样本能否代表不同转场类型尚不明确。",
+      "人工拒绝原因尚未保存，因此错误类型暂时无法可靠拆分。"
+    ],
+    "viewerBenefit": "理解如何把音效时机从标签召回问题转化为可比较、可拒绝、可验证的训练与评估问题。",
+    "weaknesses": [
+      "当前没有保存人工拒绝原因，无法区分是音效本身不合适、时机错误、响度错误，还是整组候选均不合格。",
+      "尚未说明“正确时机”由动作开始、视觉冲击点、动作结束或其他事件锚点定义。",
+      "尚未提供跨多个转场类型的样本覆盖情况，无法判断现有三种时间点样片能否支持泛化。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:11:00.990Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "2eb395c0312c002eb2689eeaf88eabca4b7120cf4c89c5ff2e2d517e1535b53f",
+  "input": {
+    "audienceContext": "已经有本地音效库、但自动剪辑的音效时机经常不自然的短视频创作者",
+    "constraints": [
+      "不得自动批准音效",
+      "不得只增加标签",
+      "必须允许整组音效都不合格"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.sfx-timeline",
+        "kind": "timeline-samples",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "已有同一真实转场上提前、对齐和滞后三种时间点样片"
+      },
+      {
+        "id": "heldout.evidence.sfx-candidates",
+        "kind": "candidate-set",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "每个样片可以绑定候选音效ID、起点和响度"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "音效均有稳定ID和使用许可",
+      "同一个转场可以召回多个候选",
+      "当前没有保存人工拒绝原因"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

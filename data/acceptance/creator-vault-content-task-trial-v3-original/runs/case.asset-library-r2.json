@@ -1,0 +1,33 @@
+{
+  "caseId": "case.asset-library",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.795c7694964f",
+  "trialAnalysisArtifactId": "content-strategy.4959a704075b",
+  "evaluationArtifactId": "content-training-evaluation.9f45bfe846ba",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+0] 两者均完整保留共享事实、约束和证据边界，没有把素材数量等同于Agent能力。",
+    "[T+0] 第一份提出结果指标，但把两个能力改动合并测试，因果归因和优先级判断较弱。",
+    "[T+0] 第二份把缺失记录转化为更具体的受控诊断步骤，因此下一步更可执行。",
+    "[T+0] 两者都明确需要真实片段验证，且未自动批准素材或越权作出生产结论。"
+  ],
+  "uncertainties": [
+    "请求未提供绝对时间戳，因此使用相对时间标记“T+0”。",
+    "共享上下文没有给出trial样本规模、错误分布或评价阈值，无法判断任一诊断路径的实际收益。",
+    "视频Agent与Sound Agent是否为同一执行链路未明确。"
+  ]
+}

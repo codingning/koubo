@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.f3a7e2e0306f",
+      "contentHash": "10e7ef4e1280414c018ba00567625dc630f27272f3eeadefa32fdb69183799a1",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.4178a96d855b",
+      "contentHash": "0c88e437668db453b9f0065df99a155e3d1ac59f922acc4f61546d77e412aca6",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:02] 第一份更强调可复核实验设计：固定版本、真实任务、量化指标、失败记录及安装／暂缓／放弃阈值。",
+      "[T+00:03] 第二份更强调受众可执行边界，明确追问普通创作者所需技术基础及无需专业安全知识时的检查边界。",
+      "[T+00:04] 对第一份的轻微异议：要求固定版本和预定义阈值虽有助于验证，但未说明哪些检查可先用低门槛定性标准完成。",
+      "[T+00:05] 对第二份的轻微异议：没有像第一份那样明确要求固定版本、具体试用任务、失败记录和稳定性指标，复核粒度稍弱。",
+      "[T+00:06] 两份均忠于既定方向、遵守证据边界，并提供了能决定下一步的问题；均不构成所列硬失败。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:01] 准确保留安装前审计与隔离试用方向，并识别普通创作者的能力门槛、公开案例和冲突取舍标准。证据归属清楚，也未把开源、热度或安装成功当作安全和真实可用的证明。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保留“不要因推荐直接安装”的方向，并把固定版本、真实任务、指标、失败记录和决策阈值列为缺失证据。分析具体且明确区分已知、缺失与不确定性；未越权给出安装或发布结论。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00:07] 评分仅依据所提供文本；缺少更细的维度锚点，因此两份在满分区间内的细微差异无法用整数分进一步表达。",
+      "[T+00:08] 共享证据未说明案例公开限制，因此无法判断“可公开案例”是否现实可得。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 1,
+    "controlCitationCount": 0,
+    "correctCitations": 1,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "7b3048f4a0db059909fbd953083610c66ee08f1404599f9b9a3cccfaee96e171",
+  "evaluatedAt": "2026-07-31T08:59:23.282Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

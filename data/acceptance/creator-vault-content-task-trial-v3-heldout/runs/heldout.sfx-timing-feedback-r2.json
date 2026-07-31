@@ -1,0 +1,33 @@
+{
+  "caseId": "heldout.sfx-timing-feedback",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.16e161bf58a3",
+  "trialAnalysisArtifactId": "content-strategy.05f74590031e",
+  "evaluationArtifactId": "content-training-evaluation.e85e80c600b2",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:02] 第一份更直接提出独立测试集和“落入人工认可时间窗的比例”，更贴近最终训练效果评估。",
+    "[T+00:03] 第二份更明确识别候选音效与响度变化造成的归因混杂，实验变量控制更严谨。",
+    "[T+00:04] 第一份更重视跨转场类型覆盖和泛化；第二份更重视审核者一致性与单一变量比较。",
+    "[T+00:05] 两份均严格区分已有证据、缺失信息和不确定性，且没有越权批准、发布或强制选择候选。"
+  ],
+  "uncertainties": [
+    "[T+00:06] 未提供人工审核数据，无法判断哪种评估设计实际具有更高信度。",
+    "[T+00:07] 未说明样本规模、审核者数量及跨转场分布，因此无法比较两方案的统计可行性。",
+    "[T+00:08] T+时间为本次评估内的相对时间戳，因为输入未提供绝对评估时间。"
+  ]
+}

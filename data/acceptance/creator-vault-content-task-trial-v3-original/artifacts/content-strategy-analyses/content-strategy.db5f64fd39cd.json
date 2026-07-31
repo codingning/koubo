@@ -1,0 +1,271 @@
+{
+  "analysis": {
+    "audience": "对AI视频工具感兴趣，但已经看腻功能列表和夸张宣传的普通观众",
+    "directionRestatement": "你要围绕同一条口播的原片、样片、返修版本和最终输出，验证工作台是否解决了一个明确的制作问题，同时如实呈现人工参与边界，而不是罗列功能或宣称全自动剪辑。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.workbench-before-after",
+          "provenance": "user_provided",
+          "relevance": "同一条口播可以展示原片、样片和返修结果，为比较修改前后真实输出提供直接材料。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.workbench-boundary",
+          "provenance": "user_provided",
+          "relevance": "工作台仍需要用户提供方向、证据和最终审核，可用于准确说明自动化边界与人工责任。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "这条口播在原片中要解决的一个具体问题及其可观察表现",
+        "原片、样片、返修版本和最终输出采用的统一人工审核标准与审核结果",
+        "返修中关键修改与结果变化之间的对应记录，以及无效或被撤销的修改"
+      ]
+    },
+    "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+    "nextQuestions": [
+      "这条口播原片最需要解决的一个具体问题是什么，例如信息冗余、节奏、字幕理解或重点不清？",
+      "你会用哪些统一标准审核原片、样片、返修版本和最终输出，现有审核结果分别是什么？",
+      "返修过程中有哪些修改无效、被撤销或仍需人工纠正？"
+    ],
+    "principleCitations": [
+      {
+        "applicabilityCheck": "当前方向属于视频返修和工作流复盘，且已有同一条口播的多个可比较版本，符合其适用条件。",
+        "appliedJudgment": "据此将原片、样片、返修版本和最终输出的统一标准比较列为证明方向成立的必要条件，并把仅有版本材料判定为尚不足以完成验证。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "b745791f78934e19fc396a28aeb941586ef538f7d763bf3e67324ec52dac5779",
+        "counterexampleCheck": "这里不是需要预防性启用的安全、隐私或合规规则，并且已有相似任务版本，不受所列反例阻断。",
+        "knowledgeKind": "content-task-contract",
+        "namespace": "content.private",
+        "principleId": "content-task.experience-reuse-needs-output-comparison.v1",
+        "relevance": "该候选原则要求用调用前后输出、适用条件和人工结果验证改进，而不能把保存流程或产生版本视为已经解决问题。",
+        "sourceRefs": [
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "71d6ac08f4ca06693d77097cc0af3a028bf633f5e01079606467f0c6542aa5ab",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.e26658426bae.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.e26658426bae"
+          },
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "2611e38d274c3cf0327b074c08d6e3b0ca5ade8f9a275fb1a909cd96b74b92b3",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.eeec5b0675af.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.eeec5b0675af"
+          }
+        ],
+        "sourceVideoId": "",
+        "timecodes": []
+      },
+      {
+        "applicabilityCheck": "当前已有样片、返修版本和最终输出，属于真实版本复盘，能够检查修改及结果。",
+        "appliedJudgment": "据此将返修中的关键修改、结果变化以及无效或撤销修改列为缺失证据，避免内容退化为成功结果展示。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "5309796372ebd790b28e3c6c1321047a838ae7690c69f5c832a5c7059acc047e",
+        "counterexampleCheck": "用户已提供真实版本材料，并非没有样本和结果的假想复盘；但具体审核结果仍需补充。",
+        "knowledgeKind": "content-principle",
+        "namespace": "shared.content-principles",
+        "principleId": "content-principle.version-failures-and-results.v1",
+        "relevance": "该候选原则强调展示原判断、具体修改、结果和淘汰理由；来源时段为 06:04–07:08、07:50–08:40。",
+        "sourceRefs": [],
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "07:08",
+            "endSeconds": 428,
+            "startLabel": "06:04",
+            "startSeconds": 364
+          },
+          {
+            "endLabel": "08:40",
+            "endSeconds": 520,
+            "startLabel": "07:50",
+            "startSeconds": 470
+          }
+        ]
+      },
+      {
+        "applicabilityCheck": "方向涉及Agent式视频工作台和自动剪辑流程，与其适用范围直接匹配。",
+        "appliedJudgment": "据此保留用户提供方向、证据和最终审核为核心判断条件，不把工作台描述为无人值守或可一键处理任意视频。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "913780947280ef328556144523972dd624a400e7f8a804f6fe7a9d206e303969",
+        "counterexampleCheck": "当前判断不依赖版本数量证明资产价值，而依赖真实输出比较和人工边界，因此所列反例不会阻止使用。",
+        "knowledgeKind": "content-principle",
+        "namespace": "shared.content-principles",
+        "principleId": "content-principle.versions-compound-with-maintenance.v1",
+        "relevance": "该候选原则要求自动化表述包含人工边界和例外处理；来源时段为 03:25–04:24、05:44–06:06。",
+        "sourceRefs": [],
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "04:24",
+            "endSeconds": 264,
+            "startLabel": "03:25",
+            "startSeconds": 205
+          },
+          {
+            "endLabel": "06:06",
+            "endSeconds": 366,
+            "startLabel": "05:44",
+            "startSeconds": 344
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已有原片、样片、返修版本和最终输出，可形成同一任务下的直接比较。",
+      "工作台可以完成转录、语义剪辑、字幕动效和人工审核。",
+      "已明确工具仍不能一键剪好任意视频，能够避免夸张的自动化叙事。",
+      "方向要求展示真实前后差异，与目标受众对功能列表和夸张宣传的疲劳直接对应。"
+    ],
+    "testableQuestion": "在同一条口播和统一审核标准下，工作台生成并返修后的最终输出，是否比原片和样片更有效地解决已锁定的具体问题，同时没有掩盖人工提供方向、证据和最终审核的必要性？",
+    "uncertainties": [
+      "尚不清楚目标问题是否能用现有版本直接观察和比较。",
+      "尚不清楚各版本之间是否只改变了工作台相关变量。",
+      "尚不清楚单个案例能支持到何种适用范围，不能据此推及任意视频。"
+    ],
+    "viewerBenefit": "观众能依据真实版本差异和人工边界，判断这套工作台是否适合自己的口播制作需求。",
+    "weaknesses": [
+      "尚未锁定这条口播中需要解决的具体问题，因此版本差异可能只能证明发生了修改，不能证明问题得到解决。",
+      "尚无明确的人工审核标准或结果记录，无法判断最终输出是否优于原片和样片。",
+      "若同时展示过多功能变化，将难以识别哪项修改真正影响了结果。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:04:29.490Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "177efa60f28361c82ccb5e2a23f8af02f020386921eb0e8dc9e334e69a0f3a1b",
+  "input": {
+    "audienceContext": "对AI视频工具感兴趣，但已经看腻功能列表和夸张宣传的普通观众",
+    "constraints": [
+      "不得只罗列功能",
+      "不得宣称一键自主剪辑任意视频",
+      "必须让观众看到真实前后差异"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.workbench-before-after",
+        "kind": "media-comparison",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "同一条口播可以展示原片、样片和返修结果"
+      },
+      {
+        "id": "evidence.workbench-boundary",
+        "kind": "product-boundary",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "工作台仍需要用户提供方向、证据和最终审核"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "工作台可以完成转录、语义剪辑、字幕动效和人工审核",
+      "已有原片、样片、返修版本和最终输出",
+      "工具仍不能一键剪好任意视频"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "candidateLimit": 20,
+    "candidatePoolSize": 19,
+    "includeTrial": true,
+    "mode": "trial-opt-in-contextual-diversity-v2",
+    "query": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频\n对AI视频工具感兴趣，但已经看腻功能列表和夸张宣传的普通观众\n工作台可以完成转录、语义剪辑、字幕动效和人工审核\n已有原片、样片、返修版本和最终输出\n工具仍不能一键剪好任意视频\n同一条口播可以展示原片、样片和返修结果\n工作台仍需要用户提供方向、证据和最终审核\n不得只罗列功能\n不得宣称一键自主剪辑任意视频\n必须让观众看到真实前后差异",
+    "records": [
+      {
+        "contentHash": "b9bd95c0fec2f192c12232172f8fef88fe0d645f0a7c67be24ac2cc7e725b194",
+        "contextualScore": 83,
+        "id": "content-task.experience-reuse-needs-output-comparison.v1",
+        "namespace": "content.private",
+        "rank": 1,
+        "retrievalRank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "4d4b516ce32ca3950924f7da8fcf1342d2ba701f81e04f26be8f6c1e46270498",
+        "contextualScore": 20,
+        "id": "content-principle.version-failures-and-results.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "retrievalRank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f3db400e79376dc05dc3b5136f2f75bc8e38b6b139008e270a0f20408fd4989c",
+        "contextualScore": 19,
+        "id": "content-principle.versions-compound-with-maintenance.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "retrievalRank": 7,
+        "status": "trial"
+      },
+      {
+        "contentHash": "cb0f6a3f46b9908f82c6332c8c610d620d4119cdaae48c650b49400bdfc0b7b9",
+        "contextualScore": 18,
+        "id": "content-principle.production-is-not-distribution.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "retrievalRank": 5,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f029b7f6ee3e8be972dd155dbb6631c9fc71e263dd053466d8e4ae6f699de7a6",
+        "contextualScore": 14,
+        "id": "content-principle.generic-copy-is-fragile.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "retrievalRank": 11,
+        "status": "trial"
+      }
+    ],
+    "selectionPolicy": "contextual-diversity-v2",
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-task.experience-reuse-needs-output-comparison.v1",
+    "content-principle.version-failures-and-results.v1",
+    "content-principle.versions-compound-with-maintenance.v1",
+    "content-principle.production-is-not-distribution.v1",
+    "content-principle.generic-copy-is-fragile.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

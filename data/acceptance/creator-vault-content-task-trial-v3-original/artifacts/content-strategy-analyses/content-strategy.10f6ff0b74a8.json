@@ -1,0 +1,130 @@
+{
+  "analysis": {
+    "audience": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+    "directionRestatement": "分析素材总库已经建立后，视频Agent仍无法自动选对素材的原因，并判断应优先解决哪一环，而不是把素材数量等同于Agent能力。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.asset-vault",
+          "provenance": "user_provided",
+          "relevance": "证明Creator Vault已经支持资产ID、哈希、授权和项目冻结，可排除“尚未建立基础资产管理能力”这一解释。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.asset-agent-gap",
+          "provenance": "user_provided",
+          "relevance": "证明Sound Agent尚未接入Vault语义检索和真实片段反馈，直接支持定位素材库与自动选材能力之间的运行缺口。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "少量音效进入trial后的逐项结果，包括候选素材、实际片段表现和失败原因。",
+        "用于判断“选对素材”的明确指标或人工评价标准。",
+        "当前最常见选材错误的分类与发生频率。"
+      ]
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "nextQuestions": [
+      "当前最常见的选材失败是哪一类：检索不到、语境不匹配、节奏不匹配，还是候选排序错误？",
+      "少量进入trial的音效是否已有真实片段评价记录，结果分别是什么？",
+      "你准备使用什么标准判断Agent“选对素材”？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "问题具有明确反差：素材库基础设施已经存在，但Agent选材仍不稳定。",
+      "现有证据覆盖资产库状态和Agent运行缺口，可以支撑对两个系统之间断点的分析。",
+      "方向贴近目标观众的实际困惑，并明确排除自动批准素材和跳过真实片段验证。"
+    ],
+    "testableQuestion": "在保持不得自动批准素材的前提下，接入Vault语义检索并记录真实片段反馈后，Sound Agent在既定人工评价标准下的正确选材率是否稳定提升？",
+    "uncertainties": [
+      "语义检索缺失与真实片段反馈缺失各自对选材失败贡献多大。",
+      "现有trial数量是否足以识别稳定模式。",
+      "“视频Agent”与“Sound Agent”在当前系统中的职责边界是否完全一致。"
+    ],
+    "viewerBenefit": "帮助观众区分资产管理与Agent选材能力，并确定语义检索和真实片段效果验证中的优先改进点。",
+    "weaknesses": [
+      "当前没有说明少量进入trial的音效在真实片段中的具体成功或失败表现。",
+      "尚未定义“选对素材”的可观察标准，因此难以比较语义检索与真实片段反馈各自的影响。",
+      "尚不清楚主要错误属于召回不到、语境不匹配、节奏不匹配，还是授权与项目冻结后的可用性判断。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T08:59:46.621Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "b5479ec24ad04e43d832dbfe7e10e3608a267067403c809be7a2534002bb419c",
+  "input": {
+    "audienceContext": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+    "constraints": [
+      "不得把素材数量当成Agent能力",
+      "不得自动批准素材",
+      "不得跳过真实片段效果验证"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.asset-vault",
+        "kind": "vault-state",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "Creator Vault已经支持资产ID、哈希、授权和项目冻结"
+      },
+      {
+        "id": "evidence.asset-agent-gap",
+        "kind": "runtime-gap",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "Sound Agent尚未接入Vault语义检索和真实片段反馈"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "素材总库与项目时间线是两个系统",
+      "素材拥有稳定ID和授权证据不等于Agent知道何时使用",
+      "当前只有少量音效进入trial"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

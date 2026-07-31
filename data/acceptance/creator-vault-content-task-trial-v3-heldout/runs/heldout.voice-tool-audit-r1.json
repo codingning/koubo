@@ -1,0 +1,34 @@
+{
+  "caseId": "heldout.voice-tool-audit",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.b9d498a39d2b",
+  "trialAnalysisArtifactId": "content-strategy.14c675634299",
+  "evaluationArtifactId": "content-training-evaluation.1b7df06dbdb4",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 1,
+    "controlCitationCount": 0,
+    "correctCitations": 1,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[评估时点 T0] 两者均未偏离锁定方向，也都保留了授权不明确时不得进入生产的约束。",
+    "[评估时点 T0] 两者均正确使用运行记录和授权审计，没有把待确认事项改写为已确认结论。",
+    "[评估时点 T0] 第二份明确把“预设增量阈值”和加入、暂缓、放弃条件列为缺失项，行动闭环比第一份更完整。",
+    "[评估时点 T0] 第一份更具体地提出容器化、降权和离线隔离等权限风险缓解手段，但未说明这些手段已可行，因此未构成无依据断言。",
+    "[评估时点 T0] 两者都覆盖维护与退出成本；第二份进一步拆分模型文件管理、卸载回退和项目迁移，边界描述稍具体。"
+  ],
+  "uncertainties": [
+    "[评估时点 T0] 共享证据仅提供摘要，无法判断运行日志是否足以计算稳定性或失败率。",
+    "[评估时点 T0] 授权审计中待确认项目的具体内容未知，无法评价候选是否遗漏某项特定权利风险。",
+    "[评估时点 T0] 用户可接受的资源、权限和维护上限未给出，因此无法检验任何具体采用阈值。"
+  ]
+}

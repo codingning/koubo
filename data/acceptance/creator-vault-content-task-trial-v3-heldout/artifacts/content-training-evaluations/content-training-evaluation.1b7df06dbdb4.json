@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.b9d498a39d2b",
+      "contentHash": "536dd1bbd1828b9b48b91ed2600b06523f46a5ea346537db689c9fd3ff5d10e4",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.14c675634299",
+      "contentHash": "22e3c13f5b5d69a290c2a35e862cc885f4051131e47abc4b01e92df4779a014d",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[评估时点 T0] 两者均未偏离锁定方向，也都保留了授权不明确时不得进入生产的约束。",
+      "[评估时点 T0] 两者均正确使用运行记录和授权审计，没有把待确认事项改写为已确认结论。",
+      "[评估时点 T0] 第二份明确把“预设增量阈值”和加入、暂缓、放弃条件列为缺失项，行动闭环比第一份更完整。",
+      "[评估时点 T0] 第一份更具体地提出容器化、降权和离线隔离等权限风险缓解手段，但未说明这些手段已可行，因此未构成无依据断言。",
+      "[评估时点 T0] 两者都覆盖维护与退出成本；第二份进一步拆分模型文件管理、卸载回退和项目迁移，边界描述稍具体。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 1,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[评估时点 T0] 准确保持采用决策方向，并清楚区分现有证据、缺失证据与不确定性。异议：虽提出同任务对比和权限核验，但没有明确加入、暂缓或放弃的判定阈值，下一步决策性略弱。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[评估时点 T0] 准确围绕真实增量、授权、权限、硬件及维护退出成本展开，且明确要求预设决策阈值。异议：阈值仍需由用户补充，尚未提供可直接套用的具体数值标准，但已形成可执行的阈值化路径。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[评估时点 T0] 共享证据仅提供摘要，无法判断运行日志是否足以计算稳定性或失败率。",
+      "[评估时点 T0] 授权审计中待确认项目的具体内容未知，无法评价候选是否遗漏某项特定权利风险。",
+      "[评估时点 T0] 用户可接受的资源、权限和维护上限未给出，因此无法检验任何具体采用阈值。"
+    ],
+    "winnerVariant": "trial"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 1,
+    "controlCitationCount": 0,
+    "correctCitations": 1,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "e68fa7f3baf1a774d07735e04e42932ca4b24c7775776635d5799c21fef48787",
+  "evaluatedAt": "2026-07-31T09:08:42.452Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

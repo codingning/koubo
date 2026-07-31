@@ -1,0 +1,238 @@
+{
+  "analysis": {
+    "audience": "希望自动选择BGM但不愿牺牲口播清晰度和内容气质的个人创作者",
+    "directionRestatement": "你想分析情绪标签为何不足以保证BGM效果合格，并明确应记录哪些人工反馈，帮助Agent区分人声清晰度、内容气质与节奏适配问题。",
+    "evidence": {
+      "available": [
+        {
+          "id": "heldout.evidence.bgm-mixes",
+          "provenance": "user_provided",
+          "relevance": "支持在同一段口播上比较不同BGM、响度和ducking参数的真实混音效果。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "heldout.evidence.bgm-review",
+          "provenance": "user_provided",
+          "relevance": "支持记录听不清、情绪冲突、节奏不合或整组不接受等人工审核结果。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "尚未提供每个候选混音与BGM稳定ID、口播时间线位置、参数版本之间的结构化关联方式。",
+        "尚未提供人工选择或拒绝时是否记录具体发生位置、主要错误类型和原因。",
+        "尚未明确内容气质的判断依据是创作前定义、用户自由描述，还是两者结合。"
+      ]
+    },
+    "lockedDirection": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+    "nextQuestions": [
+      "你目前能否把每次接受或拒绝绑定到具体BGM ID、混音参数版本和发生问题的时间点？",
+      "你希望“内容气质”由哪些可观察维度表达，例如克制、紧张、轻松或庄重，还是保留用户自由描述？",
+      "第一阶段更想优先降低“听不清”，还是优先降低“气质冲突”？"
+    ],
+    "principleCitations": [
+      {
+        "applicabilityCheck": "已有稳定资产ID、授权证据、多个真实混音和人工审核能力，符合BGM选择及时间线反馈的适用条件。",
+        "appliedJudgment": "将分析重点从继续补充情绪标签，调整为记录候选BGM ID、具体上下文、时间线位置、混音参数及人工接受或拒绝原因。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "ddf343d42c9b2650bf7e71e88dd83f3ca319ed2ef6efca8e9dce613dc1f40864",
+        "counterexampleCheck": "这不是纯归档或人工浏览场景，且素材已有授权证据，因此所列反例不阻断使用。",
+        "knowledgeKind": "content-task-contract",
+        "namespace": "content.private",
+        "principleId": "content-task.asset-selection-needs-timeline-feedback.v1",
+        "relevance": "该方向正是BGM自动选择，需要把素材属性、候选集合、时间线与人工听感结果连接起来。",
+        "sourceRefs": [
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "b49396bb56920f09d3977b6c29a5089cc812bda025822fff5ac0d242ecc2b4cb",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.c7440b05eed9.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.c7440b05eed9"
+          },
+          {
+            "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+            "contentHash": "a8ee3dc44df452af7117bbdb344de3285a93e6bf887e5d7a07569a63cbb8b992",
+            "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.ed0c7752b9df.json",
+            "repository": "codingning/koubo",
+            "sourceId": "content-training-evaluation.ed0c7752b9df"
+          }
+        ],
+        "sourceVideoId": "",
+        "timecodes": []
+      },
+      {
+        "applicabilityCheck": "同一段口播可以输出多个候选混音，具备控制主要变量进行比较的条件；候选原则来源时码为05:14–06:04。",
+        "appliedJudgment": "要求比较时固定其他条件并标明本轮主要变化变量，否则只能记录整体不合格，不能声称某个情绪标签或参数导致结果。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "b054a90b3af2030df2762114301b8a1aa8ce3a3be87b22050d58976cb892b3cb",
+        "counterexampleCheck": "当前不是紧急修复场景；即使同时修复多个确定性缺陷，也不能据此形成单变量因果结论。",
+        "knowledgeKind": "content-principle",
+        "namespace": "shared.content-principles",
+        "principleId": "content-principle.change-one-main-variable.v1",
+        "relevance": "现有比较包含BGM、响度和ducking多个变量，需要避免错误归因。",
+        "sourceRefs": [],
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "06:04",
+            "endSeconds": 364,
+            "startLabel": "05:14",
+            "startSeconds": 314
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "BGM有稳定ID、情绪标签和授权证据",
+      "同一段口播可以输出多个候选混音",
+      "最终选择仍由用户决定",
+      "已有同一口播的真实候选混音及明确的人工拒绝原因，可支撑基于实际听感的比较。"
+    ],
+    "testableQuestion": "在固定同一段口播并一次只改变一个主要变量时，记录候选BGM ID、时间线位置、响度与ducking参数、人工接受或拒绝结果及错误类型，能否减少后续候选中“压住人声”或“气质冲突”的比例？",
+    "uncertainties": [
+      "尚不清楚现有混音记录是否保存了精确时间点、持续时间和参数版本。",
+      "尚不清楚情绪标签的粒度及其与具体内容气质判断的对应关系。",
+      "尚不清楚反馈将用于候选召回、排序、混音参数调整，还是分别用于多个环节。"
+    ],
+    "viewerBenefit": "理解素材标签与实际混音效果的差距，并建立可用于改进BGM选择的反馈记录。",
+    "weaknesses": [
+      "当前方向同时涉及素材选择、响度、ducking、节奏和内容气质，若不区分错误类型，反馈难以定位到具体决策。",
+      "情绪标签描述的是素材属性，不能单独表示它在特定口播时间线、响度和混音组合中的最终效果。",
+      "若一次同时改变BGM、响度和ducking参数，无法将听感差异可靠归因于某一个变量。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T09:13:24.816Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "fd29538b2fe02729a82f8848393af5c85923559eb346db014056f2b88401512a",
+  "input": {
+    "audienceContext": "希望自动选择BGM但不愿牺牲口播清晰度和内容气质的个人创作者",
+    "constraints": [
+      "不得把授权合格等同于效果合格",
+      "不得同时改变所有变量后宣称某个标签有效",
+      "不得用模型自评替代听感审核"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "heldout.evidence.bgm-mixes",
+        "kind": "audio-comparison",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "已有同一口播搭配不同BGM、响度和ducking参数的真实混音"
+      },
+      {
+        "id": "heldout.evidence.bgm-review",
+        "kind": "human-review",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "用户可以标记听不清、情绪冲突、节奏不合或整组不接受"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "BGM有稳定ID、情绪标签和授权证据",
+      "同一段口播可以输出多个候选混音",
+      "最终选择仍由用户决定"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "candidateLimit": 20,
+    "candidatePoolSize": 19,
+    "includeTrial": true,
+    "mode": "trial-opt-in-contextual-diversity-v2",
+    "query": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈\n希望自动选择BGM但不愿牺牲口播清晰度和内容气质的个人创作者\nBGM有稳定ID、情绪标签和授权证据\n同一段口播可以输出多个候选混音\n最终选择仍由用户决定\n已有同一口播搭配不同BGM、响度和ducking参数的真实混音\n用户可以标记听不清、情绪冲突、节奏不合或整组不接受\n不得把授权合格等同于效果合格\n不得同时改变所有变量后宣称某个标签有效\n不得用模型自评替代听感审核",
+    "records": [
+      {
+        "contentHash": "b500485c7bceceab7e9b4c69aeb80d78838f172c8fc9b860fba9c92ba3cac341",
+        "contextualScore": 123,
+        "id": "content-task.asset-selection-needs-timeline-feedback.v1",
+        "namespace": "content.private",
+        "rank": 1,
+        "retrievalRank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "187f2fb83bc4a76a64dc3a167cb32bd48a0422e35a87b035d02134307997d742",
+        "contextualScore": 18,
+        "id": "content-principle.change-one-main-variable.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "retrievalRank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f029b7f6ee3e8be972dd155dbb6631c9fc71e263dd053466d8e4ae6f699de7a6",
+        "contextualScore": 11,
+        "id": "content-principle.generic-copy-is-fragile.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "retrievalRank": 7,
+        "status": "trial"
+      },
+      {
+        "contentHash": "1061d17d8249b42840f85b9ca54189a1af037094fa3394da151a8507ba96f13e",
+        "contextualScore": 9,
+        "id": "content-principle.asset-survives-tomorrow.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "retrievalRank": 10,
+        "status": "trial"
+      },
+      {
+        "contentHash": "7b2e16c71aad8c384590a09eed63cf940528112e461a737065ded4d06dfddeb9",
+        "contextualScore": 9,
+        "id": "content-principle.preregister-expectations.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "retrievalRank": 16,
+        "status": "trial"
+      }
+    ],
+    "selectionPolicy": "contextual-diversity-v2",
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-task.asset-selection-needs-timeline-feedback.v1",
+    "content-principle.change-one-main-variable.v1",
+    "content-principle.generic-copy-is-fragile.v1",
+    "content-principle.asset-survives-tomorrow.v1",
+    "content-principle.preregister-expectations.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

@@ -1,0 +1,34 @@
+{
+  "caseId": "case.asset-library",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.10f6ff0b74a8",
+  "trialAnalysisArtifactId": "content-strategy.04519db49602",
+  "evaluationArtifactId": "content-training-evaluation.909bb03f0c87",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:04] 两者都完整保留了“不把素材数量等同于Agent能力”的核心方向，也都未越权自动批准素材或跳过真实片段验证。",
+    "[T+00:05] 第二份比第一份更具体地定义了验证单元：固定片段、表达目标、候选稳定ID、时间点、组合状态及接受或拒绝原因。",
+    "[T+00:06] 第二份对错误层级的拆分更细，能区分召回、排序、放置时间点、混音和最终感知问题；第一份主要覆盖召回、语境、节奏和排序。",
+    "[T+00:07] 第一份更直接提出比较语义检索缺失与真实片段反馈缺失的相对贡献，但其验证设计不如第二份具体。",
+    "[T+00:08] 两者均严格区分现有证据、缺失证据和不确定性，未发现声明范围内的硬失败。"
+  ],
+  "uncertainties": [
+    "[T+00:09] 固定评分尺度较粗，两份分析均达到各维度要求，细微质量差异未转化为分数差。",
+    "[T+00:10] 共享上下文没有提供trial记录，无法验证任一候选提出的错误分类是否与实际分布一致。",
+    "[T+00:11] 当前无法判断所需样本量或评价者一致性，因此不能确认建议的验证方案能产生稳定结论。"
+  ]
+}

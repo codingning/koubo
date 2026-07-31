@@ -1,0 +1,78 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.98363b9e0def",
+      "contentHash": "d8fbed2112c79c30d55b7026ea63b233244610215c7a6a5eb2629f887e08f829",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.fbf0b7e30390",
+      "contentHash": "b14f39140e5d4fd8a0c530349b6a28c0819cd6b175cfea843aaeb9ec5eb8e206",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:02] 两份分析都完整保留共享事实，没有把单次否决扩张为全面禁用，也没有用Agent自评替代用户样片审核。",
+      "[T+00:03] 第一份明确要求后续可比较任务的调用记录、真实输出、用户审核以及经验降级或撤销标准，因此形成了更完整的验证闭环。",
+      "[T+00:04] 第二份识别了额外样片和复核结果的缺口，但其下一步问题未明确落实测试时间、审核主体及无效时的处置条件。",
+      "[T+00:05] 第二份将“可追溯触发记录的具体内容”列为缺失是合理细化，并未否认共享上下文中“记录可以追溯”的事实。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 1,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:01] 准确聚焦跨样片差异、条件化调用和避免永久禁用，也正确保留了归因限制与人工审核边界。但后续问题主要用于复盘既有材料，对第三条样片的执行安排、失败后的修改或撤销判据不如第一份具体。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持“将失败转化为可条件调用、验证和撤销的经验”这一方向。清楚区分现有失败证据、成功样本缺口、归因不确定性和后续验证需求，并提出可比较任务、用户审核及降级/撤销标准。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00:06] 未提供recommendation字段的选择标准，因此无法仅据“series”与“single_piece”的差异判定方向优劣。",
+      "[T+00:07] 两份分析都缺少第一条视频的成功样片与人工审核依据，当前不能确认失败的主导变量。"
+    ],
+    "winnerVariant": "trial"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "9539b670135b74867aa723ae0573c132b721af5e4c57e78fbf8bd367ab880148",
+  "evaluatedAt": "2026-07-31T09:14:23.808Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

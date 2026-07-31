@@ -1,0 +1,32 @@
+{
+  "caseId": "heldout.caption-rule-reuse",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.98363b9e0def",
+  "trialAnalysisArtifactId": "content-strategy.fbf0b7e30390",
+  "evaluationArtifactId": "content-training-evaluation.2b952c83c5a0",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v3",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:02] 两份分析都完整保留共享事实，没有把单次否决扩张为全面禁用，也没有用Agent自评替代用户样片审核。",
+    "[T+00:03] 第一份明确要求后续可比较任务的调用记录、真实输出、用户审核以及经验降级或撤销标准，因此形成了更完整的验证闭环。",
+    "[T+00:04] 第二份识别了额外样片和复核结果的缺口，但其下一步问题未明确落实测试时间、审核主体及无效时的处置条件。",
+    "[T+00:05] 第二份将“可追溯触发记录的具体内容”列为缺失是合理细化，并未否认共享上下文中“记录可以追溯”的事实。"
+  ],
+  "uncertainties": [
+    "[T+00:06] 未提供recommendation字段的选择标准，因此无法仅据“series”与“single_piece”的差异判定方向优劣。",
+    "[T+00:07] 两份分析都缺少第一条视频的成功样片与人工审核依据，当前不能确认失败的主导变量。"
+  ]
+}
