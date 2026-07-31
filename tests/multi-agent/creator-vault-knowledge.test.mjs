@@ -118,3 +118,52 @@ test("Creator Vault selection prefers contextual applicability and source divers
   assert.equal(new Set(selected.map(item => item.principle.sourceVideoId)).size, 3);
   assert.equal(selected.some(item => item.principle.id === "generic-one"), false);
 });
+
+test("Creator Vault adapter accepts only complete Content Strategist private task contracts", async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "koubo-private-task-adapter-"));
+  const root = path.join(directory, "vault");
+  const cli = path.join(directory, "cli.mjs");
+  fs.mkdirSync(root);
+  fs.writeFileSync(cli, "fixture");
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const record = {
+    id: "content-task.real-output-validates-reuse.v1",
+    status: "trial",
+    namespace: "content.private",
+    contentHash: "d".repeat(64),
+    title: "经验必须改善后续真实输出",
+    problem: "不能用知识字段完整代替实际效果",
+    applicability: ["失败经验回写"],
+    parameters: {
+      knowledgeKind: "content-task-contract",
+      claim: "经验必须改善后续真实输出",
+      abstraction: "不能用知识字段完整代替实际效果",
+      counterexamples: ["安全规则可预防性启用"],
+      requiredEvidence: ["可比较的前后输出"],
+      decisionProcedure: ["调用候选经验并比较结果"],
+      failureSignals: ["只有复盘文档没有后续输出"],
+      sourceRefs: [{
+        sourceId: "content-training-evaluation.fixture",
+        repository: "codingning/koubo",
+        commit: "e".repeat(40),
+        relativePath: "data/acceptance/fixture.json",
+        contentHash: "f".repeat(64),
+      }],
+    },
+  };
+  const adapter = createCreatorVaultKnowledgeAdapter({
+    vaultRoot: root,
+    cliPath: cli,
+    run: async () => ({ stdout: JSON.stringify([record]) }),
+  });
+  const result = await adapter.retrieve({
+    agentId: "content-strategist",
+    query: "失败经验如何改善下一次输出",
+    includeTrial: true,
+    topK: 3,
+  });
+  assert.equal(result.principles[0].namespace, "content.private");
+  assert.equal(result.principles[0].knowledgeKind, "content-task-contract");
+  assert.equal(result.principles[0].timecodes.length, 0);
+  assert.equal(result.principles[0].sourceRefs[0].sourceId, "content-training-evaluation.fixture");
+});

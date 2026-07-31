@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 
 const execFile = promisify(execFileCallback);
 const allowedStatuses = new Set(["trial", "approved", "promoted"]);
+const allowedNamespaces = new Set(["shared.content-principles", "content.private"]);
 const searchStopTokens = new Set([
   "agent", "ai", "一个", "不得", "不能", "仍然", "什么", "他们", "以及", "使用", "内容", "可以", "如何",
   "已经", "工作", "当前", "所有", "方向", "没有", "用户", "真实", "结果", "自动", "视频", "证据", "进行", "需要", "问题",
@@ -35,6 +36,9 @@ function principleTokens(principle) {
     principle.abstraction,
     ...principle.applicability,
     ...principle.counterexamples,
+    ...(principle.requiredEvidence || []),
+    ...(principle.decisionProcedure || []),
+    ...(principle.failureSignals || []),
   ].join("\n"));
 }
 
@@ -49,7 +53,14 @@ function contextualScore(principle, queryTokens) {
   return overlapCount(queryTokens, principle.applicability.join("\n")) * 6
     + overlapCount(queryTokens, principle.claim) * 3
     + overlapCount(queryTokens, principle.abstraction) * 2
-    + overlapCount(queryTokens, principle.counterexamples.join("\n"));
+    + overlapCount(queryTokens, principle.counterexamples.join("\n"))
+    + overlapCount(queryTokens, (principle.requiredEvidence || []).join("\n")) * 3
+    + overlapCount(queryTokens, (principle.decisionProcedure || []).join("\n")) * 2
+    + overlapCount(queryTokens, (principle.failureSignals || []).join("\n")) * 2;
+}
+
+function sourceKey(principle) {
+  return principle.sourceVideoId || principle.sourceRefs?.[0]?.sourceId || principle.id;
 }
 
 export function selectDiversePrinciples(principles, { query, topK }) {
@@ -63,18 +74,18 @@ export function selectDiversePrinciples(principles, { query, topK }) {
     tokens: principleTokens(principle),
   }));
   const sourceCount = new Map();
-  const distinctSources = new Set(candidates.map(item => item.principle.sourceVideoId)).size;
+  const distinctSources = new Set(candidates.map(item => sourceKey(item.principle))).size;
   const sourceCap = Math.max(1, Math.ceil(topK / Math.max(1, Math.min(3, distinctSources))));
   const selected = [];
   const remaining = new Set(candidates);
   while (selected.length < Math.min(topK, candidates.length)) {
-    let eligible = [...remaining].filter(item => (sourceCount.get(item.principle.sourceVideoId) || 0) < sourceCap);
+    let eligible = [...remaining].filter(item => (sourceCount.get(sourceKey(item.principle)) || 0) < sourceCap);
     if (eligible.length === 0) eligible = [...remaining];
     eligible.sort((left, right) => {
       const leftSimilarity = selected.length === 0 ? 0 : Math.max(...selected.map(item => similarity(left.tokens, item.tokens)));
       const rightSimilarity = selected.length === 0 ? 0 : Math.max(...selected.map(item => similarity(right.tokens, item.tokens)));
-      const leftAdjusted = left.baseScore - leftSimilarity * 8 - (sourceCount.get(left.principle.sourceVideoId) || 0) * 4;
-      const rightAdjusted = right.baseScore - rightSimilarity * 8 - (sourceCount.get(right.principle.sourceVideoId) || 0) * 4;
+      const leftAdjusted = left.baseScore - leftSimilarity * 8 - (sourceCount.get(sourceKey(left.principle)) || 0) * 4;
+      const rightAdjusted = right.baseScore - rightSimilarity * 8 - (sourceCount.get(sourceKey(right.principle)) || 0) * 4;
       return rightAdjusted - leftAdjusted
         || right.baseScore - left.baseScore
         || left.retrievalIndex - right.retrievalIndex
@@ -82,7 +93,8 @@ export function selectDiversePrinciples(principles, { query, topK }) {
     });
     const chosen = eligible[0];
     remaining.delete(chosen);
-    sourceCount.set(chosen.principle.sourceVideoId, (sourceCount.get(chosen.principle.sourceVideoId) || 0) + 1);
+    const chosenSource = sourceKey(chosen.principle);
+    sourceCount.set(chosenSource, (sourceCount.get(chosenSource) || 0) + 1);
     selected.push(chosen);
   }
   return selected.map((item, selectionIndex) => ({
@@ -102,8 +114,11 @@ function label(seconds) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function normalizeTimecodes(value, id) {
-  if (!Array.isArray(value) || value.length === 0) throw new Error(`${id} has no source timecodes`);
+function normalizeTimecodes(value, id, { required = true } = {}) {
+  if (!Array.isArray(value) || value.length === 0) {
+    if (required) throw new Error(`${id} has no source timecodes`);
+    return [];
+  }
   return value.map((range, index) => {
     const startSeconds = Number(range.startSeconds ?? range.start);
     const endSeconds = Number(range.endSeconds ?? range.end);
@@ -121,15 +136,23 @@ function normalizeTimecodes(value, id) {
 
 function recordToPrinciple(record) {
   const parameters = record.parameters || {};
+  const namespace = String(record.namespace || "");
+  const isTaskContract = namespace === "content.private";
   return {
     id: String(record.id),
+    namespace,
+    knowledgeKind: String(parameters.knowledgeKind || (isTaskContract ? "" : "content-principle")),
     sourceVideoId: String(parameters.sourceVideoId || ""),
     sourceTitle: String(parameters.sourceTitle || ""),
-    timecodes: normalizeTimecodes(parameters.timecodes, record.id),
+    timecodes: normalizeTimecodes(parameters.timecodes, record.id, { required: !isTaskContract }),
+    sourceRefs: Array.isArray(parameters.sourceRefs) ? structuredClone(parameters.sourceRefs) : [],
     claim: String(parameters.claim || record.title || "").trim(),
     abstraction: String(parameters.abstraction || record.problem || "").trim(),
     applicability: Array.isArray(record.applicability) ? record.applicability.map(String) : [],
     counterexamples: Array.isArray(parameters.counterexamples) ? parameters.counterexamples.map(String) : [],
+    requiredEvidence: Array.isArray(parameters.requiredEvidence) ? parameters.requiredEvidence.map(String) : [],
+    decisionProcedure: Array.isArray(parameters.decisionProcedure) ? parameters.decisionProcedure.map(String) : [],
+    failureSignals: Array.isArray(parameters.failureSignals) ? parameters.failureSignals.map(String) : [],
     status: ["approved", "promoted"].includes(record.status) ? "accepted" : "trial",
   };
 }
@@ -137,14 +160,23 @@ function recordToPrinciple(record) {
 function validateRecord(record) {
   if (!record || typeof record !== "object") throw new Error("Creator Vault returned a non-object record");
   if (!allowedStatuses.has(record.status)) throw new Error(`Creator Vault returned forbidden status: ${record.status}`);
-  if (record.namespace !== "shared.content-principles") {
+  if (!allowedNamespaces.has(record.namespace)) {
     throw new Error(`Creator Vault returned forbidden namespace: ${record.namespace}`);
   }
   if (!/^[a-f0-9]{64}$/u.test(String(record.contentHash || ""))) {
     throw new Error(`Creator Vault record has invalid content hash: ${record.id}`);
   }
   const principle = recordToPrinciple(record);
-  if (!principle.sourceVideoId || !principle.claim || !principle.abstraction
+  const sharedPrincipleReady = principle.namespace === "shared.content-principles"
+    && principle.sourceVideoId && principle.timecodes.length > 0;
+  const privateTaskReady = principle.namespace === "content.private"
+    && principle.knowledgeKind === "content-task-contract"
+    && principle.sourceRefs.length > 0
+    && principle.sourceRefs.every(item => /^[a-f0-9]{64}$/u.test(String(item.contentHash || "")))
+    && principle.requiredEvidence.length > 0
+    && principle.decisionProcedure.length > 0
+    && principle.failureSignals.length > 0;
+  if ((!sharedPrincipleReady && !privateTaskReady) || !principle.claim || !principle.abstraction
     || principle.applicability.length === 0 || principle.counterexamples.length === 0) {
     throw new Error(`Creator Vault record is incomplete for Content Strategist: ${record.id}`);
   }

@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "id": "koubo-content-task-knowledge.v1",
+  "status": "candidate_internal_evaluation",
+  "sourceCommit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+  "usageBoundary": {
+    "privateToContentStrategist": true,
+    "trialOnly": true,
+    "productionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "sourceIsInternalEvaluation": true
+  },
+  "cards": [
+    {
+      "id": "content-task.tool-audit-needs-decision-thresholds.v1",
+      "claim": "工具审计只有形成明确的安装、暂缓或放弃阈值，并用隔离试用结果触发该阈值，才足以支持真实决策。",
+      "abstraction": "检查表和安装成功只能证明过程发生，不能证明工具值得进入当前工作流；分析必须把风险、增量价值、退出成本和环境边界转成可执行的决策条件。",
+      "applicability": ["开源Skill审计", "AI工具选型", "插件安装", "本地模型试用"],
+      "counterexamples": ["只做概念介绍且不提供安装建议的内容，可以不形成最终安装阈值。", "高风险权限或来源不明时可以直接停止，不需要为了比较完整而继续试用。"],
+      "requiredEvidence": ["具体工具及固定版本或提交", "许可证与权限边界", "隔离试用环境和任务", "安装成功之外的真实可用指标", "安装、暂缓或放弃的实际结论与理由"],
+      "decisionProcedure": ["先列出一票否决的安全、许可证和权限条件", "再定义时间、质量、稳定性或流程替代等增量指标", "在隔离环境执行同一真实任务并记录失败", "依据预先定义的阈值形成安装、暂缓或放弃结论", "保留卸载和退出路径"],
+      "failureSignals": ["只展示安装界面或示例成功", "没有放弃条件", "把开源等同于安全", "没有固定版本和运行环境", "用功能数量代替真实工作流收益"],
+      "prohibitions": ["不得虚构维护状态或兼容性", "不得把隔离试用成功扩大为生产可用", "不得省略高权限操作和退出成本"],
+      "evidence": [
+        {
+          "type": "local-evaluation-artifact",
+          "sourceId": "content-training-evaluation.ad2eb2f626f4",
+          "repository": "codingning/koubo",
+          "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+          "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.ad2eb2f626f4.json",
+          "contentHash": "fa79234b98175e3a04cc1a21fc2335f3c9471f1e37858403d54973baac4378ff"
+        },
+        {
+          "type": "local-evaluation-artifact",
+          "sourceId": "content-training-evaluation.7edc9bf4b987",
+          "repository": "codingning/koubo",
+          "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+          "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.7edc9bf4b987.json",
+          "contentHash": "7054f22699026b7a42ac7f7142eec52d658c8ef285d4ab988b8170ca1605195b"
+        }
+      ]
+    },
+    {
+      "id": "content-task.asset-selection-needs-timeline-feedback.v1",
+      "claim": "资产ID、标签、授权和哈希只能支持安全召回；Agent要学会选对素材，还必须记录语义触发点、时间线位置、候选集合及人工接受或拒绝结果。",
+      "abstraction": "素材库完整不等于选择能力。应把每次素材选择编译成可比较的决策样本，区分召回错误、排序错误、时间点错误、混音错误和最终感知不合格。",
+      "applicability": ["音效选择", "BGM选择", "图片与视频素材推荐", "自动剪辑", "素材库接入"],
+      "counterexamples": ["纯归档或人工浏览场景只需要可检索和授权合格，不要求自动选择反馈。", "素材涉及未知或不合格授权时应直接阻断，不进入效果试验。"],
+      "requiredEvidence": ["明确的叙事或动作触发点", "候选资产稳定ID和授权状态", "精确时间线位置与持续时间", "与其他音轨或画面的组合状态", "人工接受、拒绝或全组不合格结果及原因"],
+      "decisionProcedure": ["先固定同一段真实时间线和表达目标", "召回多个授权合格候选并记录未入选候选", "一次只比较一个主要变量，例如素材或时间点", "让人工基于真实片段选择接受、拒绝或全组不合格", "把错误分类和结果绑定到资产、上下文和版本"],
+      "failureSignals": ["只增加素材数量或标签", "只有被选素材没有候选集合", "没有精确时间点", "同时改变素材、响度和画面却归因于单项", "用Agent自评分代替真实片段审核"],
+      "prohibitions": ["不得把授权合格等同于效果合格", "不得自动批准素材", "不得脱离真实片段和人工结果晋升选择规则"],
+      "evidence": [
+        {
+          "type": "local-evaluation-artifact",
+          "sourceId": "content-training-evaluation.c7440b05eed9",
+          "repository": "codingning/koubo",
+          "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+          "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.c7440b05eed9.json",
+          "contentHash": "b49396bb56920f09d3977b6c29a5089cc812bda025822fff5ac0d242ecc2b4cb"
+        },
+        {
+          "type": "local-evaluation-artifact",
+          "sourceId": "content-training-evaluation.ed0c7752b9df",
+          "repository": "codingning/koubo",
+          "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+          "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.ed0c7752b9df.json",
+          "contentHash": "a8ee3dc44df452af7117bbdb344de3285a93e6bf887e5d7a07569a63cbb8b992"
+        }
+      ]
+    },
+    {
+      "id": "content-task.experience-reuse-needs-output-comparison.v1",
+      "claim": "一次失败经验只有在后续可比较任务中被实际调用，并改善真实输出和人工审核结果，才能证明它可复用。",
+      "abstraction": "知识卡、复盘文档、触发规则和版本记录只证明经验被保存；是否学会必须通过调用前后输出、适用条件、无效样本和撤销机制验证。",
+      "applicability": ["Agent训练", "失败经验回写", "视频返修", "字幕与动效规则", "工作流复盘"],
+      "counterexamples": ["安全、隐私和合规规则可以在真实伤害发生前预防性启用。", "没有足够相似的后续任务时只能保持候选，不能为了验证强行制造发布风险。"],
+      "requiredEvidence": ["失败输出及具体问题", "候选经验的适用条件和禁止条件", "后续可比较任务和调用记录", "调用前后真实输出或对照组", "人工审核结果及无效或负面样本"],
+      "decisionProcedure": ["锁定要避免的具体问题而不是泛化成风格偏好", "把候选经验写成触发条件、动作、预期信号和停止条件", "在后续相似任务中显式记录是否调用", "比较调用前后输出并控制主要变量", "根据人工结果保持trial、修改、降级或撤销"],
+      "failureSignals": ["只有复盘文档没有后续调用", "只记录调用次数没有输出结果", "一次成功后自动晋升", "同时改变多个变量却宣称经验有效", "只使用Agent自评或相关性指标"],
+      "prohibitions": ["不得隐藏失败或无效样本", "不得用知识结构完整代替真实输出效果", "不得把相关性说成因果"],
+      "evidence": [
+        {
+          "type": "local-evaluation-artifact",
+          "sourceId": "content-training-evaluation.e26658426bae",
+          "repository": "codingning/koubo",
+          "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+          "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.e26658426bae.json",
+          "contentHash": "71d6ac08f4ca06693d77097cc0af3a028bf633f5e01079606467f0c6542aa5ab"
+        },
+        {
+          "type": "local-evaluation-artifact",
+          "sourceId": "content-training-evaluation.eeec5b0675af",
+          "repository": "codingning/koubo",
+          "commit": "fed3d8fc883108372a70d391a82ed08a15bd4740",
+          "relativePath": "data/acceptance/creator-vault-content-trial-suite-v2/artifacts/content-training-evaluations/content-training-evaluation.eeec5b0675af.json",
+          "contentHash": "2611e38d274c3cf0327b074c08d6e3b0ca5ade8f9a275fb1a909cd96b74b92b3"
+        }
+      ]
+    }
+  ]
+}

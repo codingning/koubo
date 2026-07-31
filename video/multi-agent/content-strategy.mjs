@@ -182,11 +182,18 @@ function normalizePrinciples(value) {
     .filter(item => item?.status !== "rejected" && item?.status !== "superseded")
     .map((item, index) => {
       requireObject(item, `principles[${index}]`);
+      const namespace = optionalString(item.namespace) || "shared.content-principles";
+      const knowledgeKind = optionalString(item.knowledgeKind) || "content-principle";
       const timecodes = Array.isArray(item.timecodes) ? item.timecodes : [];
-      if (timecodes.length === 0) throw new Error(`principles[${index}].timecodes must not be empty`);
+      const sourceRefs = Array.isArray(item.sourceRefs) ? item.sourceRefs : [];
+      if (timecodes.length === 0 && sourceRefs.length === 0) {
+        throw new Error(`principles[${index}] requires timecodes or sourceRefs`);
+      }
       return {
         id: requireString(item.id, `principles[${index}].id`),
-        sourceVideoId: requireString(item.sourceVideoId, `principles[${index}].sourceVideoId`),
+        namespace,
+        knowledgeKind,
+        sourceVideoId: timecodes.length > 0 ? requireString(item.sourceVideoId, `principles[${index}].sourceVideoId`) : "",
         timecodes: timecodes.map((range, rangeIndex) => {
           requireObject(range, `principles[${index}].timecodes[${rangeIndex}]`);
           if (!Number.isFinite(range.startSeconds) || !Number.isFinite(range.endSeconds)) {
@@ -202,10 +209,27 @@ function normalizePrinciples(value) {
             endLabel: requireString(range.endLabel, `principles[${index}].timecodes[${rangeIndex}].endLabel`),
           };
         }),
+        sourceRefs: sourceRefs.map((source, sourceIndex) => {
+          requireObject(source, `principles[${index}].sourceRefs[${sourceIndex}]`);
+          const declaredHash = requireString(source.contentHash, `principles[${index}].sourceRefs[${sourceIndex}].contentHash`);
+          if (!/^[a-f0-9]{64}$/u.test(declaredHash)) {
+            throw new Error(`principles[${index}].sourceRefs[${sourceIndex}].contentHash must be sha256`);
+          }
+          return {
+            sourceId: requireString(source.sourceId, `principles[${index}].sourceRefs[${sourceIndex}].sourceId`),
+            repository: requireString(source.repository, `principles[${index}].sourceRefs[${sourceIndex}].repository`),
+            commit: requireString(source.commit, `principles[${index}].sourceRefs[${sourceIndex}].commit`),
+            relativePath: requireString(source.relativePath, `principles[${index}].sourceRefs[${sourceIndex}].relativePath`),
+            contentHash: declaredHash,
+          };
+        }),
         claim: requireString(item.claim, `principles[${index}].claim`),
         abstraction: requireString(item.abstraction, `principles[${index}].abstraction`),
         applicability: stringList(item.applicability, `principles[${index}].applicability`, { minItems: 1 }),
         counterexamples: stringList(item.counterexamples, `principles[${index}].counterexamples`, { minItems: 1 }),
+        requiredEvidence: stringList(item.requiredEvidence, `principles[${index}].requiredEvidence`),
+        decisionProcedure: stringList(item.decisionProcedure, `principles[${index}].decisionProcedure`),
+        failureSignals: stringList(item.failureSignals, `principles[${index}].failureSignals`),
         status: requireString(item.status, `principles[${index}].status`),
         authority: item.status === "accepted" ? "user_accepted_rule" : "advisory_candidate_only",
         contentHash: contentHash(item),
@@ -244,8 +268,11 @@ function normalizePrincipleCitations(value, principles) {
       applicabilityCheck: requireString(item.applicabilityCheck, `output.principleCitations[${index}].applicabilityCheck`),
       counterexampleCheck: requireString(item.counterexampleCheck, `output.principleCitations[${index}].counterexampleCheck`),
       authority: principle.authority,
+      namespace: principle.namespace,
+      knowledgeKind: principle.knowledgeKind,
       sourceVideoId: principle.sourceVideoId,
       timecodes: principle.timecodes.map(range => ({ ...range })),
+      sourceRefs: principle.sourceRefs.map(source => ({ ...source })),
     };
   });
 }

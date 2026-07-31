@@ -416,3 +416,46 @@ test("Strategist requires material, bounded, condition-checked principle use", (
     /at most three/
   );
 });
+
+test("Strategist accepts private task contracts with artifact provenance instead of video timecodes", () => {
+  const fixture = directionCases[2];
+  const input = buildContentStrategistInput({ direction: fixture.direction, evidence: [fixture.evidence] });
+  const task = {
+    id: "content-task.real-output-validates-reuse.v1",
+    namespace: "content.private",
+    knowledgeKind: "content-task-contract",
+    sourceVideoId: "",
+    timecodes: [],
+    sourceRefs: [{
+      sourceId: "content-training-evaluation.fixture",
+      repository: "codingning/koubo",
+      commit: "a".repeat(40),
+      relativePath: "data/acceptance/fixture.json",
+      contentHash: "b".repeat(64),
+    }],
+    claim: "经验必须改善后续真实输出",
+    abstraction: "不能用知识字段完整代替实际效果",
+    applicability: ["失败经验回写"],
+    counterexamples: ["安全规则可预防性启用"],
+    requiredEvidence: ["可比较的前后输出"],
+    decisionProcedure: ["调用候选经验并比较结果"],
+    failureSignals: ["只有复盘文档没有后续输出"],
+    status: "trial",
+  };
+  const request = buildContentStrategistAnalysisRequest(input, { principles: [task] });
+  const candidate = request.candidatePrinciples[0];
+  const raw = readyAnalysis(input, fixture.evidence.id, {
+    principleCitations: [{
+      principleId: candidate.id,
+      contentHash: candidate.contentHash,
+      relevance: "检查经验是否真正改善下一次输出",
+      appliedJudgment: "要求后续可比较输出和人工审核结果",
+      applicabilityCheck: "当前方向属于Agent失败经验回写",
+      counterexampleCheck: "不属于需预防性启用的安全规则",
+    }],
+  });
+  const analysis = normalizeContentStrategistOutput(raw, input, { principles: [task] });
+  assert.equal(analysis.principleCitations[0].namespace, "content.private");
+  assert.equal(analysis.principleCitations[0].sourceVideoId, "");
+  assert.equal(analysis.principleCitations[0].sourceRefs[0].contentHash, "b".repeat(64));
+});

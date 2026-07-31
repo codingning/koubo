@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "content-strategist-task-knowledge-heldout-suite.v1",
+  "status": "trial",
+  "repeats": 2,
+  "thresholds": {
+    "minimumTrialDirectionWins": 4,
+    "minimumAverageScoreDelta": 1,
+    "minimumCitationAccuracy": 0.9,
+    "minimumConsistentDirections": 4,
+    "maximumRegressions": 0
+  },
+  "cases": [
+    {
+      "id": "heldout.subtitle-aligner-audit",
+      "direction": "我想试一个开源字幕对齐工具，怎样判断它是真的能替代现在的人工校对，而不是只在演示样例上看起来很准",
+      "audienceContext": "经常制作口播字幕、希望减少校对时间但担心中文准确率和环境兼容性的创作者",
+      "userFacts": ["已经在隔离目录完成安装", "工具能生成字幕文件", "尚未进入正式视频流程"],
+      "evidence": [
+        { "id": "heldout.evidence.subtitle-license", "kind": "audit-record", "summary": "许可证、依赖版本和本地运行权限已经记录" },
+        { "id": "heldout.evidence.subtitle-sample", "kind": "local-trial", "summary": "已有三段不同语速中文口播的工具输出和人工校对稿" }
+      ],
+      "constraints": ["不得把生成成功说成准确率合格", "不得虚构维护状态", "不得在没有退出路径时替换正式流程"]
+    },
+    {
+      "id": "heldout.voice-tool-audit",
+      "direction": "一个开源本地配音工具效果很惊艳，但需要显卡和较高权限，我应该怎样决定是否把它加入视频工作流",
+      "audienceContext": "想提高配音效率但担心硬件、权限、声音授权和维护成本的个人创作者",
+      "userFacts": ["工具已在隔离环境运行", "当前正式流程已有可用配音方案", "新工具需要额外模型文件和显卡资源"],
+      "evidence": [
+        { "id": "heldout.evidence.voice-runtime", "kind": "runtime-trial", "summary": "记录了安装时间、显存占用、生成时长和失败日志" },
+        { "id": "heldout.evidence.voice-rights", "kind": "rights-audit", "summary": "模型和声线授权仍有待确认项目" }
+      ],
+      "constraints": ["授权不明确时不得进入生产", "不得因效果惊艳忽略维护和退出成本", "必须与现有方案比较真实增量"]
+    },
+    {
+      "id": "heldout.sfx-timing-feedback",
+      "direction": "我的音效库能按标签找到转场音，但Agent总把音效放在动作之后，我该怎样训练它学会正确时机",
+      "audienceContext": "已经有本地音效库、但自动剪辑的音效时机经常不自然的短视频创作者",
+      "userFacts": ["音效均有稳定ID和使用许可", "同一个转场可以召回多个候选", "当前没有保存人工拒绝原因"],
+      "evidence": [
+        { "id": "heldout.evidence.sfx-timeline", "kind": "timeline-samples", "summary": "已有同一真实转场上提前、对齐和滞后三种时间点样片" },
+        { "id": "heldout.evidence.sfx-candidates", "kind": "candidate-set", "summary": "每个样片可以绑定候选音效ID、起点和响度" }
+      ],
+      "constraints": ["不得自动批准音效", "不得只增加标签", "必须允许整组音效都不合格"]
+    },
+    {
+      "id": "heldout.bgm-selection-feedback",
+      "direction": "BGM都已经整理好情绪标签，为什么Agent还是会选到压住人声或和内容气质冲突的音乐，我该记录什么反馈",
+      "audienceContext": "希望自动选择BGM但不愿牺牲口播清晰度和内容气质的个人创作者",
+      "userFacts": ["BGM有稳定ID、情绪标签和授权证据", "同一段口播可以输出多个候选混音", "最终选择仍由用户决定"],
+      "evidence": [
+        { "id": "heldout.evidence.bgm-mixes", "kind": "audio-comparison", "summary": "已有同一口播搭配不同BGM、响度和ducking参数的真实混音" },
+        { "id": "heldout.evidence.bgm-review", "kind": "human-review", "summary": "用户可以标记听不清、情绪冲突、节奏不合或整组不接受" }
+      ],
+      "constraints": ["不得把授权合格等同于效果合格", "不得同时改变所有变量后宣称某个标签有效", "不得用模型自评替代听感审核"]
+    },
+    {
+      "id": "heldout.caption-rule-reuse",
+      "direction": "一条视频里有效的关键词放大字幕，到了下一条却显得很吵，我怎样把这次失败变成Agent真正会用的经验",
+      "audienceContext": "反复调整字幕动效、但同一种规则在不同口播中表现不稳定的创作者",
+      "userFacts": ["两条视频的话题和语速不同", "旧规则的触发记录可以追溯", "第二条真实样片已被用户否决"],
+      "evidence": [
+        { "id": "heldout.evidence.caption-versions", "kind": "version-comparison", "summary": "保留了第二条视频调用旧规则前后的字幕样片" },
+        { "id": "heldout.evidence.caption-rejection", "kind": "human-review", "summary": "用户否决原因为关键词放大过密并抢夺注意力" }
+      ],
+      "constraints": ["不得隐藏旧规则的成功和失败样本", "不得因一次否决永久禁用所有关键词强调", "不得用Agent自评代替用户样片审核"]
+    }
+  ]
+}
