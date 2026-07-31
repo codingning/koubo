@@ -336,6 +336,7 @@ export function createMultiAgentApi({
   orchestrator,
   contentStrategist,
   contentPrinciples = [],
+  retrieveContentKnowledge,
   ordinaryViewerCritic,
   buildBlindReviewBundle,
   createWorkspaceEvidence,
@@ -373,14 +374,66 @@ export function createMultiAgentApi({
     return stored;
   }
 
-  async function runContentStrategist(input, request) {
+  async function runContentStrategist(input, request, principles) {
     if (typeof contentStrategist === "function") {
-      return normalizedAgentResult(await contentStrategist(input, { request }), "content strategist");
+      return normalizedAgentResult(await contentStrategist(input, { request, principles }), "content strategist");
     }
     if (typeof contentStrategist?.analyze === "function") {
-      return normalizedAgentResult(await contentStrategist.analyze(input, { request }), "content strategist");
+      return normalizedAgentResult(await contentStrategist.analyze(input, { request, principles }), "content strategist");
     }
     throw httpError(503, "content strategist is not configured");
+  }
+
+  async function resolveContentKnowledge(selection, input) {
+    if (selection === undefined || selection === null) {
+      return {
+        principles: contentPrinciples,
+        audit: {
+          source: "repository",
+          mode: "default",
+          includeTrial: false,
+          topK: null,
+          query: input.lockedDirection,
+          records: [],
+        },
+      };
+    }
+    if (!selection || typeof selection !== "object" || Array.isArray(selection)) {
+      throw httpError(400, "knowledgeContext must be an object");
+    }
+    const mode = String(selection.mode || "").trim();
+    if (mode === "none") {
+      return {
+        principles: [],
+        audit: {
+          source: "none",
+          mode: "explicit-control",
+          includeTrial: false,
+          topK: 0,
+          query: input.lockedDirection,
+          records: [],
+        },
+      };
+    }
+    if (mode !== "creator-vault") {
+      throw httpError(400, "knowledgeContext.mode must be none or creator-vault");
+    }
+    if (selection.includeTrial !== true) {
+      throw httpError(400, "creator-vault mode requires includeTrial=true");
+    }
+    const topK = Number(selection.topK ?? 5);
+    if (!Number.isInteger(topK) || topK < 3 || topK > 5) {
+      throw httpError(400, "creator-vault topK must be between 3 and 5");
+    }
+    if (typeof retrieveContentKnowledge !== "function") {
+      throw httpError(409, "Creator Vault knowledge adapter is not configured");
+    }
+    return retrieveContentKnowledge({
+      agentId: "content-strategist",
+      query: input.lockedDirection,
+      includeTrial: true,
+      topK,
+    });
   }
 
   async function runOrdinaryReview(input, options) {
@@ -637,6 +690,7 @@ export function createMultiAgentApi({
         ], "content strategy analysis");
         let input;
         let request;
+        let knowledge;
         try {
           const evidence = [
             ...clientProvidedEvidence(body.evidence),
@@ -651,17 +705,22 @@ export function createMultiAgentApi({
             constraints: body.constraints,
             interviewAnswers: body.interviewAnswers,
           });
-          request = buildContentStrategistAnalysisRequest(input, { principles: contentPrinciples });
         } catch (error) {
           throw validationError(error);
         }
-        const rawAnalysis = await runContentStrategist(input, request);
+        knowledge = await resolveContentKnowledge(body.knowledgeContext, input);
+        try {
+          request = buildContentStrategistAnalysisRequest(input, { principles: knowledge.principles });
+        } catch (error) {
+          throw validationError(error);
+        }
+        const rawAnalysis = await runContentStrategist(input, request, knowledge.principles);
         let analysis;
         try {
           analysis = normalizeContentStrategistOutput(
             rawAnalysis,
             input,
-            { principles: contentPrinciples }
+            { principles: knowledge.principles }
           );
         } catch (error) {
           throw httpError(502, `content strategist returned invalid output: ${error.message}`);
@@ -675,6 +734,7 @@ export function createMultiAgentApi({
           input,
           analysis,
           principleIds: request.candidatePrinciples.map(item => item.id),
+          knowledgeContext: knowledge.audit,
           analyzedAt: clock(),
           authority: {
             directionOwner: "user",
@@ -687,7 +747,7 @@ export function createMultiAgentApi({
           },
         });
         const artifact = await writeIndependentArtifact("content-strategy-analyses", id, record);
-        return { status: 201, body: { analysisArtifactId: id, analysis, artifact } };
+        return { status: 201, body: { analysisArtifactId: id, analysis, knowledgeContext: knowledge.audit, artifact } };
       });
     }
 

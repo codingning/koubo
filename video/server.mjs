@@ -25,6 +25,7 @@ import {
   buildHyperframesDirectorProject,
 } from "./visual_director.mjs";
 import { createMultiAgentApi } from "./multi-agent/api.mjs";
+import { createCreatorVaultKnowledgeAdapter } from "./multi-agent/creator-vault-knowledge.mjs";
 import { buildBlindReviewBundle } from "./multi-agent/evaluation.mjs";
 import { buildExpertKnowledgeLibrary } from "./multi-agent/expert-knowledge-library.mjs";
 import { canonicalJson, contentHash, loadAgentProfiles, validateLibrary } from "./multi-agent/contracts.mjs";
@@ -4888,6 +4889,10 @@ const multiAgentContentPrinciples = validateLibrary(
   "content-principle",
   await readJsonFile(path.join(root, "config", "multi-agent", "content-principles.json"))
 );
+const creatorVaultKnowledge = createCreatorVaultKnowledgeAdapter({
+  vaultRoot: process.env.KOUBO_CREATOR_VAULT_ROOT,
+  cliPath: process.env.KOUBO_CREATOR_VAULT_CLI,
+});
 const multiAgentMemory = createMemoryService(multiAgentStore, multiAgentProfiles);
 const multiAgentBridgeRoot = path.join(multiAgentDataRoot, "runtime", "bridge");
 const multiAgentArtifactRoot = path.join(multiAgentDataRoot, "runtime", "artifacts");
@@ -5174,9 +5179,12 @@ const multiAgentApi = createMultiAgentApi({
   tutorials: multiAgentTutorials,
   orchestrator: multiAgentOrchestrator,
   contentStrategist: {
-    analyze: async input => (await multiAgentOrchestrator.analyzeContentDirection(input)).analysis,
+    analyze: async (input, { principles }) => (
+      await multiAgentOrchestrator.analyzeContentDirection(input, { principles })
+    ).analysis,
   },
   contentPrinciples: multiAgentContentPrinciples,
+  retrieveContentKnowledge: input => creatorVaultKnowledge.retrieve(input),
   ordinaryViewerCritic: multiAgentOrdinaryViewerCritic,
   buildBlindReviewBundle,
   createWorkspaceEvidence: createWorkspaceEvidenceSnapshot,

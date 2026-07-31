@@ -108,6 +108,7 @@ async function apiFixture(t, overrides = {}) {
   const ingestions = [];
   const proposalCalls = [];
   const contentStrategyCalls = [];
+  const contentStrategyPrincipleInputs = [];
   const ordinaryReviewCalls = [];
   const renderedRoot = fs.mkdtempSync(path.join(os.tmpdir(), "koubo-api-rendered-review-"));
   const outputPath = path.join(renderedRoot, "final-v4.mp4");
@@ -235,8 +236,9 @@ async function apiFixture(t, overrides = {}) {
       },
     },
     contentStrategist: {
-      async analyze(input, { request }) {
+      async analyze(input, { request, principles }) {
         contentStrategyCalls.push(request);
+        contentStrategyPrincipleInputs.push(principles);
         const evidenceId = input.evidence[0]?.id;
         const principle = request.candidatePrinciples[0];
         return {
@@ -251,11 +253,11 @@ async function apiFixture(t, overrides = {}) {
             missing: evidenceId ? [] : ["真实行动证据"],
           },
           testableQuestion: "这条内容能否让观众完成一个具体动作？",
-          principleCitations: [{
+          principleCitations: principle ? [{
             principleId: principle.id,
             contentHash: principle.contentHash,
             relevance: "用于检查方向是否包含真实、可核验的行动历史",
-          }],
+          }] : [],
           recommendation: evidenceId ? "单篇" : "暂缓",
           nextQuestions: ["观众今天最小能做什么？"],
           status: evidenceId ? "可进入成稿" : "补证后再写",
@@ -326,6 +328,7 @@ async function apiFixture(t, overrides = {}) {
     ingestions,
     proposalCalls,
     contentStrategyCalls,
+    contentStrategyPrincipleInputs,
     ordinaryReviewCalls,
     content,
   };
@@ -454,6 +457,85 @@ test("content strategy analysis is idempotent and writes only an independent art
   assert.equal(artifacts[0].value.authority.promotesMemory, false);
   assert.deepEqual(job, beforeJob);
   assert.deepEqual(content, beforeContent);
+});
+
+test("content strategy supports an explicit no-knowledge A control", async t => {
+  const { request, artifacts, contentStrategyCalls, contentStrategyPrincipleInputs } = await apiFixture(t);
+  const response = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/analyze",
+    {
+      direction: "分享我如何把真实失败记录变成下一版改进",
+      evidence: [{ id: "evidence.ab-a", kind: "test", summary: "真实失败和返修记录" }],
+      knowledgeContext: { mode: "none" },
+    },
+    { idempotencyKey: "content-strategy-ab-control" }
+  );
+  assert.equal(response.status, 201, JSON.stringify(response.data));
+  assert.equal(contentStrategyCalls[0].candidatePrinciples.length, 0);
+  assert.deepEqual(contentStrategyPrincipleInputs[0], []);
+  assert.equal(contentStrategyCalls[0].outputContract.principleCitationPolicy, "must_be_empty");
+  assert.deepEqual(response.data.analysis.principleCitations, []);
+  assert.equal(response.data.knowledgeContext.source, "none");
+  assert.equal(artifacts[0].value.knowledgeContext.mode, "explicit-control");
+});
+
+test("content strategy reads Creator Vault trial knowledge only with explicit opt-in", async t => {
+  const reads = [];
+  const audit = {
+    source: "creator-vault",
+    mode: "trial-opt-in",
+    agentId: "content-strategist",
+    includeTrial: true,
+    topK: 3,
+    query: "分享我如何把真实失败记录变成下一版改进",
+    records: [{
+      rank: 1,
+      id: principleFixture.id,
+      status: "trial",
+      namespace: "shared.content-principles",
+      contentHash: "b".repeat(64),
+    }],
+  };
+  const { request, artifacts, contentStrategyCalls, contentStrategyPrincipleInputs } = await apiFixture(t, {
+    retrieveContentKnowledge: async input => {
+      reads.push(input);
+      return { principles: [principleFixture], audit };
+    },
+  });
+  const missingOptIn = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/analyze",
+    {
+      direction: audit.query,
+      knowledgeContext: { mode: "creator-vault", topK: 3 },
+    },
+    { idempotencyKey: "content-strategy-vault-missing-opt-in" }
+  );
+  assert.equal(missingOptIn.status, 400);
+  assert.equal(reads.length, 0);
+
+  const response = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/analyze",
+    {
+      direction: audit.query,
+      evidence: [{ id: "evidence.ab-b", kind: "test", summary: "真实失败和返修记录" }],
+      knowledgeContext: { mode: "creator-vault", includeTrial: true, topK: 3 },
+    },
+    { idempotencyKey: "content-strategy-vault-trial-opt-in" }
+  );
+  assert.equal(response.status, 201, JSON.stringify(response.data));
+  assert.deepEqual(reads, [{
+    agentId: "content-strategist",
+    query: audit.query,
+    includeTrial: true,
+    topK: 3,
+  }]);
+  assert.equal(contentStrategyCalls[0].candidatePrinciples.length, 1);
+  assert.deepEqual(contentStrategyPrincipleInputs[0], [principleFixture]);
+  assert.equal(response.data.knowledgeContext.records[0].id, principleFixture.id);
+  assert.equal(artifacts.at(-1).value.knowledgeContext.records[0].contentHash, "b".repeat(64));
 });
 
 test("workspace evidence snapshots are server-authored, workspace-scoped, and unlock verified provenance", async t => {

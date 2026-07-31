@@ -214,10 +214,17 @@ function normalizePrinciples(value) {
 }
 
 function normalizePrincipleCitations(value, principles) {
+  const normalizedPrinciples = normalizePrinciples(principles);
+  if (normalizedPrinciples.length === 0) {
+    if (!Array.isArray(value) || value.length !== 0) {
+      throw new Error("output.principleCitations must be empty when no principles are supplied");
+    }
+    return [];
+  }
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error("output.principleCitations must contain at least one traceable principle");
   }
-  const available = new Map(normalizePrinciples(principles).map(item => [item.id, item]));
+  const available = new Map(normalizedPrinciples.map(item => [item.id, item]));
   const seen = new Set();
   return value.map((item, index) => {
     requireObject(item, `output.principleCitations[${index}]`);
@@ -387,6 +394,7 @@ export function buildContentStrategistInput({
 
 export function buildContentStrategistAnalysisRequest(input, { principles = [] } = {}) {
   const lockedDirection = assertMinimalInput(input);
+  const candidatePrinciples = normalizePrinciples(principles);
   return {
     operation: "agent_proposals",
     agentId: "content-strategist",
@@ -414,7 +422,7 @@ export function buildContentStrategistAnalysisRequest(input, { principles = [] }
       constraints: input.constraints.map(item => item),
       interviewAnswers: input.interviewAnswers.map(item => ({ ...item })),
     },
-    candidatePrinciples: normalizePrinciples(principles),
+    candidatePrinciples,
     instructions: {
       firstRestateUserIntent: true,
       interviewAndAnalyzeBeforeAnyDraft: true,
@@ -462,6 +470,7 @@ export function buildContentStrategistAnalysisRequest(input, { principles = [] }
       forbidAdditionalFields: true,
       forbidDraftMaterial: true,
       maxNextQuestions: 3,
+      principleCitationPolicy: candidatePrinciples.length > 0 ? "at_least_one" : "must_be_empty",
     },
     scriptGate: {
       strategistMayDraft: false,
