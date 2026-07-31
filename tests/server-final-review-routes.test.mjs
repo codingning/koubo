@@ -115,6 +115,7 @@ test("final review routes reject stale pages, preserve downloads, and replay app
     [`/api/jobs/${jobId}/replan`, { feedback: "锁竞争重做" }],
     [`/api/jobs/${jobId}/rerender`, { reason: "锁竞争重渲染" }],
     [`/api/jobs/${jobId}/cover`, { title: "锁竞争封面" }],
+    [`/api/jobs/${jobId}/publish-package`, { expectedVersion: 2, mode: "regenerate" }],
     [`/api/jobs/${jobId}/assets/rediscover`, {}],
     [`/api/jobs/${jobId}/assets/auto-review-preview`, {}],
     [`/api/jobs/${jobId}/assets`, {}],
@@ -150,6 +151,32 @@ test("final review routes reject stale pages, preserve downloads, and replay app
   assert.equal(firstReview.version, 2);
   assert.equal(firstReview.mediaSha256, sha256(v2Path));
   assert.equal(firstReview.reviewBundle.previewSha256, sha256(previewPath));
+  assert.equal(first.payload.publishPackage.status, "ready");
+  assert.equal(first.payload.publishPackage.outputVersion, 2);
+  assert.equal(first.payload.publishPackage.mediaSha256, sha256(v2Path));
+  assert.equal(first.payload.publishPackage.autoPublish, false);
+  assert.equal(first.payload.publishPackage.titleCandidates.length, 3);
+  assert.ok(first.payload.publishPackage.hashtags.length >= 6);
+  assert.deepEqual(Object.keys(first.payload.publishPackage.platforms), ["douyin", "xiaohongshu", "wechat"]);
+  for (const name of ["publish-package-v2.json", "publish-copy-v2.md", "publish-package-v2.zip"]) {
+    assert.equal(fs.existsSync(path.join(jobDir, name)), true, name);
+  }
+
+  const savedCopy = "这是人工调整后的抖音发布文案。";
+  const saved = await post(baseUrl, `/api/jobs/${jobId}/publish-package`, {
+    expectedVersion: 2,
+    mode: "save",
+    selectedTitle: first.payload.publishPackage.selectedTitle,
+    hashtags: ["#AI实战", "#口播短视频", "#发布准备", "#内容创作", "#效率工具", "#本地工作台"],
+    platforms: {
+      ...first.payload.publishPackage.platforms,
+      douyin: { ...first.payload.publishPackage.platforms.douyin, body: savedCopy },
+    },
+    syncCovers: false,
+  });
+  assert.equal(saved.response.status, 200);
+  assert.equal(saved.payload.publishPackage.platforms.douyin.body, savedCopy);
+  assert.equal(JSON.parse(await fsp.readFile(path.join(jobDir, "publish-package-v2.json"), "utf8")).platforms.douyin.body, savedCopy);
 
   const replay = await post(baseUrl, `/api/jobs/${jobId}/approve`, { expectedVersion: 2 });
   assert.equal(replay.response.status, 200);

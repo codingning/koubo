@@ -1,21 +1,85 @@
 window.KOUBO_DATA = {
   project: {
-    name: "AI口播成长工作台",
-    subtitle: "从知道到做到 · 普通人的AI行动实验",
-    positioning: "我持续优化自己的AI口播工作台，也从开发、工作和生活中的真实需求出发，做能解决一个具体问题的AI项目，公开从知道到做到的全过程。",
-    phase: "口播工作台优化 · 真实问题AI共创",
+    name: "Codex / Agent / Skill 实测工作台",
+    subtitle: "真实跑通 · 可复用资产 · 明确边界",
+    positioning: "面向开发者与进阶用户，真实跑通Codex、Agent、Skill和开源组件，交付提示词、工作流图、清单与模板。",
+    phase: "开放选题池 · 不设固定天数和每日目标",
     autoPublish: false,
-    updatedAt: "2026-07-19"
+    updatedAt: "2026-07-29"
   },
   contentItems: [
     {
+      id: "developer-workflow-start",
+      kind: "developer",
+      date: "2026-07-29",
+      day: "新定位",
+      column: "Codex / Agent / Skill 实测",
+      status: "待选题",
+      badge: "当前定位",
+      contentRevision: "2026-07-29-developer-proof-first",
+      sourcePackagePath: "F:\\code\\koubo\\docs\\CREATOR_PROFILE.md",
+      sourcePackageHref: "../docs/CREATOR_PROFILE.md",
+      contentFolderPath: "F:\\code\\koubo\\docs",
+      durationFull: "按证据密度决定",
+      durationShort: "可选精简版",
+      mainTopic: "选择一个已经跑通、能交付资产的开发者问题",
+      shortTopic: "等待实测选题",
+      hook: "先展示运行结果、失败画面或资源文件，再解释怎么复用。",
+      audienceBenefit: "拿走一个经过真实验证的提示词、工作流图、清单或模板。",
+      engagement: {
+        audienceMirror: "你已经会用AI写代码，但Skill、Agent和工作流一多，就很难判断什么值得装、怎样组合和怎样验收。",
+        commentPrompt: "你更需要可安装Skill、Agent工作流图，还是开源项目审计清单？",
+        followPromise: "下一条只在真实证据和资源准备完成后，验证一个明确分支。",
+        viewerTask: "先写下你当前最想减少的一次重复操作或一次失败检查。",
+        primaryClose: "选定真实问题并跑通后，我会把对应模板整理成可领取版本。"
+      },
+      structureDesign: {
+        archetype: "quick-proof",
+        selectionReason: "新定位先用最短路径证明结果和资源价值。",
+        coreQuestion: "哪一个开发者问题值得先做真实实测？",
+        hookConflict: "会用AI不等于已经拥有稳定工作流。",
+        saveableFramework: [
+          { label: "问题", action: "锁定一个具体失败或重复劳动", expectedSignal: "能用一句话描述输入和期望结果" },
+          { label: "实测", action: "完成安装、运行和失败验证", expectedSignal: "保存真实输出、错误或前后差异" },
+          { label: "交付", action: "整理提示词、流程图、清单或模板", expectedSignal: "资源文件有版本和适用范围" }
+        ],
+        personalEvidenceRole: "本地项目只负责提供真实运行证据。",
+        personalVariation: "优先验证Windows、Codex和本地Agent工作流。",
+        boundary: "当前还没有锁定第一条新选题，不应直接拍摄或发布。",
+        payoff: "观众能判断是否值得复用，并拿到文件化资产。"
+      },
+      storyPosition: {
+        problem: "旧内容围绕个人成长和项目进度，开发者无法立即拿走可复用成果。",
+        current: "已取消30天规划，改为Codex、Agent、Skill实测与资源交付。",
+        nextVerification: "从三个开放选题池中选择一个有完整证据和资产的问题。"
+      },
+      fullSegments: [
+        { time: "定位说明", label: "暂不拍摄", tone: "直接", text: "当前没有锁定正式选题。请先在上方填写一个Codex、Agent、Skill或开源项目问题，以及真实运行证据；只有资源文件和验证结果都准备好后才生成口播。" }
+      ],
+      shortScript: "",
+      evidence: [
+        { name: "新创作者定位", proof: "已取消30天和泛成长主线", path: "../docs/CREATOR_PROFILE.md", public: true },
+        { name: "新内容工作流", proof: "按证据和资产选择题目，不按日期凑内容", path: "../docs/WORKFLOW.md", public: true }
+      ],
+      risks: [
+        { text: "未锁定真实问题和证据前不进入拍摄", done: true },
+        { text: "资源文件必须真实存在并标记版本", done: false },
+        { text: "微信群导流方式需核对当前平台规则", done: false }
+      ],
+      sourceFiles: [
+        { label: "创作者定位", path: "../docs/CREATOR_PROFILE.md" },
+        { label: "内容工作流", path: "../docs/WORKFLOW.md" },
+        { label: "证据来源矩阵", path: "../docs/SOURCE_MATRIX.md" }
+      ]
+    },
+    {
       id: "growth-day-1",
-      kind: "growth",
+      kind: "legacy",
       date: "2026-07-17",
       day: "Day 1",
-      column: "普通人的AI行动实验第1条",
-      status: "待审核",
-      badge: "当前可拍",
+      column: "历史：普通人的AI行动实验",
+      status: "已废止定位",
+      badge: "历史证据",
       contentRevision: "2026-07-19-spoken-problem-solving",
       sourcePackagePath: "E:\\ai\\koubo\\runs\\2026-07-17\\growth\\02_main_package.md",
       sourcePackageHref: "../runs/2026-07-17/growth/02_main_package.md",
@@ -240,36 +304,24 @@ window.KOUBO_DATA = {
       legacyPath: "../runs/2026-07-15/02_main_package.md"
     }
   ],
-  roadmap: [
-    [1, "从收藏者到发布者", "完成第一遍真人口播，不追求完美", "当前"],
-    [2, "从收藏者到发布者", "上传原片并完成自动剪辑", "计划"],
-    [3, "从收藏者到发布者", "审核并决定是否发布第一条", "计划"],
-    [4, "从收藏者到发布者", "公开第一遍与最终成片差异", "计划"],
-    [5, "从知道到完成", "完成一个最小AI行动项目", "计划"],
-    [6, "从知道到完成", "亲测一个相关AI热点或热梗", "计划"],
-    [7, "行动复盘", "第一周行动与内容双重复盘", "计划"],
-    [8, "真实项目", "从一个真实痛点定义项目", "计划"],
-    [9, "真实项目", "写验收标准和公开边界", "计划"],
-    [10, "真实项目", "完成可展示V1", "计划"],
-    [11, "真实项目", "记录V1最明显的问题", "计划"],
-    [12, "真实项目", "修复并制作前后对比", "计划"],
-    [13, "真实项目", "让非专业观众检查是否看懂", "计划"],
-    [14, "行动复盘", "第二周项目与内容复盘", "计划"],
-    [15, "提高判断", "比较两种AI工具或提示方法", "计划"],
-    [16, "提高判断", "测试AI事实核验边界", "计划"],
-    [17, "提高判断", "测试AI文件生成边界", "计划"],
-    [18, "提高判断", "记录必须人工判断的一步", "计划"],
-    [19, "热点亲测", "把一个热点变成真实行动实验", "计划"],
-    [20, "真实互动", "根据真实评论选择下一步或留空", "计划"],
-    [21, "行动复盘", "第三周行动与内容复盘", "计划"],
-    [22, "稳定输出", "复用最自然的内容结构", "计划"],
-    [23, "稳定输出", "升级或开始第二个行动项目", "计划"],
-    [24, "稳定输出", "公开一次真实失败", "计划"],
-    [25, "稳定输出", "展示可复用行动方法", "计划"],
-    [26, "作品整理", "整理可公开作品与证据", "计划"],
-    [27, "身份对比", "比较Day 1和当前行动能力", "计划"],
-    [28, "内容测试", "测试最佳标题、封面和热梗方式", "计划"],
-    [29, "成果汇总", "汇总30天真实行动与发布结果", "计划"],
-    [30, "完整复盘", "决定保留、增加、减少和停止什么", "计划"]
+  experiments: [
+    {
+      type: "Skill真实跑通",
+      question: "这个Skill解决什么问题，怎样安装、调用和验证？",
+      evidence: "官方来源、固定版本、真实运行结果和失败边界。",
+      asset: "提示词 / 配置模板 / 安装清单"
+    },
+    {
+      type: "Agent工作流拆解",
+      question: "输入、角色、工具、人工门和失败恢复怎样连接？",
+      evidence: "流程图、一次完整运行、错误与回滚记录。",
+      asset: "工作流图 / 执行提示词 / 验收清单"
+    },
+    {
+      type: "开源项目审计",
+      question: "是否值得装，适合谁，不适合谁？",
+      evidence: "源码关系、许可证、安全、维护和Windows试用。",
+      asset: "审计表 / 安装步骤 / 替代方案清单"
+    }
   ]
 };

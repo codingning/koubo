@@ -217,7 +217,7 @@ async function runTutorialLifecycle({ runRoot, tutorial }) {
     };
     const proposalInput = {
       jobId: "acceptance-memory-effect",
-      transcript: [{ start: 0, end: 4, text: "从知道到做到，用真实结果验证 AI。" }],
+      transcript: [{ start: 0, end: 4, text: "先看真实运行结果，再拆解可复用的 AI 工作流。" }],
       sharedEvidence: [{ id: "fixture-evidence", kind: "fixture", start: 0, end: 4 }],
       currentPlan: {
         layout: "speaker-right-information-left",

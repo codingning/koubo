@@ -99,7 +99,7 @@ for (const fixture of directionCases) {
   test(`${fixture.name}方向保持用户锁定并且确认前不能进入成稿`, () => {
     const input = buildContentStrategistInput({
       direction: fixture.direction,
-      audienceContext: "从知道到做到的AI行动型观众",
+      audienceContext: "Codex、Agent、Skill方向的开发者与进阶用户",
       userFacts: ["用户会展示自己真实完成的步骤"],
       evidence: [fixture.evidence],
       constraints: ["不得虚构结果", "不得擅自换题"],

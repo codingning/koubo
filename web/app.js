@@ -26,10 +26,10 @@
     creative: ["选择最终包装", "标题和封面"],
     shoot: ["B-roll、字幕和准备事项", "拍什么画面"],
     edit: ["视频只在本机处理", "拍完AI剪辑"],
-    publish: ["审核后再手动发布", "发布文案"],
+    publish: ["审核通过后生成本地素材包", "发布准备"],
     evidence: ["只讲能证明的事实", "证据和风险"],
-    roadmap: ["计划不等于完成", "30天成长路线"],
-    library: ["成长版和旧基线都保留", "历史内容"]
+    experiments: ["没有证据就不凑内容", "开放选题实验"],
+    library: ["新定位与历史证据分开", "历史内容"]
   };
 
   const defaultShootChecks = [
@@ -37,11 +37,16 @@
     "标题和封面与正文一致",
     "所有展示画面已完成脱敏",
     "收音、光线和背景已经准备",
-    "明日挑战是实际准备继续做的任务"
+    "资源文件、适用边界和领取说明已经准备好"
   ];
 
   let currentView = "today";
   let currentItem = data.contentItems.find(item => item.id === persisted.currentId) || data.contentItems[0];
+  if (currentItem?.id === "growth-day-1" && data.contentItems[0]?.kind === "developer") {
+    currentItem = data.contentItems[0];
+    persisted.currentId = currentItem.id;
+  }
+  let publishPackageDraft = null;
   let teleRunning = false;
   let teleFrame = null;
   let teleLastTime = null;
@@ -184,6 +189,7 @@
     byId("page-eyebrow").textContent = pageNames[view][0];
     byId("page-title").textContent = pageNames[view][1];
     if (view === "edit") renderEditExperienceMode();
+    if (view === "publish") renderPublish();
     $(".sidebar").classList.remove("is-open");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -222,19 +228,19 @@
     byId("hero-benefit").textContent = currentItem.audienceBenefit;
     const engagement = currentItem.engagement || {};
     const design = currentItem.structureDesign || {};
-    const archetypeNames = { "evidence-story": "证据故事", "saveable-map": "可收藏路径图", "short-resonance": "短共鸣" };
+    const archetypeNames = { "quick-proof": "快速实测", "evidence-story": "失败修复", "saveable-map": "可收藏工作流", "deep-audit": "深度审计", "short-resonance": "历史短共鸣" };
     byId("structure-archetype").textContent = archetypeNames[design.archetype] || "旧稿未标注，生成新口播时自动选择";
     byId("structure-question").textContent = design.coreQuestion || "围绕一个观众问题组织整条内容。";
     byId("structure-framework").textContent = Array.isArray(design.saveableFramework) && design.saveableFramework.length
       ? design.saveableFramework.map(item => `${item.label}：${item.action}（信号：${item.expectedSignal}）`).join("；")
       : "新稿会为每一步同时给出动作和可观察信号。";
     byId("viewer-mirror").textContent = engagement.audienceMirror || currentItem.audienceBenefit || "先把个人经历翻译成观众能使用的经验。";
-    byId("viewer-task").textContent = engagement.viewerTask || currentItem.actionExperiment?.viewerTask || "给观众一个今天就能完成的最小动作。";
+    byId("viewer-task").textContent = engagement.viewerTask || currentItem.actionExperiment?.viewerTask || "给开发者一个可以立即复制、运行或检查的最小动作。";
     const tone = currentItem.creativeTone || {};
     const memeLine = tone.trendMeme?.adaptedLine || "";
     byId("humor-beat").textContent = [tone.humorBeat, memeLine].filter(Boolean).join(" · ") || "用一句自然自嘲或反差降低严肃感。";
-    byId("comment-prompt").textContent = engagement.commentPrompt || "用一个具体选择题邀请观众参与下一步实验。";
-    byId("follow-promise").textContent = engagement.followPromise || currentItem.storyPosition?.tomorrow || "说明下一集会验证什么真实结果。";
+    byId("comment-prompt").textContent = engagement.commentPrompt || "只问一个会改变资源版本或下一次实测分支的具体问题。";
+    byId("follow-promise").textContent = engagement.followPromise || currentItem.storyPosition?.nextVerification || currentItem.storyPosition?.tomorrow || "说明下一次会验证哪个具体分支。";
     byId("primary-close").textContent = engagement.primaryClose || "旧稿未标注；新稿会从评论、任务和下一次验证中只选一个主动作。";
     const referenceResearch = currentItem.referenceResearch || {};
     byId("reference-sources").textContent = Array.isArray(referenceResearch.sourceIds) && referenceResearch.sourceIds.length
@@ -244,13 +250,13 @@
       ...(Array.isArray(referenceResearch.borrowedKnowledge) ? referenceResearch.borrowedKnowledge.slice(0, 2) : []),
       ...(Array.isArray(referenceResearch.structuralChoices) ? referenceResearch.structuralChoices.slice(0, 1) : [])
     ].join("；") || "只借鉴知识、结构和互动机制，不复制原句、案例或人设。";
-    byId("home-script-duration").textContent = currentItem.durationFull || "约2—3分钟";
+    byId("home-script-duration").textContent = currentItem.durationFull || "按证据密度决定";
     byId("home-script-preview").textContent = fullPlainText(currentItem);
     byId("source-package-path").textContent = sourcePackagePath(currentItem);
     byId("open-source-package").href = sourcePackageHref(currentItem);
-    byId("story-yesterday").textContent = currentItem.storyPosition?.yesterday || "旧定位基线内容，没有成长连续任务。";
-    byId("story-today").textContent = currentItem.storyPosition?.today || "保留旧样本供对照。";
-    byId("story-tomorrow").textContent = currentItem.storyPosition?.tomorrow || "打开旧素材包查看原计划。";
+    byId("story-yesterday").textContent = currentItem.storyPosition?.problem || currentItem.storyPosition?.yesterday || "这条内容要解决的开发者问题。";
+    byId("story-today").textContent = currentItem.storyPosition?.current || currentItem.storyPosition?.today || "本次真实安装、运行、失败或修复证据。";
+    byId("story-tomorrow").textContent = currentItem.storyPosition?.nextVerification || currentItem.storyPosition?.tomorrow || "尚待验证的边界或替代方案。";
 
     const progress = currentItem.progress || ["旧定位内容已完整保留，可从历史内容打开。"];
     byId("progress-list").innerHTML = progress.map(item => `<li>${htmlEscape(item)}</li>`).join("");
@@ -345,16 +351,144 @@
 
   function renderPublish() {
     const platform = persisted.platform || "douyin";
+    const packageValue = currentVideoJob?.publishPackage;
+    const ready = currentVideoJob?.status === "approved" && packageValue?.status === "ready" && Number(packageValue.outputVersion) === Number(currentVideoJob.output?.version);
+    const state = byId("publish-package-state");
+    const titleSection = byId("publish-title-section");
+    const coverSection = byId("publish-cover-section");
+    const actions = byId("publish-package-actions");
+    const download = byId("download-publish-package");
+    if (ready) {
+      publishPackageDraft = structuredClone(packageValue);
+      state.innerHTML = `<strong>发布素材包已就绪</strong><span>已绑定成片 v${htmlEscape(packageValue.outputVersion)}；所有内容只保存在本机，不会自动发布。</span>`;
+      state.classList.add("is-ready");
+      byId("publish-package-meta").textContent = `成片 v${packageValue.outputVersion} · ${packageValue.generation?.engine === "local-content-derived" ? "从真实稿件生成" : "本地生成"} · ${new Date(packageValue.generatedAt).toLocaleString("zh-CN")}`;
+      titleSection.classList.remove("is-hidden");
+      coverSection.classList.remove("is-hidden");
+      actions.classList.remove("is-hidden");
+      byId("save-publish-package").disabled = false;
+      byId("regenerate-publish-package").disabled = false;
+      const selectedTitle = packageValue.selectedTitle || packageValue.titleCandidates?.[0]?.title || "";
+      byId("publish-title").value = selectedTitle;
+      byId("publish-title-options").innerHTML = (packageValue.titleCandidates || []).map(item => `<button class="publish-title-option ${item.title === selectedTitle ? "is-active" : ""}" data-publish-title="${htmlEscape(item.title)}"><span>${htmlEscape(item.title)}</span><small>${htmlEscape(item.angle || "标题候选")}</small></button>`).join("");
+      const coverMap = [
+        ["vertical", "publish-cover-vertical", "download-publish-cover-vertical"],
+        ["wide16x9", "publish-cover-wide", "download-publish-cover-wide"],
+      ];
+      for (const [name, imageId, linkId] of coverMap) {
+        const cover = packageValue.covers?.[name];
+        const image = byId(imageId), link = byId(linkId);
+        if (cover?.url) {
+          image.src = `${videoApiBase}${cover.pngUrl || cover.url}?t=${Date.now()}`;
+          image.classList.remove("is-hidden");
+          link.href = `${videoApiBase}${cover.pngUrl || cover.url}`;
+          link.classList.remove("is-hidden");
+        } else {
+          image.removeAttribute("src");
+          image.classList.add("is-hidden");
+          link.classList.add("is-hidden");
+        }
+      }
+      if (packageValue.artifacts?.zip) {
+        download.href = `${videoApiBase}${packageValue.artifacts.zip}`;
+        download.classList.remove("is-hidden");
+      } else download.classList.add("is-hidden");
+    } else {
+      publishPackageDraft = null;
+      state.classList.remove("is-ready");
+      state.innerHTML = currentVideoJob?.status === "approved" && packageValue?.status === "error"
+        ? `<strong>发布素材包生成失败</strong><span>${htmlEscape(packageValue.error || "可以点击重新生成后再试")}</span>`
+        : `<strong>等待成片</strong><span>审核通过最终成片后，这里会自动生成标题、发布文案、关联话题和两种封面。</span>`;
+      byId("publish-package-meta").textContent = currentVideoJob?.output ? `当前成片 v${currentVideoJob.output.version} 尚未完成最终发布准备` : "尚未绑定已审核成片";
+      titleSection.classList.add("is-hidden");
+      coverSection.classList.add("is-hidden");
+      actions.classList.toggle("is-hidden", !(currentVideoJob?.status === "approved"));
+      byId("save-publish-package").disabled = true;
+      byId("regenerate-publish-package").disabled = currentVideoJob?.status !== "approved";
+      download.classList.add("is-hidden");
+    }
     setPlatform(platform, false);
   }
 
+  function capturePublishDraft() {
+    if (!publishPackageDraft) return;
+    const platform = persisted.platform || "douyin";
+    publishPackageDraft.selectedTitle = byId("publish-title").value.trim() || publishPackageDraft.selectedTitle;
+    publishPackageDraft.platforms ||= {};
+    publishPackageDraft.platforms[platform] ||= { label: platform };
+    publishPackageDraft.platforms[platform].body = byId("publish-text").value.trim();
+    publishPackageDraft.platforms[platform].hashtags = byId("publish-hashtags").value.trim().split(/[\s,，、]+/).filter(Boolean);
+    publishPackageDraft.hashtags = publishPackageDraft.platforms[platform].hashtags;
+  }
+
   function setPlatform(platform, save = true) {
-    const labels = { douyin: "抖音发布文案", xiaohongshu: "小红书发布文案", weibo: "微博发布文案" };
+    if (save) capturePublishDraft();
+    const labels = { douyin: "抖音发布文案", xiaohongshu: "小红书发布文案", wechat: "视频号发布文案" };
+    if (!labels[platform]) platform = "douyin";
     persisted.platform = platform;
     $$(".platform-tab").forEach(button => button.classList.toggle("is-active", button.dataset.platform === platform));
     byId("platform-name").textContent = labels[platform];
-    byId("publish-text").value = currentItem.publish?.[platform] || "旧定位基线发布文案请打开原素材包查看。";
+    const packageCopy = publishPackageDraft?.platforms?.[platform];
+    const legacyCopy = currentItem.publish?.[platform] || (platform === "wechat" ? currentItem.publish?.weibo : "") || currentItem.platformCopy?.[platform];
+    byId("publish-text").value = packageCopy?.body || legacyCopy || "审核通过成片后，将在这里生成与最终版本绑定的发布文案。";
+    byId("publish-hashtags").value = (packageCopy?.hashtags || publishPackageDraft?.hashtags || []).join(" ");
+    byId("publish-text").readOnly = !publishPackageDraft;
+    byId("publish-hashtags").readOnly = !publishPackageDraft;
     if (save) saveState();
+  }
+
+  function selectPublishTitle(title) {
+    if (!publishPackageDraft) return;
+    byId("publish-title").value = title;
+    publishPackageDraft.selectedTitle = title;
+    $$("[data-publish-title]", byId("publish-title-options")).forEach(button => button.classList.toggle("is-active", button.dataset.publishTitle === title));
+  }
+
+  function publishRequestBody(mode) {
+    capturePublishDraft();
+    const body = {
+      expectedVersion: Number(currentVideoJob?.output?.version),
+      mode,
+      selectedTitle: byId("publish-title").value.trim(),
+      syncCovers: true,
+    };
+    if (mode === "save") {
+      body.hashtags = publishPackageDraft?.hashtags || [];
+      body.platforms = publishPackageDraft?.platforms || {};
+    }
+    return body;
+  }
+
+  async function updatePublishPackage(mode) {
+    if (!currentVideoJob?.id || currentVideoJob.status !== "approved") return toast("请先审核通过最终成片");
+    const button = mode === "save" ? byId("save-publish-package") : byId("regenerate-publish-package");
+    const idleText = button.textContent;
+    button.disabled = true;
+    button.textContent = mode === "save" ? "正在保存并同步封面…" : "正在重新生成…";
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/publish-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(publishRequestBody(mode)),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "发布素材包生成失败");
+      currentVideoJob = payload.job;
+      upsertAvailableVideoJob(currentVideoJob);
+      renderPublish();
+      toast(mode === "save" ? "发布素材包已保存，封面已同步" : "发布素材包已重新生成");
+    } catch (error) {
+      toast(`发布素材包失败：${error.message}`);
+    } finally {
+      button.disabled = false;
+      button.textContent = idleText;
+    }
+  }
+
+  function copyCurrentPublishCopy() {
+    const body = byId("publish-text").value.trim();
+    const topics = byId("publish-hashtags").value.trim();
+    copyText([body, topics].filter(Boolean).join("\n\n"), "发布文案和话题已复制");
   }
 
   function renderEvidence() {
@@ -377,11 +511,10 @@
     byId("risk-progress").textContent = `${done}/${checks.length} 已确认`;
   }
 
-  function renderRoadmap() {
-    byId("roadmap-grid").innerHTML = data.roadmap.map(([day, phase, challenge, status]) => {
-      const phaseIndex = day <= 7 ? 1 : day <= 14 ? 2 : day <= 21 ? 3 : 4;
-      return `<article class="roadmap-day phase-index-${phaseIndex} ${status === "已完成" ? "is-done" : ""} ${status === "下一步" ? "is-next" : ""}">
-        <div class="day-number">Day ${day}</div><span class="day-phase">${htmlEscape(phase)}</span><p>${htmlEscape(challenge)}</p><span class="day-status">${htmlEscape(status)}</span>
+  function renderExperiments() {
+    byId("experiment-grid").innerHTML = (data.experiments || []).map((item, index) => {
+      return `<article class="experiment-card track-index-${index + 1}">
+        <div class="experiment-type">${htmlEscape(item.type)}</div><strong>${htmlEscape(item.question)}</strong><p>${htmlEscape(item.evidence)}</p><span>${htmlEscape(item.asset)}</span>
       </article>`;
     }).join("");
   }
@@ -396,7 +529,7 @@
     byId("library-list").innerHTML = items.length ? items.map(item => `
       <article class="library-card">
         <div>
-          <div class="library-meta"><span class="pill ${item.kind === "growth" ? "kind-growth" : "kind-legacy"}">${item.kind === "growth" ? "AI成长版" : "旧定位基线"}</span><span class="pill">${htmlEscape(item.date)}</span><span class="pill">${htmlEscape(item.day)}</span></div>
+          <div class="library-meta"><span class="pill ${item.kind === "developer" ? "kind-growth" : "kind-legacy"}">${item.kind === "developer" ? "开发者实测" : "历史证据"}</span><span class="pill">${htmlEscape(item.date)}</span><span class="pill">${htmlEscape(item.day)}</span></div>
           <h3>${htmlEscape(item.mainTopic)}</h3><p>${htmlEscape(item.column)} · ${htmlEscape(item.status)}</p>
         </div>
         <div class="library-actions"><button class="btn btn-secondary" data-open-item="${htmlEscape(item.id)}">打开查看</button></div>
@@ -404,7 +537,7 @@
   }
 
   function renderAll() {
-    renderPicker(); renderStatus(); renderToday(); renderScripts(); renderCreative(); renderShoot(); renderPublish(); renderEvidence(); renderRoadmap(); renderLibrary();
+    renderPicker(); renderStatus(); renderToday(); renderScripts(); renderCreative(); renderShoot(); renderPublish(); renderEvidence(); renderExperiments(); renderLibrary();
     renderOrdinaryViewerResult();
     void hydrateOrdinaryViewerReview(currentItem);
   }
@@ -1956,6 +2089,7 @@
     renderDemoPreview(job);
     upsertAvailableVideoJob(job);
     renderVideoJobPicker();
+    if (currentView === "publish") renderPublish();
     if (job.status === "error") setAnalyzeVideoDisabled(!(videoServiceOnline && selectedVideoFile));
   }
 
@@ -2051,7 +2185,7 @@
       byId("cover-downloads").innerHTML = "";
     }
     const variantLabels = { vertical: "9:16 竖屏", square: "1:1 方形", original: "原比例" };
-    const artifactLabels = { editPlan: "剪辑计划", timeline: "时间线 JSON", edl: "CMX 3600 EDL", captions: "字幕 ASS", captionStoryboard: "动态字幕分镜", filter: "FFmpeg 脚本", qa: "QA 报告", mediaManifest: "素材清单", finalReview: "最终审核记录", coverDesign: "封面设计 JSON", coverVertical: "封面 9:16", coverGrid: "封面 3:4", coverWide16x9: "封面 16:9", coverLandscape4x3: "封面 4:3", styleReport: "视觉风格分析", contentBreakdown: "内容拆解", keyframeDirection: "关键帧导演方案", motionSample: "动态样片", fullDirection: "全片导演方案", hyperframesProject: "HyperFrames 工程", hyperframesManifest: "HyperFrames 清单" };
+    const artifactLabels = { editPlan: "剪辑计划", timeline: "时间线 JSON", edl: "CMX 3600 EDL", captions: "字幕 ASS", captionStoryboard: "动态字幕分镜", filter: "FFmpeg 脚本", qa: "QA 报告", mediaManifest: "素材清单", finalReview: "最终审核记录", publishPackage: "发布素材 JSON", publishCopy: "发布文案 Markdown", publishBundle: "发布素材 ZIP", coverDesign: "封面设计 JSON", coverVertical: "封面 9:16", coverGrid: "封面 3:4", coverWide16x9: "封面 16:9", coverLandscape4x3: "封面 4:3", styleReport: "视觉风格分析", contentBreakdown: "内容拆解", keyframeDirection: "关键帧导演方案", motionSample: "动态样片", fullDirection: "全片导演方案", hyperframesProject: "HyperFrames 工程", hyperframesManifest: "HyperFrames 清单" };
     byId("variant-downloads").innerHTML = Object.entries(output.variants || {}).map(([name, item]) => item.available === false
       ? `<span class="variant-unavailable" title="${htmlEscape(item.reason || "当前母版无法生成")}">${variantLabels[name] || name}不可用</span>`
       : `<a href="${videoApiBase}${htmlEscape(item.url)}" download>下载 ${variantLabels[name] || name}</a>`).join("");
@@ -2145,7 +2279,8 @@
       if (!response.ok) throw new Error(payload.error || "审核提交失败");
       currentVideoJob = payload.job;
       renderVideoJob(currentVideoJob);
-      toast("已审核通过，工作流不会自动发布");
+      switchView("publish");
+      toast("已审核通过，发布素材包已在本地生成");
     } catch (error) { toast(`审核失败：${error.message}`); }
   }
 
@@ -2473,8 +2608,8 @@
 
   // Script actions
   $$(".segment").forEach(button => button.addEventListener("click", () => setScriptMode(button.dataset.scriptMode)));
-  byId("copy-short-hero").addEventListener("click", () => copyText(fullPlainText(), "2—3分钟完整版已复制"));
-  byId("copy-home-script").addEventListener("click", () => copyText(fullPlainText(), "2—3分钟完整版已复制"));
+  byId("copy-short-hero").addEventListener("click", () => copyText(fullPlainText(), "当前正式稿已复制"));
+  byId("copy-home-script").addEventListener("click", () => copyText(fullPlainText(), "当前正式稿已复制"));
   byId("copy-source-path").addEventListener("click", () => copyText(sourcePackagePath(), "文件位置已复制"));
   byId("copy-short-script").addEventListener("click", () => copyText(shortText(), "精简稿已复制"));
   byId("copy-current-script").addEventListener("click", () => copyText(currentScriptText(), "当前口播稿已复制"));
@@ -2578,7 +2713,13 @@
 
   // Publish
   $$(".platform-tab").forEach(button => button.addEventListener("click", () => setPlatform(button.dataset.platform)));
-  byId("copy-publish").addEventListener("click", () => copyText(byId("publish-text").value, "发布文案已复制"));
+  byId("copy-publish").addEventListener("click", copyCurrentPublishCopy);
+  byId("save-publish-package").addEventListener("click", () => updatePublishPackage("save"));
+  byId("regenerate-publish-package").addEventListener("click", () => updatePublishPackage("regenerate"));
+  byId("publish-title-options").addEventListener("click", event => {
+    const button = event.target.closest("[data-publish-title]");
+    if (button) selectPublishTitle(button.dataset.publishTitle);
+  });
 
   // Roadmap and library
   byId("library-search").addEventListener("input", renderLibrary);

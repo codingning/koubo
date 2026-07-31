@@ -61,7 +61,8 @@ const mime = {
   ".md": "text/plain; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg", ".mp4": "video/mp4", ".webm": "video/webm",
   ".srt": "application/x-subrip; charset=utf-8", ".ass": "text/plain; charset=utf-8",
-  ".csv": "text/csv; charset=utf-8", ".edl": "text/plain; charset=utf-8"
+  ".csv": "text/csv; charset=utf-8", ".edl": "text/plain; charset=utf-8",
+  ".zip": "application/zip"
 };
 
 await Promise.all([fsp.mkdir(jobsRoot, { recursive: true }), fsp.mkdir(contentRoot, { recursive: true })]);
@@ -508,12 +509,21 @@ async function referenceCatalog() {
 }
 async function collectEvidence() {
   const runRoot = path.join(root, "runs");
-  let latestProgress = "";
+  let latestEvidence = "";
   try {
     const dates = (await fsp.readdir(runRoot, { withFileTypes: true })).filter(x => x.isDirectory()).map(x => x.name).sort().reverse();
     for (const date of dates) {
-      const candidate = path.join(runRoot, date, "growth", "00_daily_progress.md");
-      if (fs.existsSync(candidate)) { latestProgress = await readTextIf(candidate, 16000); break; }
+      const contentRootForDate = path.join(runRoot, date, "content");
+      if (fs.existsSync(contentRootForDate)) {
+        const slugs = (await fsp.readdir(contentRootForDate, { withFileTypes: true })).filter(x => x.isDirectory()).map(x => x.name).sort().reverse();
+        for (const slug of slugs) {
+          const candidate = path.join(contentRootForDate, slug, "00_evidence.md");
+          if (fs.existsSync(candidate)) { latestEvidence = await readTextIf(candidate, 16000); break; }
+        }
+      }
+      if (latestEvidence) break;
+      const historicalCandidate = path.join(runRoot, date, "growth", "00_daily_progress.md");
+      if (fs.existsSync(historicalCandidate)) { latestEvidence = await readTextIf(historicalCandidate, 16000); break; }
     }
   } catch {}
   let gitLog = "", gitStatus = "", gitDiff = "";
@@ -536,18 +546,18 @@ async function collectEvidence() {
   await walk(root);
   return {
     creator_profile: await readTextIf(path.join(root, "docs", "CREATOR_PROFILE.md"), 12000),
-    roadmap: await readTextIf(path.join(root, "docs", "30_DAY_AI_GROWTH_ROADMAP.md"), 12000),
-    latest_progress: latestProgress,
+    content_contract: await readTextIf(path.join(root, "docs", "WORKFLOW.md"), 12000),
+    latest_evidence: latestEvidence,
     git: { log: redact(gitLog), status: redact(gitStatus), diff_stat: redact(gitDiff) },
     recently_modified_files: recent.sort((a, b) => b.modified.localeCompare(a.modified)).slice(0, 60),
     generated_at: new Date().toISOString()
   };
 }
-function normalizeContent(raw, dayNumber, id, meta) {
+function normalizeContent(raw, sequenceNumber, id, meta) {
   const value = raw && typeof raw === "object" ? raw : {};
   const defaultSegments = [{ time: "0—3秒", label: "直接给结果", tone: "自然", text: value.hook || value.mainTopic || "今天没有足够证据生成口播。" }];
   const design = value.structureDesign && typeof value.structureDesign === "object" ? value.structureDesign : {};
-  const validArchetypes = new Set(["evidence-story", "saveable-map", "short-resonance"]);
+  const validArchetypes = new Set(["quick-proof", "evidence-story", "saveable-map", "deep-audit", "short-resonance"]);
   const structureDesign = {
     archetype: validArchetypes.has(design.archetype) ? design.archetype : "",
     selectionReason: String(design.selectionReason || ""),
@@ -570,16 +580,16 @@ function normalizeContent(raw, dayNumber, id, meta) {
     originalityNote: String(research.originalityNote || "")
   };
   return {
-    id, kind: "growth", date: shanghaiDate(), day: `Day ${dayNumber}`, column: value.column || `普通人学AI第${dayNumber}天`,
-    status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "约2—3分钟", durationShort: value.durationShort || "约60—90秒衍生版",
-    mainTopic: String(value.mainTopic || "今天没有足够证据生成主选题"), shortTopic: String(value.shortTopic || value.mainTopic || "待确认").slice(0, 20),
+    id, kind: "developer", date: shanghaiDate(), day: `作品 ${sequenceNumber}`, column: value.column || "Codex / Agent / Skill 实测",
+    status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "按证据密度决定", durationShort: value.durationShort || "可选精简版",
+    mainTopic: String(value.mainTopic || "当前证据不足，暂不生成主选题"), shortTopic: String(value.shortTopic || value.mainTopic || "待确认").slice(0, 24),
     hook: String(value.hook || ""), audienceBenefit: String(value.audienceBenefit || ""),
     resultFirstProof: value.resultFirstProof && typeof value.resultFirstProof === "object" ? value.resultFirstProof : {},
     engagement: {
       audienceMirror: String(value.engagement?.audienceMirror || value.audienceMirror || value.audienceBenefit || ""),
       commentPrompt: String(value.engagement?.commentPrompt || value.commentPrompt || ""),
-      followPromise: String(value.engagement?.followPromise || value.followPromise || value.tomorrowChallenge || value.storyPosition?.tomorrow || ""),
-      viewerTask: String(value.engagement?.viewerTask || value.actionExperiment?.viewerTask || ""),
+      followPromise: String(value.engagement?.followPromise || value.followPromise || value.nextVerification || value.storyPosition?.nextVerification || value.storyPosition?.tomorrow || ""),
+      viewerTask: String(value.engagement?.viewerTask || value.developerExperiment?.viewerTask || value.actionExperiment?.viewerTask || ""),
       primaryClose: String(value.engagement?.primaryClose || "")
     },
     structureDesign, referenceResearch,
@@ -587,13 +597,13 @@ function normalizeContent(raw, dayNumber, id, meta) {
       humorBeat: String(value.creativeTone?.humorBeat || ""),
       trendMeme: value.creativeTone?.trendMeme && typeof value.creativeTone.trendMeme === "object" ? value.creativeTone.trendMeme : { id: "", adaptedLine: "", placement: "", sourceUrl: "" }
     },
-    actionExperiment: value.actionExperiment && typeof value.actionExperiment === "object" ? value.actionExperiment : {},
-    storyPosition: value.storyPosition || { yesterday: "自动读取最近记录", today: "等待确认", tomorrow: value.tomorrowChallenge || "继续真实验证" },
+    actionExperiment: value.developerExperiment && typeof value.developerExperiment === "object" ? value.developerExperiment : (value.actionExperiment && typeof value.actionExperiment === "object" ? value.actionExperiment : {}),
+    storyPosition: value.storyPosition || { problem: "读取当前开发者问题", current: "等待确认实测证据", nextVerification: value.nextVerification || "继续验证一个明确分支" },
     progress: Array.isArray(value.progress) ? value.progress : [], candidates: Array.isArray(value.candidates) ? value.candidates : [],
     fullSegments: Array.isArray(value.fullSegments) && value.fullSegments.length ? value.fullSegments : defaultSegments,
     shortScript: String(value.shortScript || ""), titles: Array.isArray(value.titles) ? value.titles.slice(0, 5) : [],
     covers: Array.isArray(value.covers) ? value.covers.slice(0, 5) : [], shooting: value.shooting || { broll: [], highlights: [], guide: {} },
-    platformCopy: value.platformCopy || { douyin: "", xiaohongshu: "", weibo: "" }, evidence: Array.isArray(value.evidence) ? value.evidence : [],
+    platformCopy: value.platformCopy || { douyin: "", xiaohongshu: "", wechat: "" }, evidence: Array.isArray(value.evidence) ? value.evidence : [],
     risks: Array.isArray(value.risks) ? value.risks : [{ text: "发布前人工确认所有事实和隐私边界", done: false }],
     sourceFiles: [
       { label: "AI生成内容JSON", path: `/content-items/${id}/content.json` },
@@ -1098,11 +1108,11 @@ export async function generateContent(options = {}, dependencies = {}) {
       const base = await fsp.readFile(path.join(webRoot, "data", "content-data.js"), "utf8");
       for (const match of base.matchAll(/mainTopic:\s*"([^"]+)"/g)) baseTopics.push(match[1]);
     } catch {}
-    const requestedDay = Number(options.dayNumber || 0);
-    const dayNumber = Number.isInteger(requestedDay) && requestedDay >= 1 && requestedDay <= 365
-      ? requestedDay
-      : Math.max(1, ...existing.map(x => Number(String(x.day || "").replace(/\D/g, "")) || 0), 1) + 1;
-    const id = `growth-day-${dayNumber}${options.replacesContentId ? "-revision" : ""}-${timestampId()}`;
+    const requestedSequence = Number(options.sequenceNumber || options.dayNumber || 0);
+    const sequenceNumber = Number.isInteger(requestedSequence) && requestedSequence >= 1
+      ? requestedSequence
+      : existing.length + 1;
+    const id = `content${options.replacesContentId ? "-revision" : ""}-${timestampId()}`;
     const dir = confined(contentRoot, id);
     await fsp.mkdir(dir, { recursive: false });
     const evidence = await collectEvidence();
@@ -1116,7 +1126,7 @@ export async function generateContent(options = {}, dependencies = {}) {
     const topicResult = await runAiFn({
       operation: "plan_topic",
       date: shanghaiDate(),
-      day_number: dayNumber,
+      sequence_number: sequenceNumber,
       evidence,
       content_style: contentStyle,
       editorial_brief: {
@@ -1149,7 +1159,7 @@ export async function generateContent(options = {}, dependencies = {}) {
     const result = await runAiFn({
       operation: "generate_content",
       date: shanghaiDate(),
-      day_number: dayNumber,
+      sequence_number: sequenceNumber,
       evidence,
       topic_plan: topicPlan,
       reference_research: referenceResearch,
@@ -1157,7 +1167,7 @@ export async function generateContent(options = {}, dependencies = {}) {
       ...generationLockPayload(generationContext),
     }, dir, "generate-content");
     const lockedResult = preserveLockedDirection(result.data, generationContext, "generate_content");
-    const content = preserveLockedDirection(normalizeContent(lockedResult, dayNumber, id, result), generationContext, "content");
+    const content = preserveLockedDirection(normalizeContent(lockedResult, sequenceNumber, id, result), generationContext, "content");
     const strategyAnalysis = generationContext.strategyArtifact?.analysis || {};
     content.audience = String(strategyAnalysis.audience || topicPlan.viewerUseCase || content.engagement?.audienceMirror || "").trim();
     content.viewerBenefit = String(strategyAnalysis.viewerBenefit || topicPlan.methodPromise || content.audienceBenefit || "").trim();
@@ -1584,38 +1594,29 @@ function coverLineAss(line, highlights) {
 }
 function coverFontSize(line) {
   const weight = [...String(line || "")].reduce((sum, char) => sum + (/^[\x00-\x7F]$/.test(char) ? 0.56 : 1), 0);
-  return weight > 10 ? 72 : weight > 8 ? 82 : 96;
+  return weight > 10 ? 112 : weight > 8 ? 126 : 142;
 }
 async function writeCoverAss(coverDir, design) {
   const lines = [
     "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1080", "PlayResY: 1920", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
     "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    "Style: Main,Microsoft YaHei,96,&H00FFFFFF,&H000000FF,&H0005080A,&H50000000,-1,0,0,0,100,100,0,0,1,5,3,7,0,0,0,1",
-    "Style: Eyebrow,Microsoft YaHei,34,&H00101820,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
-    "Style: Feature,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H0005080A,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,7,0,0,0,1", "",
-    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
-    `Dialogue: 2,0:00:00.00,0:00:10.00,Eyebrow,,0,0,0,,{\\an7\\pos(88,282)}${coverAssEscape(design.eyebrow)}`
+    "Style: Main,Microsoft YaHei,142,&H00FFFFFF,&H000000FF,&H0010181C,&H50000000,-1,0,0,0,100,100,-2,0,1,7,2,7,0,0,0,1", "",
+    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
   ];
-  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(65,${370 + index * 125})\\fs${coverFontSize(line)}}${coverLineAss(line, design.highlights)}`));
-  if (design.features.length) lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Feature,,0,0,0,,{\\an7\\pos(90,1598)}${coverAssEscape(design.features.join("  ·  "))}`);
+  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(64,${130 + index * 158})\\fs${coverFontSize(line)}}${coverLineAss(line, design.highlights)}`));
   const file = path.join(coverDir, "cover.ass");
   await fsp.writeFile(file, lines.join("\r\n"), "utf8");
   return file;
 }
 async function writeHorizontalCoverAss(coverDir, design, width, suffix) {
-  const x = width >= 1900 ? 120 : 70;
-  const labelX = x + 25;
+  const x = width >= 1900 ? 78 : 58;
   const lines = [
     "[Script Info]", "ScriptType: v4.00+", `PlayResX: ${width}`, "PlayResY: 1080", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
     "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    "Style: Main,Microsoft YaHei,88,&H00FFFFFF,&H000000FF,&H0005080A,&H50000000,-1,0,0,0,100,100,0,0,1,5,3,7,0,0,0,1",
-    "Style: Eyebrow,Microsoft YaHei,32,&H00101820,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
-    "Style: Feature,Microsoft YaHei,36,&H00FFFFFF,&H000000FF,&H0005080A,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,7,0,0,0,1", "",
-    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
-    `Dialogue: 2,0:00:00.00,0:00:10.00,Eyebrow,,0,0,0,,{\\an7\\pos(${labelX},190)}${coverAssEscape(design.eyebrow)}`
+    "Style: Main,Microsoft YaHei,126,&H00FFFFFF,&H000000FF,&H0010181C,&H50000000,-1,0,0,0,100,100,-2,0,1,7,2,7,0,0,0,1", "",
+    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
   ];
-  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(${x + 5},${300 + index * 125})\\fs${Math.min(88, coverFontSize(line))}}${coverLineAss(line, design.highlights)}`));
-  if (design.features.length) lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Feature,,0,0,0,,{\\an7\\pos(${x + 30},865)}${coverAssEscape(design.features.join("  ·  "))}`);
+  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(${x},${112 + index * 145})\\fs${Math.min(126, coverFontSize(line))}}${coverLineAss(line, design.highlights)}`));
   const file = path.join(coverDir, `cover-${suffix}.ass`);
   await fsp.writeFile(file, lines.join("\r\n"), "utf8");
   return file;
@@ -1627,29 +1628,19 @@ async function renderCover(job, version) {
   await fsp.mkdir(coverDir, { recursive: true });
   const design = coverDesignForJob(job);
   await writeCoverAss(coverDir, design);
-  const labelWidth = Math.min(620, Math.max(360, 82 + [...design.eyebrow].length * 39));
-  const featureFilters = design.features.length
-    ? ",drawbox=x=65:y=1585:w=500:h=72:color=0x06131D@0.82:t=fill"
-    : "";
   const color = videoColorPipeline(job.source);
-  const filter = `[0:v]${color.filter}[color];[color]split=2[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:8[bg2];[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg2];[bg2][fg2]overlay=(W-w)/2:(H-h)/2,eq=brightness=-0.035:saturation=0.84:contrast=1.04,drawbox=x=38:y=245:w=720:h=515:color=0x06131D@0.58:t=fill,drawbox=x=38:y=245:w=9:h=515:color=0x2ED6C4@1:t=fill,drawbox=x=65:y=270:w=${labelWidth}:h=62:color=0xFFAA3C@1:t=fill${featureFilters},ass=filename='cover.ass',format=rgb24[cover]`;
+  const filter = `[0:v]${color.filter},scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,eq=brightness=-0.025:saturation=0.92:contrast=1.05,drawbox=x=0:y=0:w=iw:h=640:color=0x02070A@0.40:t=fill,ass=filename='cover.ass',format=rgb24[cover]`;
   const png9x16 = path.join(coverDir, `cover-v${version}-9x16.png`);
   const jpg9x16 = path.join(coverDir, `cover-v${version}-9x16.jpg`);
   const png3x4 = path.join(coverDir, `cover-v${version}-3x4.png`);
   const jpg3x4 = path.join(coverDir, `cover-v${version}-3x4.jpg`);
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(design.sourceTime), "-i", job.sourcePath, "-filter_complex", filter, "-map", "[cover]", "-frames:v", "1", "-update", "1", png9x16], { cwd: coverDir });
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png9x16, "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1", "-update", "1", jpg9x16]);
-  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png9x16, "-vf", "crop=1080:1440:0:240", "-frames:v", "1", "-update", "1", png3x4]);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png9x16, "-vf", "crop=1080:1440:0:0", "-frames:v", "1", "-update", "1", png3x4]);
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png3x4, "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1", "-update", "1", jpg3x4]);
   const renderHorizontal = async (width, suffix) => {
     await writeHorizontalCoverAss(coverDir, design, width, suffix);
-    const panelX = width >= 1900 ? 90 : 40;
-    const panelWidth = width >= 1900 ? 890 : 750;
-    const labelX = panelX + 55;
-    const labelWidthHorizontal = Math.min(panelWidth - 90, Math.max(350, 76 + [...design.eyebrow].length * 36));
-    const featureHorizontal = design.features.length ? `,drawbox=x=${labelX}:y=850:w=470:h=68:color=0x06131D@0.82:t=fill` : "";
-    const foregroundWidth = Math.round(width * 0.52);
-    const horizontalFilter = `[0:v]${color.filter}[color];[color]split=2[bg][fg];[bg]scale=${width}:1080:force_original_aspect_ratio=increase,crop=${width}:1080,boxblur=24:8[bg2];[fg]scale=${foregroundWidth}:1080:force_original_aspect_ratio=decrease[fg2];[bg2][fg2]overlay=x=W-w-45:y=(H-h)/2,eq=brightness=-0.045:saturation=0.84:contrast=1.05,drawbox=x=${panelX}:y=150:w=${panelWidth}:h=650:color=0x06131D@0.62:t=fill,drawbox=x=${panelX}:y=150:w=9:h=650:color=0x2ED6C4@1:t=fill,drawbox=x=${labelX}:y=178:w=${labelWidthHorizontal}:h=58:color=0xFFAA3C@1:t=fill${featureHorizontal},ass=filename='cover-${suffix}.ass',format=rgb24[cover]`;
+    const horizontalFilter = `[0:v]${color.filter},scale=${width}:1080:force_original_aspect_ratio=increase,crop=${width}:1080,eq=brightness=-0.035:saturation=0.92:contrast=1.05,drawbox=x=0:y=0:w=${Math.round(width * 0.66)}:h=650:color=0x02070A@0.42:t=fill,ass=filename='cover-${suffix}.ass',format=rgb24[cover]`;
     const png = path.join(coverDir, `cover-v${version}-${suffix}.png`);
     const jpg = path.join(coverDir, `cover-v${version}-${suffix}.jpg`);
     await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(design.sourceTime), "-i", job.sourcePath, "-filter_complex", horizontalFilter, "-map", "[cover]", "-frames:v", "1", "-update", "1", png], { cwd: coverDir });
@@ -1659,12 +1650,13 @@ async function renderCover(job, version) {
   const wide16x9 = await renderHorizontal(1920, "16x9");
   const landscape4x3 = await renderHorizontal(1440, "4x3");
   const metadata9x16 = await probe(jpg9x16), metadata3x4 = await probe(jpg3x4);
-  const artifact = { version, design, engine: "local-ffmpeg-ass", privacy: "local-frame-only", generatedAt: new Date().toISOString() };
+  const artifact = { version, design, style: "portrait-big-text-v1", engine: "local-ffmpeg-ass", privacy: "local-frame-only", generatedAt: new Date().toISOString() };
   await writeJson(path.join(jobDir, `cover-design-v${version}.json`), artifact);
   return {
     requested: true,
     available: true,
     engine: "local-ffmpeg-ass",
+    style: "portrait-big-text-v1",
     design,
     privacy: "local-frame-only",
     vertical: { path: jpg9x16, url: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-9x16.jpg`, pngUrl: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-9x16.png`, metadata: metadata9x16 },
@@ -1672,6 +1664,183 @@ async function renderCover(job, version) {
     wide16x9,
     landscape4x3
   };
+}
+function cleanPublishText(value, limit = 1800) {
+  return String(value || "").replace(/\r\n/g, "\n").replace(/[\t ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, limit);
+}
+function publishTitleText(value) {
+  if (typeof value === "string") return cleanPublishText(value, 42);
+  if (!value || typeof value !== "object") return "";
+  return cleanPublishText(value.title || value.text || value.name, 42);
+}
+function uniquePublishTexts(values, limit) {
+  const seen = new Set();
+  const result = [];
+  for (const raw of values) {
+    const value = cleanPublishText(raw, 42);
+    const key = value.replace(/[\s，。！？、；：,.!?;:—-]/g, "").toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+function publishScriptExcerpt(job) {
+  const script = cleanPublishText(job.script || job.transcript?.text, 5000);
+  const sentences = script.split(/(?<=[。！？!?])|\n+/)
+    .map(item => cleanPublishText(item, 120))
+    .filter(item => item && !/^大家好[，,]?我是/.test(item));
+  return cleanPublishText(sentences.slice(0, 2).join(""), 220) || "这条视频记录了从原片到最终成片的真实过程。";
+}
+function publishTitleCandidates(job, content) {
+  const script = String(job.script || job.transcript?.text || "");
+  const design = coverDesignForJob(job);
+  const coverTitle = cleanPublishText(design.lines.join(""), 42);
+  const contentTitles = (Array.isArray(content?.titles) ? content.titles : []).map(publishTitleText);
+  const topic = publishTitleText(content?.mainTopic || job.options?.contentTitle);
+  const firstSentence = publishScriptExcerpt(job).split(/[。！？!?]/)[0];
+  const special = /AI|Codex|HyperFrames|工作台/i.test(script) && /剪辑|重剪|剪过/.test(script)
+    ? ["我把口播交给 AI 重剪了一遍", "不会剪辑，也能做出口播成片？", "AI 工作台真的能替我剪口播吗？"]
+    : [];
+  const candidates = uniquePublishTexts([
+    coverTitle,
+    ...contentTitles,
+    topic,
+    ...special,
+    firstSentence,
+    topic ? `${topic}，我实际做了一遍` : "这次，我把口播真正做成了成片",
+    "从原片到成片，我完整走了一遍",
+  ], 3);
+  const fallbacks = ["这次，我把口播真正做成了成片", "从原片到成片，我完整走了一遍", "AI 能不能真的帮我完成口播剪辑？"];
+  for (const fallback of fallbacks) {
+    if (candidates.length >= 3) break;
+    if (!candidates.includes(fallback)) candidates.push(fallback);
+  }
+  const angles = ["结果直给", "问题钩子", "过程复盘"];
+  return candidates.map((title, index) => ({ id: `title-${index + 1}`, title, angle: angles[index] }));
+}
+function normalizePublishHashtags(values) {
+  const source = Array.isArray(values) ? values : String(values || "").split(/[\s,，、]+/);
+  const result = [];
+  const seen = new Set();
+  for (const raw of source) {
+    const text = cleanPublishText(raw, 24).replace(/^#+/, "").replace(/\s+/g, "");
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(`#${text}`);
+    if (result.length >= 10) break;
+  }
+  return result;
+}
+function publishHashtagsForJob(job, content) {
+  const text = `${job.script || ""}\n${content?.mainTopic || ""}\n${job.options?.contentTitle || ""}`;
+  const rules = [
+    [/AI/i, "AI"], [/Codex/i, "Codex"], [/HyperFrames/i, "HyperFrames"], [/Remotion/i, "Remotion"], [/FFmpeg/i, "FFmpeg"],
+    [/口播/, "口播短视频"], [/剪辑|重剪/, "AI剪辑"], [/工作台/, "AI工作台"], [/程序员/, "程序员"], [/自媒体/, "自媒体创作"],
+  ];
+  const matched = rules.filter(([pattern]) => pattern.test(text)).map(([, topic]) => topic);
+  return normalizePublishHashtags([...matched, "AI实战", "口播短视频", "内容创作", "效率工具", "视频制作", "创作复盘"]).slice(0, 10);
+}
+function publishPlatformDefaults(job, content, title, hashtags) {
+  const excerpt = publishScriptExcerpt(job);
+  const existing = content?.platformCopy || content?.publish || {};
+  const fallback = {
+    douyin: `${title}\n\n${excerpt}\n\n这条视频记录了从原片、剪辑、返修到人工审核成片的真实过程。封面和发布素材都在本地生成，是否发布仍由我最后确认。\n\n你最想让 AI 帮你解决口播剪辑里的哪一步？`,
+    xiaohongshu: `${title}\n\n这次完整走了一遍：\n1. 原片进入本地工作台\n2. 根据真实反馈继续返修\n3. 人工审核后再准备发布\n\n${excerpt}\n\n没有自动发布，最后仍然由我自己确认结果。`,
+    wechat: `${title}\n\n${excerpt}\n\n这是一次从原片到人工审核成片的真实记录。视频、封面和发布文案准备完成后，再由我手动决定是否发布。`,
+  };
+  const labels = { douyin: "抖音", xiaohongshu: "小红书", wechat: "视频号" };
+  return Object.fromEntries(Object.keys(labels).map(key => {
+    const body = cleanPublishText(existing[key] || (key === "wechat" ? existing.weibo : "") || fallback[key], 1800);
+    return [key, { label: labels[key], body, hashtags, combined: cleanPublishText(`${body}\n\n${hashtags.join(" ")}`, 2200) }];
+  }));
+}
+function publishPackageMarkdown(value) {
+  const titleLines = (value.titleCandidates || []).map((item, index) => `${index + 1}. ${item.title}（${item.angle}）`).join("\n");
+  const platformLines = Object.values(value.platforms || {}).map(item => `## ${item.label}\n\n${item.body}\n\n关联话题：${(item.hashtags || []).join(" ")}`).join("\n\n");
+  const covers = [
+    value.covers?.vertical?.url ? `- 9:16 手机封面：${value.covers.vertical.url}` : "- 9:16 手机封面：未生成",
+    value.covers?.wide16x9?.url ? `- 16:9 横版封面：${value.covers.wide16x9.url}` : "- 16:9 横版封面：未生成",
+  ].join("\n");
+  return `# 发布素材包 v${value.outputVersion}\n\n生成时间：${value.generatedAt}\n\n最终标题：${value.selectedTitle}\n\n## 标题候选\n\n${titleLines}\n\n${platformLines}\n\n## 封面\n\n${covers}\n\n> 本素材包只用于人工审核、复制和下载，不会连接平台账号或自动发布。\n`;
+}
+function powershellLiteral(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+async function compressPublishPackage(files, output) {
+  const existing = files.filter(file => file && fs.existsSync(file));
+  if (!existing.length) throw new Error("发布素材包没有可压缩文件");
+  const script = `$items=@(${existing.map(powershellLiteral).join(",")}); Compress-Archive -LiteralPath $items -DestinationPath ${powershellLiteral(output)} -Force`;
+  await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { cwd: path.dirname(output), timeoutMs: 120000 });
+}
+async function buildPublishPackage(job, outputVersion, options = {}) {
+  const version = Number(outputVersion);
+  if (!Number.isInteger(version) || version < 1 || Number(job.output?.version) !== version) throw new Error("发布素材包必须绑定当前成片版本");
+  const content = await readContent(job.contentId);
+  const previous = options.mode === "save" && Number(job.publishPackage?.outputVersion) === version ? job.publishPackage : null;
+  const generatedTitles = publishTitleCandidates(job, content);
+  const titleCandidates = previous?.titleCandidates?.length ? previous.titleCandidates : generatedTitles;
+  const selectedTitle = cleanPublishText(options.selectedTitle || previous?.selectedTitle || titleCandidates[0]?.title, 42);
+  const hashtags = normalizePublishHashtags(options.hashtags || previous?.hashtags || publishHashtagsForJob(job, content));
+  const defaultPlatforms = publishPlatformDefaults(job, content, selectedTitle, hashtags);
+  const platforms = Object.fromEntries(Object.entries(defaultPlatforms).map(([key, fallback]) => {
+    const supplied = options.platforms?.[key] || previous?.platforms?.[key] || {};
+    const body = cleanPublishText(supplied.body || fallback.body, 1800);
+    const platformHashtags = normalizePublishHashtags(supplied.hashtags || hashtags);
+    return [key, { ...fallback, body, hashtags: platformHashtags, combined: cleanPublishText(`${body}\n\n${platformHashtags.join(" ")}`, 2200) }];
+  }));
+  const jobDir = confined(jobsRoot, job.id);
+  const jsonName = `publish-package-v${version}.json`;
+  const markdownName = `publish-copy-v${version}.md`;
+  const zipName = `publish-package-v${version}.zip`;
+  const packageValue = {
+    schemaVersion: 1,
+    status: "ready",
+    outputVersion: version,
+    mediaSha256: job.output?.mediaSha256 || null,
+    generatedAt: new Date().toISOString(),
+    generation: { engine: "local-content-derived", automatic: options.automatic === true },
+    titleCandidates,
+    selectedTitle,
+    hashtags,
+    platforms,
+    covers: {
+      vertical: job.output?.cover?.vertical ? { url: job.output.cover.vertical.url, pngUrl: job.output.cover.vertical.pngUrl } : null,
+      wide16x9: job.output?.cover?.wide16x9 ? { url: job.output.cover.wide16x9.url, pngUrl: job.output.cover.wide16x9.pngUrl } : null,
+    },
+    artifacts: {
+      json: `/video-jobs/${job.id}/${jsonName}`,
+      markdown: `/video-jobs/${job.id}/${markdownName}`,
+      zip: `/video-jobs/${job.id}/${zipName}`,
+    },
+    archive: { available: true, error: null },
+    autoPublish: false,
+  };
+  const jsonPath = path.join(jobDir, jsonName);
+  const markdownPath = path.join(jobDir, markdownName);
+  const zipPath = path.join(jobDir, zipName);
+  await writeJson(jsonPath, packageValue);
+  await fsp.writeFile(markdownPath, publishPackageMarkdown(packageValue), "utf8");
+  try {
+    await compressPublishPackage([jsonPath, markdownPath, job.output?.cover?.vertical?.path, job.output?.cover?.wide16x9?.path], zipPath);
+  } catch (error) {
+    packageValue.archive = { available: false, error: error.message };
+    packageValue.artifacts.zip = null;
+    await writeJson(jsonPath, packageValue);
+    await fsp.writeFile(markdownPath, publishPackageMarkdown(packageValue), "utf8");
+  }
+  job.publishPackage = packageValue;
+  const publishArtifacts = {
+    publishPackage: packageValue.artifacts.json,
+    publishCopy: packageValue.artifacts.markdown,
+    ...(packageValue.artifacts.zip ? { publishBundle: packageValue.artifacts.zip } : {}),
+  };
+  job.output = { ...job.output, artifacts: { ...(job.output.artifacts || {}), ...publishArtifacts } };
+  job.versions = (job.versions || []).map(item => Number(item.version) === version ? job.output : item);
+  return packageValue;
 }
 function outputToSource(time, keeps) {
   let cursor = 0;
@@ -3101,7 +3270,7 @@ export async function normalizeHyperframesMaster(inputPath, outputPath, width, h
   const audioTargets = hyperframesMasterAudioTargets(audioSpec);
   const audioArgs = metadata.hasAudio ? [
     "-map", "0:a:0",
-    "-af", `loudnorm=I=${audioTargets.loudnessLufs}:TP=${audioTargets.truePeakDbtp}:LRA=11`,
+    "-af", `loudnorm=I=${audioTargets.loudnessLufs}:TP=${audioTargets.truePeakDbtp}:LRA=11,asetpts=N/SR/TB`,
     "-c:a", "aac",
     "-b:a", "192k",
     "-ar", "48000",
@@ -4885,7 +5054,39 @@ const server = http.createServer(async (req, res) => {
       return await withJobMutation(jobId, async () => {
         const job = await readJob(jobId);
         const cover = await regenerateCover(job, body);
-        return json(res, 200, { job, cover, reusedVideo: true, reusedPlan: true });
+        if (job.status === "approved") {
+          await buildPublishPackage(job, Number(job.output.version), {
+            mode: "save",
+            selectedTitle: cleanPublishText(body.coverTitle || job.publishPackage?.selectedTitle, 42),
+            automatic: false,
+          });
+          await saveJob(job);
+        }
+        return json(res, 200, { job, cover, publishPackage: job.publishPackage || null, reusedVideo: true, reusedPlan: true });
+      });
+    }
+    const publishPackageMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/publish-package$/);
+    if (req.method === "POST" && publishPackageMatch) {
+      const body = await readBodyJson(req);
+      const jobId = publishPackageMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
+        if (job.status !== "approved") return json(res, 409, { error: "请先审核通过当前成片，再生成发布素材包" });
+        const selectedTitle = cleanPublishText(body.selectedTitle, 42);
+        const currentCoverTitle = cleanPublishText(job.output?.cover?.design?.lines?.join(""), 42).replace(/\s+/g, "");
+        if (selectedTitle && body.syncCovers !== false && selectedTitle.replace(/\s+/g, "") !== currentCoverTitle) {
+          await regenerateCover(job, { coverTitle: selectedTitle });
+        }
+        const publishPackage = await buildPublishPackage(job, outputVersion, {
+          mode: body.mode === "save" ? "save" : "regenerate",
+          selectedTitle,
+          hashtags: body.hashtags,
+          platforms: body.platforms,
+          automatic: false,
+        });
+        await saveJob(job);
+        return json(res, 200, { job, publishPackage, reusedVideo: true });
       });
     }
     const assetRediscoverMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/rediscover$/);
@@ -5103,7 +5304,9 @@ const server = http.createServer(async (req, res) => {
           autoPublish: false,
         };
         const persisted = await createOrReadVersionedFinalReview(path.join(jobDir, finalReviewName), proposedFinalReview);
-        if (persisted.replayed && job.status === "approved") return json(res, 200, { job, finalReview: persisted.review, replayed: true });
+        if (persisted.replayed && job.status === "approved" && job.publishPackage?.status === "ready" && Number(job.publishPackage.outputVersion) === outputVersion) {
+          return json(res, 200, { job, finalReview: persisted.review, publishPackage: job.publishPackage, replayed: true });
+        }
         const finalReview = persisted.review;
         job.status = "approved";
         job.approvedAt = finalReview.approvedAt;
@@ -5121,8 +5324,13 @@ const server = http.createServer(async (req, res) => {
         await writeJson(path.join(jobDir, "final-review.json"), finalReview);
         job.output = { ...job.output, mediaSha256, finalReview: { status: "approved", version: outputVersion, url: finalReviewUrl, mediaSha256, approvedAt: job.approvedAt, evidenceHash: finalReview.evidenceHash, recordHash: finalReview.recordHash }, artifacts: { ...(job.output.artifacts || {}), finalReview: finalReviewUrl } };
         job.versions = (job.versions || []).map(item => Number(item.version) === outputVersion ? job.output : item);
+        try {
+          await buildPublishPackage(job, outputVersion, { mode: "regenerate", automatic: true });
+        } catch (error) {
+          job.publishPackage = { status: "error", outputVersion, generatedAt: new Date().toISOString(), error: error.message, autoPublish: false };
+        }
         await saveJob(job);
-        return json(res, 200, { job, finalReview, replayed: persisted.replayed });
+        return json(res, 200, { job, finalReview, publishPackage: job.publishPackage, replayed: persisted.replayed });
       });
     }
     if (pathname.startsWith("/video-jobs/")) return await serveFile(req, res, confined(jobsRoot, pathname.slice("/video-jobs/".length)));

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>AI口播成长工作台</title>
+  <title>Codex / Agent / Skill 实测工作台</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
         <div class="brand-mark">口</div>
         <div>
           <strong>AI口播工作台</strong>
-          <span>从知道到做到</span>
+          <span>真实跑通 · 可复用资产</span>
         </div>
       </div>
 
@@ -25,9 +25,9 @@
         <button class="nav-item" data-view="creative"><span class="nav-icon">4</span><span>标题和封面</span></button>
 
         <button class="nav-item" data-view="edit"><span class="nav-icon">剪</span><span>拍完AI剪辑</span></button>
-        <button class="nav-item" data-view="publish"><span class="nav-icon">发</span><span>发布文案</span></button>
+        <button class="nav-item" data-view="publish"><span class="nav-icon">发</span><span>发布准备</span></button>
         <button class="nav-item" data-view="evidence"><span class="nav-icon">证</span><span>证据和风险</span></button>
-        <button class="nav-item" data-view="roadmap"><span class="nav-icon">30</span><span>成长路线</span></button>
+        <button class="nav-item" data-view="experiments"><span class="nav-icon">测</span><span>选题实验</span></button>
         <button class="nav-item" data-view="library"><span class="nav-icon">库</span><span>历史内容</span></button>
       </nav>
 
@@ -124,14 +124,14 @@
             <div class="hero-actions">
               <button class="btn btn-primary" data-go="script">查看完整口播稿</button>
               <button id="start-teleprompter" class="btn btn-dark">开始提词器</button>
-              <button id="copy-short-hero" class="btn btn-secondary">复制2—3分钟完整版</button>
+              <button id="copy-short-hero" class="btn btn-secondary">复制当前正式稿</button>
             </div>
           </div>
 
           <div class="focus-grid">
             <article class="panel quick-script-panel">
               <div class="panel-head">
-                <div><span class="step-tag">默认拍2—3分钟完整版</span><h3>打开相机后，直接念这一版</h3></div>
+                <div><span class="step-tag">时长由证据密度决定</span><h3>确认价值和证据后，再拍这一版</h3></div>
                 <span id="home-script-duration" class="mini-label"></span>
               </div>
               <p id="home-script-preview" class="home-script-preview"></p>
@@ -164,11 +164,11 @@
             <article class="panel story-panel">
               <div class="panel-head"><h3>这一集为什么值得拍</h3><span class="mini-label">真实进展</span></div>
               <div class="story-flow">
-                <div><span>之前</span><p id="story-yesterday"></p></div>
+                <div><span>问题</span><p id="story-yesterday"></p></div>
                 <div class="flow-arrow">→</div>
-                <div><span>今天</span><p id="story-today"></p></div>
+                <div><span>本次验证</span><p id="story-today"></p></div>
                 <div class="flow-arrow">→</div>
-                <div><span>明天</span><p id="story-tomorrow"></p></div>
+                <div><span>边界/下一分支</span><p id="story-tomorrow"></p></div>
               </div>
             </article>
 
@@ -192,7 +192,7 @@
               <div><span>唯一核心问题</span><p id="structure-question"></p></div>
               <div><span>可收藏框架</span><p id="structure-framework"></p></div>
               <div><span>观众代入点</span><p id="viewer-mirror"></p></div>
-              <div><span>今天的最小任务</span><p id="viewer-task"></p></div>
+              <div><span>立即可执行</span><p id="viewer-task"></p></div>
               <div><span>轻松点 / 热梗</span><p id="humor-beat"></p></div>
               <div><span>评论问题</span><p id="comment-prompt"></p></div>
               <div><span>继续关注的理由</span><p id="follow-promise"></p></div>
@@ -203,7 +203,7 @@
           </article>
 
           <article class="panel progress-panel">
-            <div class="panel-head"><h3>今天真实完成了什么</h3><button class="text-button" data-go="evidence">查看证据</button></div>
+            <div class="panel-head"><h3>本次真实证据与交付物</h3><button class="text-button" data-go="evidence">查看证据</button></div>
             <ul id="progress-list" class="check-list"></ul>
           </article>
 
@@ -236,7 +236,7 @@
           </div>
 
           <div id="short-script-panel" class="script-card is-hidden">
-            <div class="script-card-head"><span>60—90秒衍生短版</span><button class="text-button" id="copy-short-script">复制</button></div>
+            <div class="script-card-head"><span>可选精简版</span><button class="text-button" id="copy-short-script">复制</button></div>
             <p id="short-script-text" class="editable-display"></p>
           </div>
 
@@ -558,18 +558,47 @@
           </article>
         </section>
 
-        <section id="view-publish" class="view" data-title="发布文案" data-eyebrow="审核后再手动发布">
+        <section id="view-publish" class="view" data-title="发布准备" data-eyebrow="审核通过后生成本地素材包">
+          <div id="publish-package-state" class="warning-banner"><strong>等待成片</strong><span>审核通过最终成片后，这里会自动生成标题、发布文案、关联话题和两种封面。</span></div>
+          <article class="panel publish-package-panel">
+            <div class="publish-package-head">
+              <div><span>当前发布素材包</span><small id="publish-package-meta">尚未绑定已审核成片</small></div>
+              <a id="download-publish-package" class="btn btn-dark is-hidden" href="#" download>下载全部素材包</a>
+            </div>
+
+            <section id="publish-title-section" class="publish-block is-hidden">
+              <div class="section-heading compact"><h3>选择标题</h3><p>提供 3 个候选，也可以直接修改最终标题。</p></div>
+              <div id="publish-title-options" class="publish-title-options"></div>
+              <label for="publish-title"><strong>最终标题</strong><small>修改后保存时会同步重做 9:16 和 16:9 封面，不会重渲染视频。</small></label>
+              <input id="publish-title" type="text" maxlength="42" placeholder="输入最终发布标题">
+            </section>
+
           <div class="platform-tabs">
             <button class="platform-tab is-active" data-platform="douyin">抖音</button>
             <button class="platform-tab" data-platform="xiaohongshu">小红书</button>
-            <button class="platform-tab" data-platform="weibo">微博</button>
+            <button class="platform-tab" data-platform="wechat">视频号</button>
           </div>
-          <article class="panel publish-panel">
+          <div class="publish-panel">
             <div class="publish-head">
-              <div><span id="platform-name">抖音发布文案</span><small>不会自动发布，只能复制</small></div>
+              <div><span id="platform-name">抖音发布文案</span><small>可以修改、保存和复制，但不会自动发布</small></div>
               <button id="copy-publish" class="btn btn-primary">复制文案</button>
             </div>
-            <textarea id="publish-text" class="publish-text" readonly></textarea>
+            <textarea id="publish-text" class="publish-text"></textarea>
+            <label class="publish-topic-label" for="publish-hashtags"><strong>关联话题</strong><small>用空格分隔，保存后会写入发布素材包。</small></label>
+            <textarea id="publish-hashtags" class="publish-hashtags" rows="2" placeholder="#AI #口播短视频"></textarea>
+            <div id="publish-package-actions" class="inline-actions publish-package-actions is-hidden">
+              <button id="save-publish-package" class="btn btn-primary">保存并同步封面</button>
+              <button id="regenerate-publish-package" class="btn btn-secondary">重新生成素材包</button>
+            </div>
+          </div>
+
+            <section id="publish-cover-section" class="publish-block is-hidden">
+              <div class="section-heading compact"><h3>发布封面</h3><p>统一采用真人像＋大文本的简洁风格。</p></div>
+              <div class="publish-cover-grid">
+                <article><strong>9:16 手机封面</strong><img id="publish-cover-vertical" alt="9:16 手机封面"><a id="download-publish-cover-vertical" download>下载 9:16 封面</a></article>
+                <article><strong>16:9 横版封面</strong><img id="publish-cover-wide" alt="16:9 横版封面"><a id="download-publish-cover-wide" download>下载 16:9 封面</a></article>
+              </div>
+            </section>
           </article>
           <div class="warning-banner"><strong>发布边界</strong><span>请先确认真实证据、隐私、版权、标题和封面。此网页不会连接任何平台账号。</span></div>
         </section>
@@ -591,27 +620,21 @@
           </article>
         </section>
 
-        <section id="view-roadmap" class="view" data-title="30天成长路线" data-eyebrow="计划不等于完成">
-          <div class="roadmap-head">
-            <div><strong>当前进度</strong><span>Day 1 / 30</span></div>
-            <div class="progress-track"><div class="progress-fill" style="width:3.33%"></div></div>
-          </div>
-          <div class="phase-legend">
-            <span><i class="legend-dot phase-1"></i>建立记录系统</span>
-            <span><i class="legend-dot phase-2"></i>第一个真实项目</span>
-            <span><i class="legend-dot phase-3"></i>提高判断能力</span>
-            <span><i class="legend-dot phase-4"></i>稳定与作品集</span>
-          </div>
-          <div id="roadmap-grid" class="roadmap-grid"></div>
+        <section id="view-experiments" class="view" data-title="开放选题实验" data-eyebrow="没有证据和资产就不凑内容">
+          <article class="experiment-head">
+            <strong>不设30天、Day编号、日更或每日目标</strong>
+            <p>每次从真实证据出发，只选择一个开发者问题，并在视频内给出核心方法，在群内提供文件化资源与更新。</p>
+          </article>
+          <div id="experiment-grid" class="experiment-grid"></div>
         </section>
 
-        <section id="view-library" class="view" data-title="历史内容" data-eyebrow="成长版和旧基线都保留">
+        <section id="view-library" class="view" data-title="历史内容" data-eyebrow="历史证据保留，但不再驱动新稿">
           <div class="library-toolbar">
             <input id="library-search" type="search" placeholder="搜索标题、栏目或日期">
             <div class="library-filters">
               <button class="filter-btn is-active" data-filter="all">全部</button>
-              <button class="filter-btn" data-filter="growth">成长版</button>
-              <button class="filter-btn" data-filter="legacy">旧基线</button>
+              <button class="filter-btn" data-filter="developer">开发者实测</button>
+              <button class="filter-btn" data-filter="legacy">历史证据</button>
             </div>
           </div>
           <div id="library-list" class="library-list"></div>

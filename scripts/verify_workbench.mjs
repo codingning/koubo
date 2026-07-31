@@ -310,8 +310,10 @@ def sample(archetype, count):
     }
 
 valid = {
+    "quick-proof": 1,
     "evidence-story": 2,
     "saveable-map": 3,
+    "deep-audit": 3,
     "short-resonance": 1,
 }
 for archetype, count in valid.items():
@@ -330,15 +332,16 @@ if not module.structure_issues(invalid):
     raise AssertionError("无效原型未被拒绝")
 
 long_script = {
-    "durationFull": "约2—3分钟",
+    "durationFull": "约45—90秒",
+    "structureDesign": {"archetype": "evidence-story"},
     "fullSegments": [
-        {"text": "AI工作流不是功能越多越好。" + "这个知识点要用真实测试和可观察结果讲清楚。" * 4}
-        for _ in range(8)
+        {"text": "Agent工作流不是角色越多越好。" + "安装配置后要用真实测试、输出结果和验收清单讲清楚。" * 2}
+        for _ in range(5)
     ],
-    "shortScript": "AI工具真正有用的标准，不是生成了多少功能，而是能不能让普通人完成一次测试。" * 7,
+    "shortScript": "Agent真正有用的标准，不是角色数量，而是安装后能不能稳定输出并通过验收。" * 3,
 }
 if module.duration_issues(long_script):
-    raise AssertionError(f"合法2—3分钟样本被拒绝: {module.duration_issues(long_script)}")
+    raise AssertionError(f"合法自适应时长样本被拒绝: {module.duration_issues(long_script)}")
 short_script = {**long_script, "fullSegments": [{"text": "AI很有用。"}] * 3}
 if not module.duration_issues(short_script):
     raise AssertionError("过短完整版没有被时长门禁拒绝")
@@ -379,7 +382,7 @@ for fixture, expected in fixtures:
         raise AssertionError(f"响应归一化失败: {content!r} != {expected!r}")
 `;
   const structureResult = spawnSync(python, ["-B", "-c", structureTest, bridge], { encoding: "utf8" });
-  assert(structureResult.status === 0, `三种口播结构门禁测试失败：${(structureResult.stderr || structureResult.stdout).trim()}`);
+  assert(structureResult.status === 0, `自适应口播结构门禁测试失败：${(structureResult.stderr || structureResult.stdout).trim()}`);
 }
 
 const html = read("web/index.html");
@@ -480,46 +483,41 @@ assert(serverSource.includes('result.replace(/卖出第一步/g, "迈出第一�
 const sandbox = { window: {} };
 vm.runInNewContext(read("web/data/content-data.js"), sandbox, { filename: "content-data.js" });
 assert(Array.isArray(sandbox.window.KOUBO_DATA?.contentItems), "静态口播数据无法加载");
-const growthItems = sandbox.window.KOUBO_DATA?.contentItems?.filter(item => item.kind === "growth") || [];
-for (const item of growthItems) {
+const developerItems = sandbox.window.KOUBO_DATA?.contentItems?.filter(item => item.kind === "developer") || [];
+assert(developerItems.length >= 1, "静态内容库缺少新的开发者实测定位入口");
+for (const item of developerItems) {
   const engagement = item.engagement || {};
   assert(Boolean(engagement.audienceMirror), `${item.id} 缺少观众代入点`);
   assert(Boolean(engagement.commentPrompt), `${item.id} 缺少具体评论问题`);
   assert(Boolean(engagement.followPromise), `${item.id} 缺少持续关注理由`);
   assert(Boolean(engagement.viewerTask), `${item.id} 缺少观众最小任务`);
-  assert(Boolean(item.creativeTone?.humorBeat), `${item.id} 缺少轻松点或自嘲`);
-  if (item.creativeTone?.humorBeat) assert(String(item.shortScript || "").includes(item.creativeTone.humorBeat), `${item.id} 精简稿没有包含轻松点`);
-  if (item.creativeTone?.trendMeme?.id) {
-    assert(Boolean(item.creativeTone.trendMeme.sourceUrl), `${item.id} 热梗缺少来源链接`);
-    assert(normalizeSpokenText(item.shortScript).includes(normalizeSpokenText(item.creativeTone.trendMeme.adaptedLine)), `${item.id} 精简稿没有包含热梗改写句`);
-  }
-  assert(!String(item.shortScript || "").startsWith("我"), `${item.id} 精简稿仍以自我汇报开场`);
+  assert(Boolean(item.structureDesign?.payoff), `${item.id} 缺少开发者可复用回报`);
+  if (item.shortScript) assert(!String(item.shortScript).startsWith("我"), `${item.id} 精简稿仍以自我汇报开场`);
 }
 const contentStyle = JSON.parse(read("config/content_style.json"));
 assert(contentStyle.tone?.spokenLanguage, "内容风格配置缺少口语化规则");
-assert(contentStyle.engagement?.commentPrompt?.includes("具体的问题"), "内容风格配置缺少真实问题互动规则");
-assert(contentStyle.engagement?.followPromise?.includes("不固定承诺未来多少天"), "内容风格配置仍缺少非倒计时追更规则");
+assert(contentStyle.engagement?.commentPrompt?.includes("资源版本"), "内容风格配置缺少开发者资源分叉互动规则");
+assert(contentStyle.engagement?.followPromise?.includes("不承诺固定日期和天数"), "内容风格配置仍缺少非倒计时追更规则");
 assert(contentStyle.engagement?.primaryClose?.includes("自然"), "内容风格配置缺少单一自然收束规则");
-assert(contentStyle.version?.includes("ai-use-case-result-first"), "内容风格尚未升级为AI使用结果优先模式");
+assert(contentStyle.version?.includes("codex-agent-skill-proof-first"), "内容风格尚未升级为开发者实测优先模式");
 assert(contentStyle.storyPriority?.requiredSequence?.length >= 6, "内容风格缺少AI输入、第一版、返修和结果顺序");
 assert(contentStyle.storyPriority?.selfDemonstratingMode?.includes("人工审核"), "内容风格缺少自证型成片发布门禁");
-assert(contentStyle.structureDesign?.archetypes?.["evidence-story"]?.recommendedDuration === "120—180秒", "证据故事默认时长不是2—3分钟");
-for (const archetype of ["evidence-story", "saveable-map", "short-resonance"]) {
+assert(contentStyle.structureDesign?.archetypes?.["quick-proof"]?.recommendedDuration === "25—45秒", "快速实测没有自适应短时长");
+for (const archetype of ["quick-proof", "evidence-story", "saveable-map", "deep-audit"]) {
   assert(Boolean(contentStyle.structureDesign?.archetypes?.[archetype]), `内容风格配置缺少 ${archetype} 结构`);
 }
 assert(serverSource.includes("structureDesign"), "服务端没有保存结构设计字段");
 assert(serverSource.includes("referenceResearch"), "服务端没有保存参考视频研究字段");
 assert(serverSource.includes("contentDirectionFor") && serverSource.includes("content_direction"), "拍后AI剪辑没有继承内容包中的结果证明与视觉设计");
 assert(bridgeSource.includes("structure_issues"), "生成器没有接入结构质量门禁");
-assert(bridgeSource.includes("viewer_use_case_issues") && bridgeSource.includes("DEVELOPER_LOG_PATTERN"), "生成器缺少AI使用结果与开发日志降权门禁");
+assert(bridgeSource.includes("viewer_use_case_issues") && bridgeSource.includes("developerExperiment.asset"), "生成器缺少开发者复现与资源交付门禁");
 const referenceCreators = JSON.parse(read("config/reference_creators.json"));
 const referenceLibrary = JSON.parse(read("config/reference_video_library.json"));
 assert(referenceCreators.creators?.some(item => item.pinnedVideoIds?.includes("7641901934210813234")), "缺少用户新指定的AI剪辑参考账号");
 assert(referenceLibrary.items?.some(item => item.sourceId === "douyin-7641901934210813234" && item.visualLanguage?.length >= 4), "缺少新参考视频的全文与视觉结构摘要");
 assert(!bridgeSource.includes("def enforce_script_contract"), "生成器仍在机械拼接口播结尾");
 assert(fs.existsSync(path.join(root, "docs", "CONTENT_STRUCTURE_RESEARCH_2026-07-20.md")), "缺少本轮内容结构调研报告");
-const memePool = JSON.parse(read("config/meme_pool.json"));
-assert(memePool.items?.some(item => item.id === "douyin-xuejie-xian-zuoqilai" && item.status === "active"), "缺少已核对的‘学姐先做起来’热梗");
+assert(!read("web/index.html").includes("30天成长路线"), "网页仍暴露已废止的30天成长路线");
 
 const urlArg = process.argv.find(arg => arg.startsWith("--url="));
 if (urlArg) {
