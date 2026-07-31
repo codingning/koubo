@@ -1,0 +1,32 @@
+{
+  "caseId": "case.open-source-skill",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.827ed1082939",
+  "trialAnalysisArtifactId": "content-strategy.1976e38037c4",
+  "evaluationArtifactId": "content-training-evaluation.7edc9bf4b987",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 两者均忠实使用共享证据，没有把开源描述为天然安全，也没有虚构具体项目状态。",
+    "[T+00:01] 第二份比第一份更明确要求“值得安装”的判定阈值或比较基线，决策标准略具体。",
+    "[T+00:02] 第二份对跨 Skill 适用性、重复试用次数和运行环境的边界识别更完整；第一份主要关注受众经验与内容篇幅。",
+    "[T+00:03] 两者都能导向下一步证据收集，且均未越权批准生产、发布内容或宣称最终安装结论。"
+  ],
+  "uncertainties": [
+    "[T+00:04] 未提供两项用户证据的原始内容，因此无法检验候选对其细节概括是否完整。",
+    "[T+00:05] 固定材料没有定义“具体、可执行”的最低粒度，行动性评分存在小幅解释空间。"
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "caseId": "case.asset-library",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.0da760f4cdcf",
+  "trialAnalysisArtifactId": "content-strategy.1223ac4cdb24",
+  "evaluationArtifactId": "content-training-evaluation.c7440b05eed9",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+0] 两者均完整保留共享事实，没有把素材数量等同于Agent能力，也没有越权批准素材或跳过真实片段验证。",
+    "[T+0] 第一份更细致地区分候选召回、排序判断与片段效果评估，归因边界略强。",
+    "[T+0] 第二份将结果表述为符合预定义标准的比例，指标形式更直接，但仍未给出具体标准。",
+    "[T+0] 第一份提出固定候选资产范围，实验控制更明确；第二份强调同组片段与trial，对照思路同样可执行。",
+    "[T+0] 两者的核心测试都同时改变语义检索与反馈机制，因此都不能充分回答哪项能力应当优先补齐。"
+  ],
+  "uncertainties": [
+    "[T+0] 输入未提供绝对时间，因此使用相对时间标记。",
+    "[T+0] 固定 rubric 未定义0、1、2各档的细化锚点；评分按完整满足维度要求计为2。",
+    "[T+0] 未提供实际trial结果，无法评价候选建议在实践中的效果。"
+  ]
+}

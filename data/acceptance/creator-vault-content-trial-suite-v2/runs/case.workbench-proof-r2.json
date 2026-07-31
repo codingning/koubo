@@ -1,0 +1,33 @@
+{
+  "caseId": "case.workbench-proof",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.56e5c0089b7f",
+  "trialAnalysisArtifactId": "content-strategy.26819c19e989",
+  "evaluationArtifactId": "content-training-evaluation.e1844884085d",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T0] 两者均完整保留“不做功能列表、展示真实前后差异、承认人工审核责任”的核心方向。",
+    "[T0] 第一份更强调观众能否独立识别改善，验证问题更偏向观看效果。",
+    "[T0] 第二份更明确指出工作台与人工判断之间的归因限制，并补充单案例代表性问题，边界分析略具体。",
+    "[T0] 第一份对版本链“可核对”的表述略乐观；第二份提出的量化指标则可能与最终观看效果脱节。",
+    "[T0] 两者都给出了可执行的补证问题，未出现方向漂移、越权批准或把未知信息当作事实的硬失败。"
+  ],
+  "uncertainties": [
+    "[T0] 固定评分仅允许整数0至2，无法表达第二份在归因边界上略优、第一份在观众验证上略聚焦的细微差别。",
+    "[T0] 尚无候选回答之外的验收标准，无法判断“时长变化”或“人工修改次数”是否属于该任务认可的有效结果证据。"
+  ]
+}

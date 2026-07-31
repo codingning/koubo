@@ -103,7 +103,7 @@ export function buildBlindedContentTrainingRequest(leftRecord, rightRecord) {
         scoreRange: [0, 2],
         dimensions: {
           directionUnderstanding: "准确理解并保持用户方向，不偷换主题",
-          evidenceDiscipline: "区分已知、缺失与不确定性，不制造无证据结论",
+          evidenceDiscipline: "区分已知、缺失与不确定性；不得削弱、缩小、矛盾改写或遗漏共享上下文中的明确事实",
           actionability: "给出具体、可执行、能决定下一步的分析",
           boundaryAwareness: "识别适用条件、反例、归因限制和权限边界",
         },

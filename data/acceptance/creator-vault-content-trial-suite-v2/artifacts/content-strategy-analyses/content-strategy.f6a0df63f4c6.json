@@ -1,0 +1,131 @@
+{
+  "analysis": {
+    "audience": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+    "directionRestatement": "你希望分析：在素材总库已经具备资产管理能力，但视频Agent仍无法稳定选对素材的情况下，问题为何存在，以及应优先补齐哪一层能力。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.asset-vault",
+          "provenance": "user_provided",
+          "relevance": "Creator Vault已经支持资产ID、哈希、授权和项目冻结，证明资产管理基础已经存在。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.asset-agent-gap",
+          "provenance": "user_provided",
+          "relevance": "Sound Agent尚未接入Vault语义检索和真实片段反馈，直接支持Agent无法稳定选材的当前能力缺口。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "trial中“选对素材”的明确评估标准与通过阈值",
+        "少量进入trial的音效在真实片段中的选择记录、人工判断和效果反馈",
+        "用于区分语义检索问题与使用决策问题的对照结果"
+      ]
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "nextQuestions": [
+      "你如何定义并判断一次“选对素材”：语义相关、情绪与节奏适配，还是最终成片效果？",
+      "现有trial是否保留了Agent候选、最终选择、人工选择及真实片段反馈？",
+      "你更想让本次分析回答故障原因，还是明确语义检索与真实片段反馈之间的实施优先级？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "问题指向明确：素材总库与项目时间线是两个系统。",
+      "已有可核验的系统现状，能够说明资产基础设施与Agent运行能力之间的差距。",
+      "素材拥有稳定ID和授权证据不等于Agent知道何时使用。",
+      "当前只有少量音效进入trial，适合将结论限定在现阶段验证范围内。"
+    ],
+    "testableQuestion": "在同一批真实视频片段和trial音效上，接入Vault语义检索后，Agent相对当前方式及人工基线的选材命中率是否提高；加入真实片段反馈后又能带来多少增量改善？",
+    "uncertainties": [
+      "尚不清楚视频Agent与Sound Agent在当前流程中的职责边界。",
+      "尚不清楚少量trial是否足以覆盖主要素材类型和使用场景。",
+      "在缺少对照数据前，不能确认语义检索应先于真实片段反馈，或反之。"
+    ],
+    "viewerBenefit": "帮助创作者区分资产管理与Agent选材能力，并判断应优先验证语义检索、使用决策还是片段效果反馈。",
+    "weaknesses": [
+      "尚未定义“选对素材”的可测量标准，例如语义匹配、节奏适配或实际成片效果。",
+      "尚无trial中真实片段的选择结果、人工基线与失败样本，无法判断检索和反馈机制各自造成的影响。",
+      "语义检索与真实片段反馈同时缺失，目前难以确定两者的优先级。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T08:13:13.532Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "4240cadd9aa3cb622b43b8a542808fc0a18f558771f4238337672dcb231fb5de",
+  "input": {
+    "audienceContext": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+    "constraints": [
+      "不得把素材数量当成Agent能力",
+      "不得自动批准素材",
+      "不得跳过真实片段效果验证"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.asset-vault",
+        "kind": "vault-state",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "Creator Vault已经支持资产ID、哈希、授权和项目冻结"
+      },
+      {
+        "id": "evidence.asset-agent-gap",
+        "kind": "runtime-gap",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "Sound Agent尚未接入Vault语义检索和真实片段反馈"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "素材总库与项目时间线是两个系统",
+      "素材拥有稳定ID和授权证据不等于Agent知道何时使用",
+      "当前只有少量音效进入trial"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

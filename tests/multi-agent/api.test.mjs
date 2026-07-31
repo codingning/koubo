@@ -258,6 +258,9 @@ async function apiFixture(t, overrides = {}) {
             principleId: principle.id,
             contentHash: principle.contentHash,
             relevance: "用于检查方向是否包含真实、可核验的行动历史",
+            appliedJudgment: "将真实行动历史设为方向成立的判断条件",
+            applicabilityCheck: "当前方向属于个人项目与真实试用分享",
+            counterexampleCheck: "没有触发候选原则中的限制条件",
           }] : [],
           recommendation: evidenceId ? "单篇" : "暂缓",
           nextQuestions: ["观众今天最小能做什么？"],
@@ -551,7 +554,7 @@ test("content strategy reads Creator Vault trial knowledge only with explicit op
   assert.equal(response.status, 201, JSON.stringify(response.data));
   assert.deepEqual(reads, [{
     agentId: "content-strategist",
-    query: audit.query,
+    query: `${audit.query}\n真实失败和返修记录`,
     includeTrial: true,
     topK: 3,
   }]);

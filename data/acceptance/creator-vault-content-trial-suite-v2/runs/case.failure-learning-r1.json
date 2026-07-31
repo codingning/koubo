@@ -1,0 +1,32 @@
+{
+  "caseId": "case.failure-learning",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.63825cff15c9",
+  "trialAnalysisArtifactId": "content-strategy.604cf1c09649",
+  "evaluationArtifactId": "content-training-evaluation.e26658426bae",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "control",
+  "controlTotal": 8,
+  "trialTotal": 7,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:02] 两者均完整保留共享事实，没有把Agent自评替代用户对真实成片的审核。",
+    "[T+00:03] 第一份明确要求调用前后真实成片及审核结果对照，更能检验复用效果并避免因果误判。",
+    "[T+00:04] 第二份更具体追问失败案例明细与经验调用形式，但“候选规则、案例检索或检查项”的选择本身不能验证效果。",
+    "[T+00:05] 两者都识别了升级、降级或撤销标准缺失，且均未越权宣称经验已经有效或应被长期固化。"
+  ],
+  "uncertainties": [
+    "现有材料未提供后续同类任务的实际复用记录，因此无法评估任何候选经验的真实效果。",
+    "“同类问题”、可比版本及改善指标尚未定义，可能影响对照测试的解释。"
+  ]
+}

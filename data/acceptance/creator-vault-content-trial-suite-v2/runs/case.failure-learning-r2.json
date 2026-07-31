@@ -1,0 +1,33 @@
+{
+  "caseId": "case.failure-learning",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.6e27ad838711",
+  "trialAnalysisArtifactId": "content-strategy.a1983c497f2e",
+  "evaluationArtifactId": "content-training-evaluation.eeec5b0675af",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T0] 两者均未将一次成功表述为长期因果，也都保留用户对真实成片的最终否决权。",
+    "[T0] 第一份更强调完整案例材料、媒体或转录哈希以及失败后的明确回滚。",
+    "[T0] 第二份更具体地分析经验的触发、迁移边界、撤销、降级及不适用时不调用。",
+    "[T0] 第一份提出复用频率与成本，第二份提出验证次数与晋升门槛；二者分别补足运营成本和治理条件。",
+    "[T0] 两者都具备可执行的下一步问题，没有出现方向漂移、无依据断言、权限越界或泛泛建议。"
+  ],
+  "uncertainties": [
+    "[T0] 未提供真实返修案例及后续调用结果，无法评价哪套问题能更有效地产生证据。",
+    "[T0] 固定评分粒度不足以表达两份分析在边界细化上的轻微差异。"
+  ]
+}

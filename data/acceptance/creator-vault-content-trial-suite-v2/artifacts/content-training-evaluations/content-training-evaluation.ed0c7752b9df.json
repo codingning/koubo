@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.f6a0df63f4c6",
+      "contentHash": "4240cadd9aa3cb622b43b8a542808fc0a18f558771f4238337672dcb231fb5de",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.5edaa27280f8",
+      "contentHash": "84a9797746923262174830c180fb3d839bec191832fb4c26369426c50ce44c1f",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[00:02] 两者都完整使用了两项共享证据，并明确列出评价标准、真实案例和trial结果等证据缺口。",
+      "[00:03] 第一份覆盖语义检索与片段反馈的增量比较，诊断范围更广，但首轮实验变量较多。",
+      "[00:04] 第二份提出单变量首轮验证和人工通过率指标，更直接支持下一步决策。",
+      "[00:05] 两者均保留人工判断与真实片段验证，没有自动批准素材或越权归因。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 1,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[00:00] 准确保持“资产管理不等于自动选材能力”的方向，也明确区分已知、缺失与不确定项。[00:01] 主要异议：测试问题同时评估语义检索和真实片段反馈的增量，实验顺序与变量隔离不够明确，因此对“先解决什么”的决策支持稍弱。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[00:00] 准确维持既定方向，没有把问题转化为扩充素材数量。[00:01] 通过固定素材库、项目片段和人工批准边界，仅改变语义检索，给出了更可执行的首轮验证；同时承认现有证据不能把失败唯一归因于语义检索。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[00:06] 固定材料未给出实际trial结果，因此无法判断语义检索是否确实应当优先。",
+      "[00:07] “选对素材”的统一评价维度和通过阈值尚未定义。",
+      "[00:08] 少量trial对主要片段语境和素材类型的覆盖程度未知。"
+    ],
+    "winnerVariant": "trial"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "a8ee3dc44df452af7117bbdb344de3285a93e6bf887e5d7a07569a63cbb8b992",
+  "evaluatedAt": "2026-07-31T08:13:47.435Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.56e5c0089b7f",
+      "contentHash": "af33dc904f8e92af54c8cfda944d154f96cfb8656912b7458f0a375b16e16904",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.26819c19e989",
+      "contentHash": "0c0ec8c46d8c893922c88f0b492b9cac1905d352a6486a81ce125b7527fa587e",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T0] 两者均完整保留“不做功能列表、展示真实前后差异、承认人工审核责任”的核心方向。",
+      "[T0] 第一份更强调观众能否独立识别改善，验证问题更偏向观看效果。",
+      "[T0] 第二份更明确指出工作台与人工判断之间的归因限制，并补充单案例代表性问题，边界分析略具体。",
+      "[T0] 第一份对版本链“可核对”的表述略乐观；第二份提出的量化指标则可能与最终观看效果脱节。",
+      "[T0] 两者都给出了可执行的补证问题，未出现方向漂移、越权批准或把未知信息当作事实的硬失败。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T0] 准确坚持“用真实结果证明价值而非罗列功能”的方向，并明确列出证据缺口、判断标准和下一步问题。异议：将现有版本描述为“连续且可核对的结果链”略显超前，因为返修原因和验收标准尚未提供；但其随后明确指出这一缺口，未构成不受支持的结论。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T0] 准确保持原方向，清楚区分已有版本材料、缺失证据及自动化边界；问题具体且能推动下一步取证。异议：提出时长、人工修改次数等指标作为可能证据，虽未冒充既有事实，但这些指标未必能直接证明观看问题得到解决，仍需与核心问题对应。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T0] 固定评分仅允许整数0至2，无法表达第二份在归因边界上略优、第一份在观众验证上略聚焦的细微差别。",
+      "[T0] 尚无候选回答之外的验收标准，无法判断“时长变化”或“人工修改次数”是否属于该任务认可的有效结果证据。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "43d85593140cb683e828e918613301afc6831bd1f35b177a1b4b40d02c8725cf",
+  "evaluatedAt": "2026-07-31T08:17:03.177Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

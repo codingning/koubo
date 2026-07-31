@@ -1,0 +1,257 @@
+{
+  "analysis": {
+    "audience": "想训练自己的AI工作流，但不知道知识库是否真的能让Agent变聪明的普通创作者",
+    "directionRestatement": "你要分析的是：在不模仿博主原句、案例、人格或视频形式，也不把trial候选当成已验证知识的前提下，如何让短视频Agent读取蒸馏知识，并通过可解释的对照验证其内容判断是否改善。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.knowledge-vault",
+          "provenance": "user_provided",
+          "relevance": "支持“16条原则已导入Creator Vault trial且doctor通过”，证明知识资产和基础校验已经存在。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.knowledge-gap",
+          "provenance": "user_provided",
+          "relevance": "支持“此前Content Strategist没有读取独立Vault”，为读取前后对照提供明确的基线缺口。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "同一组内容任务在不读取Vault与读取Vault条件下的可比输出。",
+        "预先定义的“更懂内容”评分标准及独立评审记录。",
+        "Agent实际引用了哪些trial原则、如何检查适用条件与反例的运行记录。",
+        "失败样本被澄清、人工纠正并重新编码后是否改善的复测结果。"
+      ]
+    },
+    "lockedDirection": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容",
+    "nextQuestions": [
+      "你准备使用哪些固定任务样本来覆盖选题判断、证据审查、原则适用性和反例处理？",
+      "谁来评分，以及“更懂内容”的三个最重要可观测指标是什么？",
+      "是否能保留读取前后输出、原则引用、人工纠正和复测结果的完整审计记录？"
+    ],
+    "principleCitations": [
+      {
+        "applicabilityCheck": "当前方向属于Agent候选比较，需要判断知识读取是否造成能力变化，符合其适用范围。",
+        "appliedJudgment": "将验证限定为主要只改变“是否读取Creator Vault trial”，并把同时修改提示词、样本或评分标准列为归因风险。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "fcc8466f457590d0650d9a892c66ea6039f252f58db06857d796b2bac6b95330",
+        "counterexampleCheck": "当前不是紧急修复；即使必须同时修复确定性缺陷，也不能据此声称获得单变量因果结论。",
+        "principleId": "content-principle.change-one-main-variable.v1",
+        "relevance": "该候选原则直接约束读取前后实验设计；来源视频7665371144572177700，05:14–06:04。",
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "06:04",
+            "endSeconds": 364,
+            "startLabel": "05:14",
+            "startSeconds": 314
+          }
+        ]
+      },
+      {
+        "applicabilityCheck": "方向涉及Agent训练和工作流治理，且目标是验证知识是否真正改变判断，符合适用条件。",
+        "appliedJudgment": "要求补充失败样本、人工纠正过程及复测结果，不能把Agent自信输出视为训练完成。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "9da41624ae1eb7b23e2ff29efb7dade66945e1e0347cbead98062b409a04d08c",
+        "counterexampleCheck": "内容策略不属于所列医疗、法律或财务高风险判断，但一次人工纠正仍不足以自动批准或晋升trial原则。",
+        "principleId": "content-principle.manual-fallback-teaches-automation.v1",
+        "relevance": "该候选原则使验证不只观察成功输出，还检查失败、人工纠正和重新编码；来源视频7665003502212582683，01:59–03:22。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "02:47",
+            "endSeconds": 167,
+            "startLabel": "01:59",
+            "startSeconds": 119
+          },
+          {
+            "endLabel": "03:22",
+            "endSeconds": 202,
+            "startLabel": "02:48",
+            "startSeconds": 168
+          }
+        ]
+      },
+      {
+        "applicabilityCheck": "当前属于Agent迭代与技能验证，需要区分运行次数和可证明的错误修正。",
+        "appliedJudgment": "将核心问题收窄为Agent是否能识别并修正具体内容判断错误，而不是把增加原则数量或重复运行当作进步。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "b14727feedc024d4091229ded9e30dd32c690babbfd8de5b4006424faa55d063",
+        "counterexampleCheck": "适量重复可用于形成基本熟练度，但不能替代错误分类、纠正记录和前后对照。",
+        "principleId": "content-principle.learning-corrects-errors.v1",
+        "relevance": "该候选原则要求把“更懂内容”转换成明确的学习问题；来源视频7665371144572177700，00:33–01:12及08:42–08:59。",
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "01:12",
+            "endSeconds": 72,
+            "startLabel": "00:33",
+            "startSeconds": 33
+          },
+          {
+            "endLabel": "08:59",
+            "endSeconds": 539,
+            "startLabel": "08:42",
+            "startSeconds": 522
+          }
+        ]
+      }
+    ],
+    "recommendation": "series",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已经建立独立Creator Vault",
+      "已有16条带来源时间码和转录哈希的trial原则",
+      "16条原则已导入Creator Vault trial且doctor通过",
+      "生产Agent尚未默认读取trial知识",
+      "此前Content Strategist没有读取独立Vault，因此存在清晰、可复现的工作流缺口。"
+    ],
+    "testableQuestion": "在任务、模型、提示词和评分标准保持不变时，仅启用Creator Vault trial读取，Agent能否更准确地识别内容问题、引用适用原则并处理反例，同时不把trial候选误称为已验证知识？",
+    "uncertainties": [
+      "尚不清楚生产Agent接入trial知识的具体读取与引用机制。",
+      "尚不清楚测试样本是否具有代表性且未参与原则蒸馏。",
+      "尚不清楚评分者、评分盲法及最低改善阈值。"
+    ],
+    "viewerBenefit": "获得一套区分“知识已导入”与“Agent能力确实改善”的可验证判断方法。",
+    "weaknesses": [
+      "现有证据证明了Vault导入和运行时读取缺口，但尚未证明读取trial知识后Agent的内容判断得到改善。",
+      "“更懂内容”尚未被拆成可观测指标，例如问题识别、证据引用、原则适用性检查或建议质量。",
+      "如果同时改变知识读取、提示词、任务样本和评分方式，将难以判断改善来自哪个变量。",
+      "trial原则不能因一次表现改善而被自动批准、晋升或视为生产政策。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T08:09:59.273Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "4572da610bfb0e3891360fae872dab35f139b2efc5d2b05707ceb4b47d7395a3",
+  "input": {
+    "audienceContext": "想训练自己的AI工作流，但不知道知识库是否真的能让Agent变聪明的普通创作者",
+    "constraints": [
+      "不得模仿博主原句、案例、人格或视频形式",
+      "不得把trial候选说成已验证知识",
+      "不得自动批准、晋升或发布"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.knowledge-vault",
+        "kind": "local-verification",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "16条原则已导入Creator Vault trial且doctor通过"
+      },
+      {
+        "id": "evidence.knowledge-gap",
+        "kind": "runtime-audit",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "此前Content Strategist没有读取独立Vault"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "已经建立独立Creator Vault",
+      "已有16条带来源时间码和转录哈希的trial原则",
+      "生产Agent尚未默认读取trial知识"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "candidateLimit": 20,
+    "candidatePoolSize": 16,
+    "includeTrial": true,
+    "mode": "trial-opt-in-contextual-diversity-v2",
+    "query": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容\n想训练自己的AI工作流，但不知道知识库是否真的能让Agent变聪明的普通创作者\n已经建立独立Creator Vault\n已有16条带来源时间码和转录哈希的trial原则\n生产Agent尚未默认读取trial知识\n16条原则已导入Creator Vault trial且doctor通过\n此前Content Strategist没有读取独立Vault\n不得模仿博主原句、案例、人格或视频形式\n不得把trial候选说成已验证知识\n不得自动批准、晋升或发布",
+    "records": [
+      {
+        "contentHash": "2a98a4e3c5fbb2032c1bbbfadb9cac87421226b2bf20c75377d0a42a6c7b34b7",
+        "contextualScore": 21,
+        "id": "content-principle.manual-fallback-teaches-automation.v1",
+        "namespace": "shared.content-principles",
+        "rank": 1,
+        "retrievalRank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "187f2fb83bc4a76a64dc3a167cb32bd48a0422e35a87b035d02134307997d742",
+        "contextualScore": 17,
+        "id": "content-principle.change-one-main-variable.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "retrievalRank": 9,
+        "status": "trial"
+      },
+      {
+        "contentHash": "ac60246b90ee4ff11c267565e98955a7d99b84ecb19010857818dad206f07a3b",
+        "contextualScore": 17,
+        "id": "content-principle.learning-corrects-errors.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "retrievalRank": 10,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f029b7f6ee3e8be972dd155dbb6631c9fc71e263dd053466d8e4ae6f699de7a6",
+        "contextualScore": 12,
+        "id": "content-principle.generic-copy-is-fragile.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "retrievalRank": 5,
+        "status": "trial"
+      },
+      {
+        "contentHash": "9d6eb3337fa86628592bb290b9e9c75ca7f21396e567c365f0a75e7ee63456ab",
+        "contextualScore": 14,
+        "id": "content-principle.knowledge-assets-need-real-reuse.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "retrievalRank": 12,
+        "status": "trial"
+      }
+    ],
+    "selectionPolicy": "contextual-diversity-v2",
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-principle.manual-fallback-teaches-automation.v1",
+    "content-principle.change-one-main-variable.v1",
+    "content-principle.learning-corrects-errors.v1",
+    "content-principle.generic-copy-is-fragile.v1",
+    "content-principle.knowledge-assets-need-real-reuse.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

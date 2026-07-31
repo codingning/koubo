@@ -1,0 +1,33 @@
+{
+  "caseId": "case.knowledge-bridge",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.8243656a4e52",
+  "trialAnalysisArtifactId": "content-strategy.c8fea6dec0ae",
+  "evaluationArtifactId": "content-training-evaluation.8a1b4eb53e21",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 两者均完整理解用户方向，没有偷换为单纯的知识库搭建或内容生产问题。",
+    "[T+00:01] 两者均严格区分已知事实、缺失证据和不确定性，未声称Agent能力已经改善。",
+    "[T+00:02] 第一份的验证链条更细，额外要求原则引用记录、适用条件、反例处理、人工纠正及复测。",
+    "[T+00:03] 第二份的核心对照设计同样可执行，但对失败样本如何诊断和迭代的说明较少。",
+    "[T+00:04] 两者均遵守trial知识不得自动批准、晋升或发布的权限边界，无声明性越权。"
+  ],
+  "uncertainties": [
+    "未提供评分指标的实际定义，因此无法判断候选建议能否直接转化为可靠量表。",
+    "未提供测试样本、执行记录或评审数据，本次只能评价分析设计质量，不能评价实验效果。"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "caseId": "case.knowledge-bridge",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.2837eacc38ed",
+  "trialAnalysisArtifactId": "content-strategy.670af948408c",
+  "evaluationArtifactId": "content-training-evaluation.9c768d47dfea",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:01] 第一份更具体地要求检查原则误用、无关引用、过度自信、负例与越权批准，边界测试覆盖略完整。",
+    "[T+00:02] 第二份更明确识别“训练”的机制歧义，并要求运行日志、样本量、重复次数和成功阈值，实验落地细节略强。",
+    "[T+00:03] 两份均完整保留共享事实，没有把Vault导入或doctor通过误写成生产效果证据。",
+    "[T+00:04] 两份都形成了可决定下一步的测试问题与追问，不构成泛泛建议，也没有方向漂移、无依据断言或权限越界。"
+  ],
+  "uncertainties": [
+    "[T+00:05] 未提供更细的评分锚点，因此两份在各维度均达到2分；其细微优劣不足以支持降分。",
+    "[T+00:06] 仅能评价所提交分析文本，无法判断建议的实验材料、日志或评审流程是否实际存在。"
+  ]
+}

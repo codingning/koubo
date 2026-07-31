@@ -385,6 +385,17 @@ export function createMultiAgentApi({
     throw httpError(503, "content strategist is not configured");
   }
 
+  function contentKnowledgeQuery(input) {
+    return [
+      input.lockedDirection,
+      input.audienceContext,
+      ...input.userFacts,
+      ...input.evidence.map(item => item.summary),
+      ...input.constraints,
+      ...input.interviewAnswers.flatMap(item => [item.question, item.answer]),
+    ].map(item => String(item || "").trim()).filter(Boolean).join("\n").slice(0, 4000);
+  }
+
   async function resolveContentKnowledge(selection, input) {
     if (selection === undefined || selection === null) {
       return {
@@ -431,7 +442,7 @@ export function createMultiAgentApi({
     }
     return retrieveContentKnowledge({
       agentId: "content-strategist",
-      query: input.lockedDirection,
+      query: contentKnowledgeQuery(input),
       includeTrial: true,
       topK,
     });

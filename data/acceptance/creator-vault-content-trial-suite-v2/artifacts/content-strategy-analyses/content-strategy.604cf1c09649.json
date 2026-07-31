@@ -1,0 +1,237 @@
+{
+  "analysis": {
+    "audience": "反复让AI返修视频但同类问题仍会再次出现的创作者",
+    "directionRestatement": "分析一次真实口播返修失败如何被转化为可在下一次任务中调用、验证且必要时撤回的Agent经验，同时保留失败版本并坚持由用户审核真实成片结果。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.failure-version",
+          "provenance": "user_provided",
+          "relevance": "支持对失败版本、修改项和最终结果进行精确区分，可作为追踪经验来源与变化的基础。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.failure-review",
+          "provenance": "user_provided",
+          "relevance": "支持以用户对真实成片效果的审核和整体否决权作为最终结果边界，而不是采用Agent自评。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "一个具体失败版本对应的原判断、修改项和最终结果明细。",
+        "经验在下一次任务中被调用、验证、拒绝或撤回的记录。",
+        "从单次结果升级为候选经验以及继续保留该经验的判定标准。"
+      ]
+    },
+    "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "nextQuestions": [
+      "这次失败案例中，原判断、具体修改项和用户审核后的最终结果分别是什么？",
+      "你希望Agent下次以什么形式调用这条经验：候选规则、相似案例检索，还是任务前检查项？",
+      "什么结果会让这条经验被保留、降级或撤回？"
+    ],
+    "principleCitations": [
+      {
+        "applicabilityCheck": "项目已经保留版本、失败原因和返修记录，且失败版本、修改项和最终结果可以被精确区分，符合版本复盘和Agent评测记录场景。",
+        "appliedJudgment": "因此当前方向不能只证明复盘文档存在，还需要呈现原判断、具体修改、结果与淘汰理由，才能判断经验是否可复用。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "f1c137468ffdecbedf83f72ad373b981564b48d3fcde0c8f08169d91c4bb1eb0",
+        "counterexampleCheck": "目前没有把假想复盘包装成已验证方法，但因缺少具体样本与后续复用结果，状态应保持needs_evidence。",
+        "principleId": "content-principle.version-failures-and-results.v1",
+        "relevance": "该候选原则直接对应版本复盘与Agent评测记录；来源视频7665371144572177700，时间码06:04–07:08、07:50–08:40。",
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "07:08",
+            "endSeconds": 428,
+            "startLabel": "06:04",
+            "startSeconds": 364
+          },
+          {
+            "endLabel": "08:40",
+            "endSeconds": 520,
+            "startLabel": "07:50",
+            "startSeconds": 470
+          }
+        ]
+      },
+      {
+        "applicabilityCheck": "方向明确讨论Agent下次复用，且真实输出可以绑定媒体和转录哈希，符合自动化流程中检验可复用成果的条件。",
+        "appliedJudgment": "将核心判断从是否保存复盘，收窄为下一次任务能否调用、验证并按用户审核结果保留或撤回该经验。",
+        "authority": "advisory_candidate_only",
+        "contentHash": "d053610f8a4e0d59e8a90d4d4d38b5b6a5ab523765d36c0e4b0314233be31aa8",
+        "counterexampleCheck": "尚无信息证明该任务低频或维护成本高于复用收益，因此反例暂不阻断使用；但实际复用收益仍需后续记录验证。",
+        "principleId": "content-principle.asset-survives-tomorrow.v1",
+        "relevance": "该候选原则用于判断复盘是否留下可在下一次继续使用的成果；来源视频7665003502212582683，时间码00:00–00:23、04:53–06:06。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "00:23",
+            "endSeconds": 23,
+            "startLabel": "00:00",
+            "startSeconds": 0
+          },
+          {
+            "endLabel": "06:06",
+            "endSeconds": 366,
+            "startLabel": "04:53",
+            "startSeconds": 293
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "项目保留版本、失败原因和返修记录",
+      "Agent不得把一次成功自动晋升为长期规则",
+      "真实输出可以绑定媒体和转录哈希",
+      "失败版本、修改项和最终结果可以被精确区分",
+      "用户只审核真实成片效果并可整体否决"
+    ],
+    "testableQuestion": "同类口播任务再次出现时，Agent能否引用与真实媒体或转录哈希绑定的失败记录提出候选修改，并由用户对真实成片审核后确认其有效、拒绝或撤回，而不把单次成功自动晋升为长期规则？",
+    "uncertainties": [
+      "尚不清楚该经验是否已在后续同类任务中实际复用。",
+      "尚不清楚经验调用与用户整体否决之间的回滚机制。",
+      "若后续积累多个独立失败案例，可再评估是否扩展为系列；当前单一案例更适合单篇验证。"
+    ],
+    "viewerBenefit": "理解如何区分普通复盘记录与可复用、可验证且不会因一次成功就自动固化的Agent经验。",
+    "weaknesses": [
+      "尚未提供这次失败案例中的原判断、具体修改项及最终结果明细。",
+      "尚未说明经验从记录转为下次可调用规则或候选规则的具体判定条件。",
+      "尚未提供该经验在后续同类任务中的复用结果，无法判断它是否已成为可验证资产。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T08:13:43.707Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "ec443730fdb2228d1412cc3dc0311d2d5f7b26d39a7b10e5676d8989578b692c",
+  "input": {
+    "audienceContext": "反复让AI返修视频但同类问题仍会再次出现的创作者",
+    "constraints": [
+      "不得隐藏失败版本",
+      "不得把相关性说成因果",
+      "不得用Agent自评代替用户结果审核"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.failure-version",
+        "kind": "version-history",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "失败版本、修改项和最终结果可以被精确区分"
+      },
+      {
+        "id": "evidence.failure-review",
+        "kind": "human-review",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "用户只审核真实成片效果并可整体否决"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "项目保留版本、失败原因和返修记录",
+      "Agent不得把一次成功自动晋升为长期规则",
+      "真实输出可以绑定媒体和转录哈希"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "candidateLimit": 20,
+    "candidatePoolSize": 16,
+    "includeTrial": true,
+    "mode": "trial-opt-in-contextual-diversity-v2",
+    "query": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档\n反复让AI返修视频但同类问题仍会再次出现的创作者\n项目保留版本、失败原因和返修记录\nAgent不得把一次成功自动晋升为长期规则\n真实输出可以绑定媒体和转录哈希\n失败版本、修改项和最终结果可以被精确区分\n用户只审核真实成片效果并可整体否决\n不得隐藏失败版本\n不得把相关性说成因果\n不得用Agent自评代替用户结果审核",
+    "records": [
+      {
+        "contentHash": "4d4b516ce32ca3950924f7da8fcf1342d2ba701f81e04f26be8f6c1e46270498",
+        "contextualScore": 42,
+        "id": "content-principle.version-failures-and-results.v1",
+        "namespace": "shared.content-principles",
+        "rank": 1,
+        "retrievalRank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f3db400e79376dc05dc3b5136f2f75bc8e38b6b139008e270a0f20408fd4989c",
+        "contextualScore": 24,
+        "id": "content-principle.versions-compound-with-maintenance.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "retrievalRank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f029b7f6ee3e8be972dd155dbb6631c9fc71e263dd053466d8e4ae6f699de7a6",
+        "contextualScore": 19,
+        "id": "content-principle.generic-copy-is-fragile.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "retrievalRank": 5,
+        "status": "trial"
+      },
+      {
+        "contentHash": "1061d17d8249b42840f85b9ca54189a1af037094fa3394da151a8507ba96f13e",
+        "contextualScore": 23,
+        "id": "content-principle.asset-survives-tomorrow.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "retrievalRank": 6,
+        "status": "trial"
+      },
+      {
+        "contentHash": "9cfb06df97975b02ac0a91a4f6a7a0c65097af6e5790d0e0eb25f6a0ed8fc123",
+        "contextualScore": 18,
+        "id": "content-principle.verifiable-history-builds-trust.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "retrievalRank": 3,
+        "status": "trial"
+      }
+    ],
+    "selectionPolicy": "contextual-diversity-v2",
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-principle.version-failures-and-results.v1",
+    "content-principle.versions-compound-with-maintenance.v1",
+    "content-principle.generic-copy-is-fragile.v1",
+    "content-principle.asset-survives-tomorrow.v1",
+    "content-principle.verifiable-history-builds-trust.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

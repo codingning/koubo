@@ -1,0 +1,129 @@
+{
+  "analysis": {
+    "audience": "想使用开源AI工具但担心安全、维护成本和兼容性的普通创作者",
+    "directionRestatement": "你的意图是帮助普通创作者在安装热门开源AI Skill之前，依据许可证、安全、维护、兼容性、退出成本和隔离试用进行判断，而不是跟随推荐直接使用，并明确区分安装成功与真实可用。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.skill-audit",
+          "provenance": "user_provided",
+          "relevance": "支持以许可证、安全、维护、兼容性和退出成本为核心的安装前审计方法。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.skill-trial",
+          "provenance": "user_provided",
+          "relevance": "支持先通过隔离试用验证增量价值，避免直接修改生产路径。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "至少一个可公开引用的本地审计案例及其检查结果。",
+        "用于判定“真实可用”和“值得安装”的具体标准或阈值。"
+      ]
+    },
+    "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "nextQuestions": [
+      "你愿意公开哪一个已完成的本地审计案例，以及其中可引用的检查结果？",
+      "你如何定义“真实可用”：稳定完成任务、节省时间、提升质量，还是能替代现有工作流步骤？",
+      "对目标观众而言，哪些安全风险、维护投入或退出成本应直接构成“不值得安装”的判断？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已有许可证、安全、维护、兼容性和退出成本检查顺序，能够形成明确的判断框架。",
+      "隔离试用可以在不修改生产路径的情况下验证增量价值。",
+      "已经做过多个开源项目的本地审计，方向具备实践基础。",
+      "明确坚持开源不等于安全或适合当前工作流，并要求区分安装成功与真实可用。"
+    ],
+    "testableQuestion": "普通创作者按照该检查顺序和隔离试用方法，能否在不改动生产路径的前提下，判断某个热门开源AI Skill是否满足其安全、兼容性、维护成本和增量价值要求？",
+    "uncertainties": [
+      "目标观众当前使用的操作系统、AI工具环境和技术能力范围尚不明确。",
+      "该判断框架是否适用于所有开源AI Skill，还是需要限定到某类运行方式或权限范围，尚未确定。"
+    ],
+    "viewerBenefit": "获得一套可在真实安装前执行的判断方法，降低引入不安全、不兼容或维护成本过高工具的风险。",
+    "weaknesses": [
+      "尚未明确普通创作者可接受的安全风险、维护投入和退出成本阈值。",
+      "尚未提供可公开引用的审计案例细节，难以判断现有证据能否支撑具体结论。",
+      "“值得安装”的成功标准尚未量化，例如节省时间、提升质量或替代现有步骤的最低要求。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T08:11:01.392Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "9959cb8f8b2e004239deeddd07a881f32b1aeeacc09957b848d267678b9f5a5b",
+  "input": {
+    "audienceContext": "想使用开源AI工具但担心安全、维护成本和兼容性的普通创作者",
+    "constraints": [
+      "不得把开源说成天然安全",
+      "不得虚构项目维护状态",
+      "必须区分安装成功与真实可用"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.skill-audit",
+        "kind": "audit-method",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "已有许可证、安全、维护、兼容性和退出成本检查顺序"
+      },
+      {
+        "id": "evidence.skill-trial",
+        "kind": "local-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "隔离试用可以在不修改生产路径的情况下验证增量价值"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "已经做过多个开源项目的本地审计",
+      "开源不等于安全或适合当前工作流",
+      "真实安装前可以先做隔离试用"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

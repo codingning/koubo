@@ -1,0 +1,32 @@
+{
+  "caseId": "case.workbench-proof",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.3f198f745596",
+  "trialAnalysisArtifactId": "content-strategy.e0f963143aac",
+  "evaluationArtifactId": "content-training-evaluation.0f756d4ce570",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[00:00] 第一份更严格地把证明任务拆成具体问题、版本判断及最终验收标准，证据链更完整。",
+    "[00:01] 第二份关于“呈现转录、语义剪辑、字幕动效和人工审核的实际作用”的表述证据不足；共享事实只确认这些能力存在。",
+    "[00:02] 第一份明确提醒单个口播案例不能外推至任意视频，归因和适用范围意识更强。",
+    "[00:03] 两份都没有偏离用户方向，也没有宣称工具能够无人值守完成任意视频。"
+  ],
+  "uncertainties": [
+    "[00:04] 未提供各版本的实际画面、修改记录或指标，因此无法验证候选所设问题能否被现有素材回答。",
+    "[00:05] 固定材料未说明各项功能是否分别作用于具体版本，第二份相关表述可能只是措辞过强，而非实质性证据失范。"
+  ]
+}

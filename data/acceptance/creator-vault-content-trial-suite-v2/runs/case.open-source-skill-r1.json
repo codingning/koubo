@@ -1,0 +1,33 @@
+{
+  "caseId": "case.open-source-skill",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.4c1c72f2b24a",
+  "trialAnalysisArtifactId": "content-strategy.4e1ad825edad",
+  "evaluationArtifactId": "content-training-evaluation.ad2eb2f626f4",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 两者都保持既定方向，未把开源等同于安全，并明确区分安装成功与真实可用。",
+    "[T+00:00] 第一份对证据缺口拆分更完整，覆盖具体案例、衡量指标及实际决策结果。",
+    "[T+00:00] 第二份对成功标准给出了时间、质量和流程替代等示例，具有较强的提问可执行性。",
+    "[T+00:00] 第一份明确提出需要额外专业审计的风险边界；第二份更侧重操作系统、工具环境和运行权限范围。",
+    "[T+00:00] 第二份新增“可公开引用”要求，可能把内容可用性与方法证据充分性不必要地绑定。"
+  ],
+  "uncertainties": [
+    "[T+00:00] 未提供既有审计的原始记录，无法验证两者建议的指标是否足以形成可复现决策。",
+    "[T+00:00] 固定量表粒度较粗；两者边界意识存在细微差异，但均达到明确识别适用条件的标准。"
+  ]
+}

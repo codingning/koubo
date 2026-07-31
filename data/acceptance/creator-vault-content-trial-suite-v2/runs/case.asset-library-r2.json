@@ -1,0 +1,33 @@
+{
+  "caseId": "case.asset-library",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.f6a0df63f4c6",
+  "trialAnalysisArtifactId": "content-strategy.5edaa27280f8",
+  "evaluationArtifactId": "content-training-evaluation.ed0c7752b9df",
+  "priorEvaluationArtifactId": null,
+  "evaluationRevision": "v2",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[00:02] 两者都完整使用了两项共享证据，并明确列出评价标准、真实案例和trial结果等证据缺口。",
+    "[00:03] 第一份覆盖语义检索与片段反馈的增量比较，诊断范围更广，但首轮实验变量较多。",
+    "[00:04] 第二份提出单变量首轮验证和人工通过率指标，更直接支持下一步决策。",
+    "[00:05] 两者均保留人工判断与真实片段验证，没有自动批准素材或越权归因。"
+  ],
+  "uncertainties": [
+    "[00:06] 固定材料未给出实际trial结果，因此无法判断语义检索是否确实应当优先。",
+    "[00:07] “选对素材”的统一评价维度和通过阈值尚未定义。",
+    "[00:08] 少量trial对主要片段语境和素材类型的覆盖程度未知。"
+  ]
+}

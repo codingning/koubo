@@ -1,0 +1,78 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.827ed1082939",
+      "contentHash": "05b0de042a8166ce057e5f9f4211ed8e8030b94c67c50bc8a48b11cfe04d6eaf",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.1976e38037c4",
+      "contentHash": "a146d2d02d817d67a89c07188b24870d1619f8a80e8a35826b3f01c9b52042de",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:00] 两者均忠实使用共享证据，没有把开源描述为天然安全，也没有虚构具体项目状态。",
+      "[T+00:01] 第二份比第一份更明确要求“值得安装”的判定阈值或比较基线，决策标准略具体。",
+      "[T+00:02] 第二份对跨 Skill 适用性、重复试用次数和运行环境的边界识别更完整；第一份主要关注受众经验与内容篇幅。",
+      "[T+00:03] 两者都能导向下一步证据收集，且均未越权批准生产、发布内容或宣称最终安装结论。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 1,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持“安装前判断是否值得安装”的方向，清楚区分已有证据、缺失案例与不确定性，并提出可直接推进证据补充的问题。异议：对方法在不同 Skill 类型、运行环境及试用周期上的适用边界识别较少。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持原方向，明确区分安装成功与真实可用，并把缺失证据落实为完整案例、判定阈值和环境信息。还识别了 Skill 类型、试用周期、运行环境及系列内容所需证据等边界。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00:04] 未提供两项用户证据的原始内容，因此无法检验候选对其细节概括是否完整。",
+      "[T+00:05] 固定材料没有定义“具体、可执行”的最低粒度，行动性评分存在小幅解释空间。"
+    ],
+    "winnerVariant": "trial"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 2,
+    "controlCitationCount": 0,
+    "correctCitations": 2,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "7054f22699026b7a42ac7f7142eec52d658c8ef285d4ab988b8170ca1605195b",
+  "evaluatedAt": "2026-07-31T08:11:48.581Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

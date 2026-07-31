@@ -44,6 +44,9 @@ function readyAnalysis(input, evidenceId, overrides = {}) {
       principleId: principle.id,
       contentHash: contentHash(principle),
       relevance: "用于检查成果是否真正连接到受众与分发",
+      appliedJudgment: "把观众能否发现并复用成果列为方向是否成立的判断条件",
+      applicabilityCheck: "该原则适用于个人项目分享与AI工具实测",
+      counterexampleCheck: "当前没有稳定触达渠道，因此反例不阻断使用",
     }],
     recommendation: "单篇",
     nextQuestions: ["用户最希望观众带走哪个动作？"],
@@ -126,6 +129,9 @@ for (const fixture of directionCases) {
     assert.equal(request.lockedDirection, fixture.direction);
     assert.equal(request.instructions.doNotChangeTopic, true);
     assert.equal(request.instructions.doNotDraftScriptTitlesHooksShotsOrEditPlan, true);
+    assert.equal(request.instructions.preserveProvidedFactsExactly, true);
+    assert.equal(request.instructions.usePrincipleOnlyWhenItChangesAConcreteJudgment, true);
+    assert.equal(request.outputContract.principleCitationPolicy, "zero_to_three_only_when_material");
     assert.ok(request.candidatePrinciples.every(item => item.authority === "advisory_candidate_only"));
     assert.equal(analysis.recommendation, fixture.recommendation);
     assert.equal(analysis.evidence.available[0].sourceId, fixture.evidence.id);
@@ -379,5 +385,34 @@ test("Strategist rejects invented or stale principle citations", () => {
   assert.throws(
     () => normalizeContentStrategistOutput(stale, input, { principles: principleLibrary }),
     /stale principle hash/
+  );
+});
+
+test("Strategist requires material, bounded, condition-checked principle use", () => {
+  const fixture = directionCases[0];
+  const input = buildContentStrategistInput({ direction: fixture.direction, evidence: [fixture.evidence] });
+  const empty = readyAnalysis(input, fixture.evidence.id, { principleCitations: [] });
+  assert.deepEqual(normalizeContentStrategistOutput(empty, input, { principles: principleLibrary }).principleCitations, []);
+
+  const missingJudgment = readyAnalysis(input, fixture.evidence.id);
+  delete missingJudgment.principleCitations[0].appliedJudgment;
+  assert.throws(
+    () => normalizeContentStrategistOutput(missingJudgment, input, { principles: principleLibrary }),
+    /appliedJudgment/
+  );
+
+  const tooMany = readyAnalysis(input, fixture.evidence.id, {
+    principleCitations: principleLibrary.principles.slice(0, 4).map(principle => ({
+      principleId: principle.id,
+      contentHash: contentHash(principle),
+      relevance: "相关",
+      appliedJudgment: "改变一个具体判断",
+      applicabilityCheck: "适用条件匹配",
+      counterexampleCheck: "反例不阻断",
+    })),
+  });
+  assert.throws(
+    () => normalizeContentStrategistOutput(tooMany, input, { principles: principleLibrary }),
+    /at most three/
   );
 });

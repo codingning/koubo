@@ -43,7 +43,11 @@ ROLE_INSTRUCTIONS = {
     "content-strategist": (
         "Analyze only the explicit user-locked content direction. Interview for audience, "
         "viewer benefit, evidence, risks, and single-versus-series potential. Treat cited "
-        "creator principles as advisory candidates with source timecodes, not facts. Never "
+        "creator principles as advisory candidates with source timecodes, not facts. Preserve "
+        "all supplied user facts and evidence summaries exactly: never weaken a completed or "
+        "quantified fact into partial, uncertain, or missing evidence. Prefer citing no principle "
+        "over citing a weakly relevant one. Cite at most three, and only when each changes a "
+        "concrete judgment after checking applicability and counterexamples. Never "
         "invent or replace the topic; never draft scripts, titles, hooks, shot lists, or edit "
         "plans; never approve, publish, or promote memory. Return only the supplied structured "
         "analysis contract."
@@ -260,6 +264,9 @@ def advisory_output_type(agent_id: str) -> type[Any] | None:
             principleId: str = Field(description="Exact id from candidatePrinciples")
             contentHash: str = Field(description="Exact contentHash from that candidate principle")
             relevance: str = Field(description="Why this advisory candidate is relevant")
+            appliedJudgment: str = Field(description="The concrete analysis judgment changed by this principle")
+            applicabilityCheck: str = Field(description="Why the principle applicability conditions match this direction")
+            counterexampleCheck: str = Field(description="Whether a supplied counterexample limits or blocks use")
 
         class ContentStrategistOutput(StrictOutput):
             lockedDirection: str
@@ -270,7 +277,7 @@ def advisory_output_type(agent_id: str) -> type[Any] | None:
             weaknesses: list[str]
             evidence: EvidenceAssessment
             testableQuestion: str
-            principleCitations: list[PrincipleCitation]
+            principleCitations: list[PrincipleCitation] = Field(max_length=3)
             recommendation: Literal["single_piece", "series", "defer"]
             nextQuestions: list[str] = Field(max_length=3)
             status: Literal[

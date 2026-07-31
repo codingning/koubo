@@ -6,6 +6,92 @@ import { promisify } from "node:util";
 
 const execFile = promisify(execFileCallback);
 const allowedStatuses = new Set(["trial", "approved", "promoted"]);
+const searchStopTokens = new Set([
+  "agent", "ai", "一个", "不得", "不能", "仍然", "什么", "他们", "以及", "使用", "内容", "可以", "如何",
+  "已经", "工作", "当前", "所有", "方向", "没有", "用户", "真实", "结果", "自动", "视频", "证据", "进行", "需要", "问题",
+]);
+
+function searchTokens(value) {
+  const normalized = String(value || "").normalize("NFKC").toLowerCase();
+  const tokens = new Set(normalized.match(/[a-z0-9][a-z0-9._-]*/g) || []);
+  for (const segment of normalized.match(/[\p{Script=Han}]+/gu) || []) {
+    if (segment.length === 1) tokens.add(segment);
+    for (let index = 0; index < segment.length - 1; index += 1) tokens.add(segment.slice(index, index + 2));
+  }
+  for (const token of searchStopTokens) tokens.delete(token);
+  return tokens;
+}
+
+function overlapCount(tokens, value) {
+  const searchable = String(value || "").normalize("NFKC").toLowerCase();
+  let count = 0;
+  for (const token of tokens) if (searchable.includes(token)) count += 1;
+  return count;
+}
+
+function principleTokens(principle) {
+  return searchTokens([
+    principle.claim,
+    principle.abstraction,
+    ...principle.applicability,
+    ...principle.counterexamples,
+  ].join("\n"));
+}
+
+function similarity(left, right) {
+  if (left.size === 0 || right.size === 0) return 0;
+  let shared = 0;
+  for (const token of left) if (right.has(token)) shared += 1;
+  return shared / Math.max(left.size, right.size);
+}
+
+function contextualScore(principle, queryTokens) {
+  return overlapCount(queryTokens, principle.applicability.join("\n")) * 6
+    + overlapCount(queryTokens, principle.claim) * 3
+    + overlapCount(queryTokens, principle.abstraction) * 2
+    + overlapCount(queryTokens, principle.counterexamples.join("\n"));
+}
+
+export function selectDiversePrinciples(principles, { query, topK }) {
+  if (!Array.isArray(principles)) throw new Error("principles must be an array");
+  if (!Number.isInteger(topK) || topK < 1) throw new Error("topK must be a positive integer");
+  const queryTokens = searchTokens(query);
+  const candidates = principles.map((principle, retrievalIndex) => ({
+    principle,
+    retrievalIndex,
+    baseScore: contextualScore(principle, queryTokens),
+    tokens: principleTokens(principle),
+  }));
+  const sourceCount = new Map();
+  const distinctSources = new Set(candidates.map(item => item.principle.sourceVideoId)).size;
+  const sourceCap = Math.max(1, Math.ceil(topK / Math.max(1, Math.min(3, distinctSources))));
+  const selected = [];
+  const remaining = new Set(candidates);
+  while (selected.length < Math.min(topK, candidates.length)) {
+    let eligible = [...remaining].filter(item => (sourceCount.get(item.principle.sourceVideoId) || 0) < sourceCap);
+    if (eligible.length === 0) eligible = [...remaining];
+    eligible.sort((left, right) => {
+      const leftSimilarity = selected.length === 0 ? 0 : Math.max(...selected.map(item => similarity(left.tokens, item.tokens)));
+      const rightSimilarity = selected.length === 0 ? 0 : Math.max(...selected.map(item => similarity(right.tokens, item.tokens)));
+      const leftAdjusted = left.baseScore - leftSimilarity * 8 - (sourceCount.get(left.principle.sourceVideoId) || 0) * 4;
+      const rightAdjusted = right.baseScore - rightSimilarity * 8 - (sourceCount.get(right.principle.sourceVideoId) || 0) * 4;
+      return rightAdjusted - leftAdjusted
+        || right.baseScore - left.baseScore
+        || left.retrievalIndex - right.retrievalIndex
+        || left.principle.id.localeCompare(right.principle.id);
+    });
+    const chosen = eligible[0];
+    remaining.delete(chosen);
+    sourceCount.set(chosen.principle.sourceVideoId, (sourceCount.get(chosen.principle.sourceVideoId) || 0) + 1);
+    selected.push(chosen);
+  }
+  return selected.map((item, selectionIndex) => ({
+    principle: item.principle,
+    selectionRank: selectionIndex + 1,
+    retrievalRank: item.retrievalIndex + 1,
+    contextualScore: item.baseScore,
+  }));
+}
 
 function httpError(statusCode, message) {
   return Object.assign(new Error(message), { statusCode });
@@ -94,6 +180,7 @@ export function createCreatorVaultKnowledgeAdapter({
     if (!fs.existsSync(resolvedRoot) || !fs.existsSync(resolvedCli)) {
       throw httpError(409, "Creator Vault root or CLI is unavailable");
     }
+    const candidateLimit = Math.min(100, Math.max(12, topK * 4));
     let result;
     try {
       result = await run(nodePath, [
@@ -103,7 +190,7 @@ export function createCreatorVaultKnowledgeAdapter({
         "--agent", agentId,
         "--query", normalizedQuery,
         "--trial",
-        "--limit", String(topK),
+        "--limit", String(candidateLimit),
       ], { cwd: path.dirname(resolvedCli) });
     } catch (error) {
       throw httpError(502, `Creator Vault retrieval failed: ${String(error?.message || error).slice(0, 240)}`);
@@ -115,28 +202,38 @@ export function createCreatorVaultKnowledgeAdapter({
       throw httpError(502, "Creator Vault returned invalid JSON");
     }
     if (!Array.isArray(records)) throw httpError(502, "Creator Vault returned a non-array result");
-    let principles;
+    let validated;
     try {
-      principles = records.map(validateRecord);
+      validated = records.map(validateRecord);
     } catch (error) {
       throw httpError(502, `Creator Vault returned invalid knowledge: ${String(error?.message || error).slice(0, 240)}`);
     }
+    const selected = selectDiversePrinciples(validated, { query: normalizedQuery, topK });
+    const rawById = new Map(records.map(record => [record.id, record]));
     return {
-      principles,
+      principles: selected.map(item => item.principle),
       audit: {
         source: "creator-vault",
-        mode: "trial-opt-in",
+        mode: "trial-opt-in-contextual-diversity-v2",
         agentId,
         includeTrial: true,
         topK,
+        candidateLimit,
+        candidatePoolSize: records.length,
+        selectionPolicy: "contextual-diversity-v2",
         query: normalizedQuery,
-        records: records.map((record, index) => ({
-          rank: index + 1,
-          id: record.id,
-          status: record.status,
-          namespace: record.namespace,
-          contentHash: record.contentHash,
-        })),
+        records: selected.map(item => {
+          const record = rawById.get(item.principle.id);
+          return {
+            rank: item.selectionRank,
+            retrievalRank: item.retrievalRank,
+            id: record.id,
+            status: record.status,
+            namespace: record.namespace,
+            contentHash: record.contentHash,
+            contextualScore: item.contextualScore,
+          };
+        }),
       },
     };
   }

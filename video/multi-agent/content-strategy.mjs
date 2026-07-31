@@ -221,9 +221,8 @@ function normalizePrincipleCitations(value, principles) {
     }
     return [];
   }
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error("output.principleCitations must contain at least one traceable principle");
-  }
+  if (!Array.isArray(value)) throw new Error("output.principleCitations must be an array");
+  if (value.length > 3) throw new Error("output.principleCitations must contain at most three material principles");
   const available = new Map(normalizedPrinciples.map(item => [item.id, item]));
   const seen = new Set();
   return value.map((item, index) => {
@@ -241,6 +240,9 @@ function normalizePrincipleCitations(value, principles) {
       principleId,
       contentHash: principle.contentHash,
       relevance: requireString(item.relevance, `output.principleCitations[${index}].relevance`),
+      appliedJudgment: requireString(item.appliedJudgment, `output.principleCitations[${index}].appliedJudgment`),
+      applicabilityCheck: requireString(item.applicabilityCheck, `output.principleCitations[${index}].applicabilityCheck`),
+      counterexampleCheck: requireString(item.counterexampleCheck, `output.principleCitations[${index}].counterexampleCheck`),
       authority: principle.authority,
       sourceVideoId: principle.sourceVideoId,
       timecodes: principle.timecodes.map(range => ({ ...range })),
@@ -428,9 +430,30 @@ export function buildContentStrategistAnalysisRequest(input, { principles = [] }
       interviewAndAnalyzeBeforeAnyDraft: true,
       doNotTreatCandidatePrinciplesAsFactsOrProductionPolicy: true,
       doNotImitateSourceWordingCasesPersonaOrVideoForm: true,
+      preserveProvidedFactsExactly: true,
+      doNotWeakenBroadenOrContradictProvidedFacts: true,
+      preferNoPrincipleOverAWeaklyRelevantPrinciple: true,
+      usePrincipleOnlyWhenItChangesAConcreteJudgment: true,
+      checkApplicabilityAndCounterexamplesBeforeUse: true,
       doNotChangeTopic: true,
       doNotDraftScriptTitlesHooksShotsOrEditPlan: true,
       maxNextQuestions: 3,
+    },
+    factFidelityContract: {
+      immutableUserFacts: input.userFacts.map((text, index) => ({ id: `user-fact-${index + 1}`, text })),
+      immutableEvidence: input.evidence.map(item => ({ id: item.id, summary: item.summary, provenance: item.provenance })),
+      forbiddenTransforms: [
+        "Do not replace an exact completed quantity with partial, some, estimated, or unverified wording",
+        "Do not turn supplied evidence into a missing-evidence claim",
+        "Do not infer facts that are absent from minimalInput",
+      ],
+    },
+    knowledgeUseContract: {
+      maximumCitations: 3,
+      citationsMayBeEmpty: true,
+      materialUseRequired: true,
+      eachCitationMustState: ["appliedJudgment", "applicabilityCheck", "counterexampleCheck"],
+      principleMayNotOverrideUserFactsEvidenceOrConstraints: true,
     },
     outputContract: {
       requiredFields: [
@@ -461,7 +484,7 @@ export function buildContentStrategistAnalysisRequest(input, { principles = [] }
           missing: "string[]",
         },
         testableQuestion: "string",
-        principleCitations: "Array<{principleId: exact candidate id, contentHash: exact candidate hash, relevance: string}>",
+        principleCitations: "Array<0..3 {principleId: exact candidate id, contentHash: exact candidate hash, relevance: string, appliedJudgment: string, applicabilityCheck: string, counterexampleCheck: string}>",
         recommendation: "enum string",
         nextQuestions: "string[]",
         status: "enum string",
@@ -470,7 +493,7 @@ export function buildContentStrategistAnalysisRequest(input, { principles = [] }
       forbidAdditionalFields: true,
       forbidDraftMaterial: true,
       maxNextQuestions: 3,
-      principleCitationPolicy: candidatePrinciples.length > 0 ? "at_least_one" : "must_be_empty",
+      principleCitationPolicy: candidatePrinciples.length > 0 ? "zero_to_three_only_when_material" : "must_be_empty",
     },
     scriptGate: {
       strategistMayDraft: false,
@@ -572,7 +595,9 @@ export function createContentStrategist({ invokeAgent, principles = [] } = {}) {
             requirements: [
               "Return exactly the declared field types with no extra fields",
               "Echo lockedDirection byte-for-byte",
-              "Cite only supplied evidence ids and exact principle content hashes",
+              "Preserve every supplied user fact and evidence summary without weakening, broadening, or contradiction",
+              "Cite zero to three principles only when each changes a concrete judgment, using exact ids and content hashes",
+              "For every citation state appliedJudgment, applicabilityCheck, and counterexampleCheck",
               "Do not draft, approve, publish, replace the topic, or relax evidence gaps",
             ],
           },

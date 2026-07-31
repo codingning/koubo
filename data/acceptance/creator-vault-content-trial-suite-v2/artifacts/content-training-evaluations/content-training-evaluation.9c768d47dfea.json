@@ -1,0 +1,78 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.2837eacc38ed",
+      "contentHash": "3630c723461b7e92235aa8d8c97d164c5753cdedd5bf6720994970e6d18c839c",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.670af948408c",
+      "contentHash": "2ff5aba1fb5d944b72cb2d8a0cf614c4e0f31cb534a9f0932dc33b1f76a4f18c",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:01] 第一份更具体地要求检查原则误用、无关引用、过度自信、负例与越权批准，边界测试覆盖略完整。",
+      "[T+00:02] 第二份更明确识别“训练”的机制歧义，并要求运行日志、样本量、重复次数和成功阈值，实验落地细节略强。",
+      "[T+00:03] 两份均完整保留共享事实，没有把Vault导入或doctor通过误写成生产效果证据。",
+      "[T+00:04] 两份都形成了可决定下一步的测试问题与追问，不构成泛泛建议，也没有方向漂移、无依据断言或权限越界。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持既定方向，没有把trial原则表述为已验证知识。证据边界清晰，并提出基线、运行日志、盲评、重复测试和成功阈值；尤其指出“训练”可能指检索、上下文注入或参数训练，有助于避免因果概念混淆。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持既定方向，将核心问题转化为单变量对照测试；明确区分Vault已导入、Agent实际读取和能力改善。可执行性强，提出固定模型、任务、提示词、评分规则与盲评，并覆盖原则误用、无关引用、模仿和越权等负面结果。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00:05] 未提供更细的评分锚点，因此两份在各维度均达到2分；其细微优劣不足以支持降分。",
+      "[T+00:06] 仅能评价所提交分析文本，无法判断建议的实验材料、日志或评审流程是否实际存在。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "ff63e63e5503b837e6be2ecf2a4123bbc23edc1a5a71ab4a3a6bd36ee0e31d6c",
+  "evaluatedAt": "2026-07-31T08:10:27.522Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}
