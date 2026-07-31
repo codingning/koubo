@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "content-strategist-vault-trial-suite.v1",
+  "status": "trial",
+  "repeats": 2,
+  "thresholds": {
+    "minimumTrialDirectionWins": 4,
+    "minimumAverageScoreDelta": 1,
+    "minimumCitationAccuracy": 0.9,
+    "minimumConsistentDirections": 4,
+    "maximumRegressions": 0
+  },
+  "cases": [
+    {
+      "id": "case.knowledge-bridge",
+      "direction": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容",
+      "audienceContext": "想训练自己的AI工作流，但不知道知识库是否真的能让Agent变聪明的普通创作者",
+      "userFacts": ["已经建立独立Creator Vault", "已有16条带来源时间码和转录哈希的trial原则", "生产Agent尚未默认读取trial知识"],
+      "evidence": [
+        { "id": "evidence.knowledge-vault", "kind": "local-verification", "summary": "16条原则已导入Creator Vault trial且doctor通过" },
+        { "id": "evidence.knowledge-gap", "kind": "runtime-audit", "summary": "此前Content Strategist没有读取独立Vault" }
+      ],
+      "constraints": ["不得模仿博主原句、案例、人格或视频形式", "不得把trial候选说成已验证知识", "不得自动批准、晋升或发布"]
+    },
+    {
+      "id": "case.open-source-skill",
+      "direction": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+      "audienceContext": "想使用开源AI工具但担心安全、维护成本和兼容性的普通创作者",
+      "userFacts": ["已经做过多个开源项目的本地审计", "开源不等于安全或适合当前工作流", "真实安装前可以先做隔离试用"],
+      "evidence": [
+        { "id": "evidence.skill-audit", "kind": "audit-method", "summary": "已有许可证、安全、维护、兼容性和退出成本检查顺序" },
+        { "id": "evidence.skill-trial", "kind": "local-trial", "summary": "隔离试用可以在不修改生产路径的情况下验证增量价值" }
+      ],
+      "constraints": ["不得把开源说成天然安全", "不得虚构项目维护状态", "必须区分安装成功与真实可用"]
+    },
+    {
+      "id": "case.asset-library",
+      "direction": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+      "audienceContext": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+      "userFacts": ["素材总库与项目时间线是两个系统", "素材拥有稳定ID和授权证据不等于Agent知道何时使用", "当前只有少量音效进入trial"],
+      "evidence": [
+        { "id": "evidence.asset-vault", "kind": "vault-state", "summary": "Creator Vault已经支持资产ID、哈希、授权和项目冻结" },
+        { "id": "evidence.asset-agent-gap", "kind": "runtime-gap", "summary": "Sound Agent尚未接入Vault语义检索和真实片段反馈" }
+      ],
+      "constraints": ["不得把素材数量当成Agent能力", "不得自动批准素材", "不得跳过真实片段效果验证"]
+    },
+    {
+      "id": "case.failure-learning",
+      "direction": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+      "audienceContext": "反复让AI返修视频但同类问题仍会再次出现的创作者",
+      "userFacts": ["项目保留版本、失败原因和返修记录", "Agent不得把一次成功自动晋升为长期规则", "真实输出可以绑定媒体和转录哈希"],
+      "evidence": [
+        { "id": "evidence.failure-version", "kind": "version-history", "summary": "失败版本、修改项和最终结果可以被精确区分" },
+        { "id": "evidence.failure-review", "kind": "human-review", "summary": "用户只审核真实成片效果并可整体否决" }
+      ],
+      "constraints": ["不得隐藏失败版本", "不得把相关性说成因果", "不得用Agent自评代替用户结果审核"]
+    },
+    {
+      "id": "case.workbench-proof",
+      "direction": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+      "audienceContext": "对AI视频工具感兴趣，但已经看腻功能列表和夸张宣传的普通观众",
+      "userFacts": ["工作台可以完成转录、语义剪辑、字幕动效和人工审核", "已有原片、样片、返修版本和最终输出", "工具仍不能一键剪好任意视频"],
+      "evidence": [
+        { "id": "evidence.workbench-before-after", "kind": "media-comparison", "summary": "同一条口播可以展示原片、样片和返修结果" },
+        { "id": "evidence.workbench-boundary", "kind": "product-boundary", "summary": "工作台仍需要用户提供方向、证据和最终审核" }
+      ],
+      "constraints": ["不得只罗列功能", "不得宣称一键自主剪辑任意视频", "必须让观众看到真实前后差异"]
+    }
+  ]
+}

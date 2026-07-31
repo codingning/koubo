@@ -337,6 +337,7 @@ export function createMultiAgentApi({
   contentStrategist,
   contentPrinciples = [],
   retrieveContentKnowledge,
+  contentTrainingEvaluator,
   ordinaryViewerCritic,
   buildBlindReviewBundle,
   createWorkspaceEvidence,
@@ -748,6 +749,105 @@ export function createMultiAgentApi({
         });
         const artifact = await writeIndependentArtifact("content-strategy-analyses", id, record);
         return { status: 201, body: { analysisArtifactId: id, analysis, knowledgeContext: knowledge.audit, artifact } };
+      });
+    }
+
+    if (req.method === "POST" && pathname === "/api/multi-agent/content-strategy/evaluate-ab") {
+      requireAdvisoryEnabled();
+      return idempotentMutation(req, pathname, async (body, key) => {
+        assertNoClientAuthorityFields(body, [
+          "winner", "scores", "approved", "publish", "memoryPromotion", "productionApproval",
+        ], "content strategy A/B evaluation");
+        const leftAnalysisArtifactId = String(body.leftAnalysisArtifactId || "").trim();
+        const rightAnalysisArtifactId = String(body.rightAnalysisArtifactId || "").trim();
+        if (!leftAnalysisArtifactId || !rightAnalysisArtifactId) {
+          throw httpError(400, "leftAnalysisArtifactId and rightAnalysisArtifactId are required");
+        }
+        if (leftAnalysisArtifactId === rightAnalysisArtifactId) {
+          throw httpError(400, "A/B evaluation requires two distinct analysis artifacts");
+        }
+        if (typeof contentTrainingEvaluator?.evaluate !== "function") {
+          throw httpError(503, "content training evaluator is not configured");
+        }
+        const artifactReader = requireDependency(readArtifact, "readArtifact");
+        const [left, right] = await Promise.all([
+          artifactReader("content-strategy-analyses", leftAnalysisArtifactId),
+          artifactReader("content-strategy-analyses", rightAnalysisArtifactId),
+        ]);
+        if (!left || !right) throw httpError(404, "content strategy analysis artifact not found");
+        const workspaceId = normalizedRequestWorkspaceId(req, workspaceIdForRequest);
+        assertArtifactWorkspace(left, workspaceId, "left content strategy analysis artifact");
+        assertArtifactWorkspace(right, workspaceId, "right content strategy analysis artifact");
+        const leftContentHash = assertRecordContentHash(left, "left content strategy analysis");
+        const rightContentHash = assertRecordContentHash(right, "right content strategy analysis");
+        if (left.input?.lockedDirection !== right.input?.lockedDirection) {
+          throw httpError(409, "A/B analyses use different locked directions");
+        }
+        const variantFor = record => {
+          const source = record.knowledgeContext?.source;
+          if (source === "none") return "control";
+          if (source === "creator-vault" && record.knowledgeContext?.includeTrial === true) return "trial";
+          throw httpError(409, "A/B analyses must contain one explicit control and one Creator Vault trial variant");
+        };
+        const leftVariant = variantFor(left);
+        const rightVariant = variantFor(right);
+        if (leftVariant === rightVariant) throw httpError(409, "A/B analyses must use different knowledge variants");
+        const evaluation = await contentTrainingEvaluator.evaluate(left, right);
+        const sourceRecord = { left, right };
+        const sourceVariant = { left: leftVariant, right: rightVariant };
+        const positionSource = evaluation.privateMapping;
+        const scoresByVariant = {};
+        for (const position of ["first", "second"]) {
+          const source = positionSource[position];
+          scoresByVariant[sourceVariant[source]] = structuredClone(evaluation.candidates[position]);
+        }
+        const winnerVariant = ["left", "right"].includes(evaluation.winnerSource)
+          ? sourceVariant[evaluation.winnerSource]
+          : evaluation.winnerSource;
+        const trialSource = leftVariant === "trial" ? "left" : "right";
+        const controlSource = leftVariant === "control" ? "left" : "right";
+        const trialRecord = sourceRecord[trialSource];
+        const retrieved = new Map((trialRecord.knowledgeContext?.records || []).map(item => [item.id, item]));
+        const citations = trialRecord.analysis?.principleCitations || [];
+        const correctCitations = citations.filter(item => retrieved.has(item.principleId)).length;
+        const citationAccuracy = citations.length > 0 ? correctCitations / citations.length : 0;
+        const citationAudit = {
+          retrievedCount: retrieved.size,
+          citedCount: citations.length,
+          correctCitations,
+          accuracy: Number(citationAccuracy.toFixed(4)),
+          controlCitationCount: (sourceRecord[controlSource].analysis?.principleCitations || []).length,
+          vaultHashesValid: [...retrieved.values()].every(item => /^[a-f0-9]{64}$/u.test(String(item.contentHash || ""))),
+        };
+        const id = artifactId("content-training-evaluation", `${workspaceId}:${key}`);
+        const record = withRecordContentHash({
+          schemaVersion: 1,
+          kind: "content_strategy_training_ab_evaluation",
+          workspaceId,
+          lockedDirection: left.input.lockedDirection,
+          analyses: {
+            left: { artifactId: leftAnalysisArtifactId, contentHash: leftContentHash, variant: leftVariant },
+            right: { artifactId: rightAnalysisArtifactId, contentHash: rightContentHash, variant: rightVariant },
+          },
+          blindEvaluation: {
+            rubricId: evaluation.rubricId,
+            dimensions: evaluation.dimensions,
+            scoresByVariant,
+            comparativeFindings: evaluation.comparativeFindings,
+            uncertainties: evaluation.uncertainties,
+            winnerVariant,
+          },
+          citationAudit,
+          evaluatedAt: clock(),
+          authority: {
+            grantsApproval: false,
+            publishes: false,
+            promotesMemory: false,
+            changesProductionDefault: false,
+          },
+        });
+        const artifact = await writeIndependentArtifact("content-training-evaluations", id, record);
+        return { status: 201, body: { evaluationArtifactId: id, evaluation: record, artifact } };
       });
     }
 

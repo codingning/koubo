@@ -1,0 +1,34 @@
+{
+  "caseId": "case.knowledge-bridge",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.a7be47e39825",
+  "trialAnalysisArtifactId": "content-strategy.0de4092cd225",
+  "evaluationArtifactId": "content-training-evaluation.0cd8bfc89268",
+  "priorEvaluationArtifactId": "content-training-evaluation.35b11772b42c",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "control",
+  "controlTotal": 8,
+  "trialTotal": 7,
+  "controlHardFailures": [],
+  "trialHardFailures": [
+    "unsupported_claim"
+  ],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:01] 两者都保持了既定方向，没有把知识存储状态误写成Agent能力已提升。",
+    "[T+00:02] 第二份将内容理解进一步具体化为识别问题、标注不确定性、引用证据和提出可验证判断，可执行性略强。",
+    "[T+00:03] 第一份对现有证据的表述与共享事实一致；第二份无依据地缩减为“部分已导入”，构成证据纪律缺陷。",
+    "[T+00:04] 两者都识别了检索机制、评分标准、重复测试和归因限制，也都未批准生产、发布或晋升知识。"
+  ],
+  "uncertainties": [
+    "[T+00:05] 共享材料未说明doctor检查的具体覆盖范围，因此不能据此判断语义调用质量。",
+    "[T+00:06] 尚无实际成对输出、运行日志或盲评结果，无法评价建议中的实验最终能否证明稳定提升。"
+  ]
+}

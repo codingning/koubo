@@ -1,0 +1,82 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.d4564d78c99e",
+      "contentHash": "6bdd9e5e94c8e9edf938bd05d3fb7d234cb24aad1a2168243b5065b673bf0fe3",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.84816a9a9d81",
+      "contentHash": "8ad62b3f54aaf6d60625e24e66d32ceeb6a40cb504ee29cfa1790cf8c1f1297f",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[评估时点：输入未提供时间戳] 两者均明确区分Vault导入成功与Agent能力提升，且没有直接宣称实验有效。",
+      "[评估时点：输入未提供时间戳] 第一份更强调原则引用准确性、适用边界、不确定性和失败案例，评测维度更细。",
+      "[评估时点：输入未提供时间戳] 第二份更强调运行日志、多任务重复测试和独立评估，对复现与排除偶然性更具体。",
+      "[评估时点：输入未提供时间戳] 两者都存在轻度证据外推，因此证据纪律未获满分，并触发unsupported_claim。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [
+          "unsupported_claim"
+        ],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 1
+        },
+        "summary": "[评估时点：输入未提供时间戳] 方向准确，尤其补充运行日志、多任务重复测试和独立评估，下一步较具体。异议：把“运行审计”描述为既有基础，并将此前未读取Vault扩大为生产Agent当前状态，均未被列明证据充分支持。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [
+          "unsupported_claim"
+        ],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 1
+        },
+        "summary": "[评估时点：输入未提供时间戳] 准确保留“知识蒸馏—接入—对照验证”方向，并提出盲评、控制变量和预设阈值。异议：将“来源时间码、转录哈希”及“生产Agent尚未默认读取”写成既有事实，超出列明证据。",
+        "total": 7
+      }
+    },
+    "uncertainties": [
+      "输入未提供原始证据全文，无法判断时间码、转录哈希或运行审计是否实际包含在未展示材料中。",
+      "未提供评估发生时间，故只能明确标记评估时点缺失，不能生成可靠的绝对时间戳。"
+    ],
+    "winnerVariant": "reject_both"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "f19c764c762ab90279437e55c7f114babc7daa45fae810b7b876e65a87868ae7",
+  "evaluatedAt": "2026-07-31T07:43:09.835Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

@@ -109,6 +109,7 @@ async function apiFixture(t, overrides = {}) {
   const proposalCalls = [];
   const contentStrategyCalls = [];
   const contentStrategyPrincipleInputs = [];
+  const contentTrainingEvaluationCalls = [];
   const ordinaryReviewCalls = [];
   const renderedRoot = fs.mkdtempSync(path.join(os.tmpdir(), "koubo-api-rendered-review-"));
   const outputPath = path.join(renderedRoot, "final-v4.mp4");
@@ -265,6 +266,27 @@ async function apiFixture(t, overrides = {}) {
         };
       },
     },
+    contentTrainingEvaluator: {
+      async evaluate(left, right) {
+        contentTrainingEvaluationCalls.push({ left, right });
+        return {
+          schemaVersion: 1,
+          rubricId: "content-strategy-training-ab-v1",
+          dimensions: ["directionUnderstanding", "evidenceDiscipline", "actionability", "boundaryAwareness"],
+          candidates: {
+            first: { scores: { directionUnderstanding: 2, evidenceDiscipline: 2, actionability: 1, boundaryAwareness: 1 }, total: 6, hardFailures: [], summary: "control" },
+            second: { scores: { directionUnderstanding: 2, evidenceDiscipline: 2, actionability: 2, boundaryAwareness: 2 }, total: 8, hardFailures: [], summary: "trial" },
+          },
+          comparativeFindings: ["第二项更具体", "第二项边界更完整"],
+          uncertainties: ["仅比较当前样本"],
+          winnerPosition: "second",
+          winnerSource: "right",
+          privateMapping: { first: "left", second: "right" },
+          publicHashes: { left: "a".repeat(64), right: "b".repeat(64) },
+          authority: { grantsApproval: false, publishes: false, promotesMemory: false },
+        };
+      },
+    },
     contentPrinciples: [principleFixture],
     ordinaryViewerCritic: {
       async review(input, options) {
@@ -329,6 +351,7 @@ async function apiFixture(t, overrides = {}) {
     proposalCalls,
     contentStrategyCalls,
     contentStrategyPrincipleInputs,
+    contentTrainingEvaluationCalls,
     ordinaryReviewCalls,
     content,
   };
@@ -536,6 +559,66 @@ test("content strategy reads Creator Vault trial knowledge only with explicit op
   assert.deepEqual(contentStrategyPrincipleInputs[0], [principleFixture]);
   assert.equal(response.data.knowledgeContext.records[0].id, principleFixture.id);
   assert.equal(artifacts.at(-1).value.knowledgeContext.records[0].contentHash, "b".repeat(64));
+});
+
+test("content strategy A/B evaluation is blind, hash-bound, and non-authoritative", async t => {
+  const audit = {
+    source: "creator-vault",
+    mode: "trial-opt-in",
+    agentId: "content-strategist",
+    includeTrial: true,
+    topK: 3,
+    query: "分享一次真实的 Agent 训练实验",
+    records: [{
+      rank: 1,
+      id: principleFixture.id,
+      status: "trial",
+      namespace: "shared.content-principles",
+      contentHash: "b".repeat(64),
+    }],
+  };
+  const fixture = await apiFixture(t, {
+    retrieveContentKnowledge: async () => ({ principles: [principleFixture], audit }),
+  });
+  const { request, artifacts, contentTrainingEvaluationCalls } = fixture;
+  const common = {
+    direction: audit.query,
+    evidence: [{ id: "evidence.training", kind: "test", summary: "真实训练记录" }],
+  };
+  const control = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/analyze",
+    { ...common, knowledgeContext: { mode: "none" } },
+    { idempotencyKey: "content-training-control" }
+  );
+  const trial = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/analyze",
+    { ...common, knowledgeContext: { mode: "creator-vault", includeTrial: true, topK: 3 } },
+    { idempotencyKey: "content-training-trial" }
+  );
+  const evaluated = await request(
+    "POST",
+    "/api/multi-agent/content-strategy/evaluate-ab",
+    {
+      leftAnalysisArtifactId: control.data.analysisArtifactId,
+      rightAnalysisArtifactId: trial.data.analysisArtifactId,
+    },
+    { idempotencyKey: "content-training-evaluate" }
+  );
+  assert.equal(evaluated.status, 201, JSON.stringify(evaluated.data));
+  assert.equal(contentTrainingEvaluationCalls.length, 1);
+  assert.equal(evaluated.data.evaluation.blindEvaluation.winnerVariant, "trial");
+  assert.equal(evaluated.data.evaluation.blindEvaluation.scoresByVariant.control.total, 6);
+  assert.equal(evaluated.data.evaluation.blindEvaluation.scoresByVariant.trial.total, 8);
+  assert.equal(evaluated.data.evaluation.citationAudit.accuracy, 1);
+  assert.equal(evaluated.data.evaluation.citationAudit.controlCitationCount, 0);
+  assert.equal(evaluated.data.evaluation.authority.grantsApproval, false);
+  assert.equal(evaluated.data.evaluation.authority.promotesMemory, false);
+  assert.deepEqual(
+    artifacts.map(item => item.kind),
+    ["content-strategy-analyses", "content-strategy-analyses", "content-training-evaluations"]
+  );
 });
 
 test("workspace evidence snapshots are server-authored, workspace-scoped, and unlock verified provenance", async t => {

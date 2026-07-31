@@ -1,0 +1,227 @@
+{
+  "analysis": {
+    "audience": "想尝试开源AI工具，但担心安全风险、维护成本和工作流兼容性的普通创作者。",
+    "directionRestatement": "围绕普通创作者在安装热门开源AI Skill前，如何基于安全、维护、兼容性、实际增量价值与退出成本作出判断，而不是依赖热度或推荐。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.skill-audit",
+          "provenance": "user_provided",
+          "relevance": "支持安装前按许可证、安全、维护、兼容性和退出成本进行系统审计。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.skill-trial",
+          "provenance": "user_provided",
+          "relevance": "支持先在隔离环境验证实际增量价值，并避免直接修改生产路径。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "至少一个具体开源AI Skill的审计记录，包括检查时间、版本、运行环境、发现的问题及证据来源。",
+        "隔离试用的真实任务、对照基线、结果与是否采用的决定。",
+        "明确的判定阈值：哪些问题直接否决，哪些问题可通过隔离、权限限制或人工兜底接受。"
+      ]
+    },
+    "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "nextQuestions": [
+      "你能提供哪一个具体Skill的审计记录，以及对应版本、检查日期和运行环境？",
+      "隔离试用时使用了什么真实任务和现有方案作为对照，结果如何？",
+      "哪些发现属于直接否决项，哪些可以通过限制权限、隔离环境或人工兜底接受？"
+    ],
+    "principleCitations": [
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "27a6a4c359bbb86c15a1db4ba6ed94b175a3363bd9233aa0d85bd7268a3c9797",
+        "principleId": "content-principle.ai-generates-hypotheses-not-verdicts.v1",
+        "relevance": "该候选原则提醒将安全、维护和兼容性判断绑定到证据与验证办法，避免把推测写成项目事实；来源时段为03:30–05:14。",
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "05:14",
+            "endSeconds": 314,
+            "startLabel": "03:30",
+            "startSeconds": 210
+          }
+        ]
+      },
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "f1c137468ffdecbedf83f72ad373b981564b48d3fcde0c8f08169d91c4bb1eb0",
+        "principleId": "content-principle.version-failures-and-results.v1",
+        "relevance": "该候选原则支持呈现原判断、具体检查、试用结果与淘汰理由，而不只展示成功安装；来源时段为06:04–07:08、07:50–08:40。",
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "07:08",
+            "endSeconds": 428,
+            "startLabel": "06:04",
+            "startSeconds": 364
+          },
+          {
+            "endLabel": "08:40",
+            "endSeconds": 520,
+            "startLabel": "07:50",
+            "startSeconds": 470
+          }
+        ]
+      },
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "dc431cc9f30aa33962d2daea84fcc4d86b8202a27a3fd5309fec7002e09ebafa",
+        "principleId": "content-principle.rough-v1-solves-recurring-problem.v1",
+        "relevance": "该候选原则有助于把“值得”限定为能解决真实且重复出现的问题，而非仅因工具流行；来源时段为00:49–01:42。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "01:42",
+            "endSeconds": 102,
+            "startLabel": "00:49",
+            "startSeconds": 49
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "用户痛点明确：热度和推荐无法证明工具安全、适配或值得长期使用。",
+      "已有许可证、安全、维护、兼容性和退出成本的检查顺序，可形成可复用的判断框架。",
+      "已有隔离试用方法，能够明确区分“安装成功”和“对真实任务有增量价值”。",
+      "用户做过多个开源项目的本地审计，具备提供真实案例证据的基础。"
+    ],
+    "testableQuestion": "对同一个热门开源AI Skill，使用审计顺序和隔离试用后，能否基于可核查证据判断其在特定工作流中应采用、限制使用或放弃，并说明相对现有方案的实际增量价值？",
+    "uncertainties": [
+      "尚不清楚案例是否包含可公开引用的仓库信息、版本信息和审计证据。",
+      "尚不清楚隔离试用是否已有可比较的结果指标。",
+      "尚不清楚目标受众默认使用的操作系统、AI宿主和技术能力范围。"
+    ],
+    "viewerBenefit": "获得一套安装前筛查与隔离试用的判断方法，降低盲目安装、污染现有工作流和后续迁移的成本。",
+    "weaknesses": [
+      "现有证据只有方法摘要，尚未呈现具体Skill、审计发现、试用结果或放弃原因。",
+      "“值得安装”的判定阈值尚未明确，不同风险容忍度和工作流可能得出不同结论。",
+      "维护状态、安全性与兼容性会随版本变化，若缺少时间点和环境说明，结论容易被误读为长期事实。",
+      "若覆盖全部检查维度但缺少一个完整实例，内容可能停留在通用清单层面。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T07:43:35.968Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "2aad021127bba94951a2e5ed00a4a930444aee470a50fe11c9a3437ea03be04f",
+  "input": {
+    "audienceContext": "想使用开源AI工具但担心安全、维护成本和兼容性的普通创作者",
+    "constraints": [
+      "不得把开源说成天然安全",
+      "不得虚构项目维护状态",
+      "必须区分安装成功与真实可用"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.skill-audit",
+        "kind": "audit-method",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "已有许可证、安全、维护、兼容性和退出成本检查顺序"
+      },
+      {
+        "id": "evidence.skill-trial",
+        "kind": "local-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "隔离试用可以在不修改生产路径的情况下验证增量价值"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "已经做过多个开源项目的本地审计",
+      "开源不等于安全或适合当前工作流",
+      "真实安装前可以先做隔离试用"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "includeTrial": true,
+    "mode": "trial-opt-in",
+    "query": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "records": [
+      {
+        "contentHash": "1061d17d8249b42840f85b9ca54189a1af037094fa3394da151a8507ba96f13e",
+        "id": "content-principle.asset-survives-tomorrow.v1",
+        "namespace": "shared.content-principles",
+        "rank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "4d4b516ce32ca3950924f7da8fcf1342d2ba701f81e04f26be8f6c1e46270498",
+        "id": "content-principle.version-failures-and-results.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "status": "trial"
+      },
+      {
+        "contentHash": "78bf2447c88c2dddc7cb437fa7dc6c25ac87021efcdd9bc42650b4f4b0ba66d1",
+        "id": "content-principle.ai-generates-hypotheses-not-verdicts.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "status": "trial"
+      },
+      {
+        "contentHash": "cb0f6a3f46b9908f82c6332c8c610d620d4119cdaae48c650b49400bdfc0b7b9",
+        "id": "content-principle.production-is-not-distribution.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "da849b82ff6d9ee7c8cc3bab76d2cccba9da0e7d0d0e2ee47922274cacaf32be",
+        "id": "content-principle.rough-v1-solves-recurring-problem.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "status": "trial"
+      }
+    ],
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-principle.asset-survives-tomorrow.v1",
+    "content-principle.version-failures-and-results.v1",
+    "content-principle.ai-generates-hypotheses-not-verdicts.v1",
+    "content-principle.production-is-not-distribution.v1",
+    "content-principle.rough-v1-solves-recurring-problem.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

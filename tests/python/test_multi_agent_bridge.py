@@ -146,6 +146,13 @@ class MultiAgentBridgeTests(unittest.TestCase):
         self.assertIn("predict retention", ordinary)
         self.assertIn("Never claim visual or audio observations", ordinary)
 
+        evaluator = BRIDGE_MODULE.instructions_for_agent(
+            "agent_critique", "content-training-evaluator"
+        )
+        self.assertIn("Blindly compare", evaluator)
+        self.assertIn("Do not guess", evaluator)
+        self.assertIn("Do not draft content", evaluator)
+
         generic = BRIDGE_MODULE.instructions_for_agent("agent_critique", "blind-critic")
         self.assertEqual(generic, BRIDGE_MODULE.AGENT_INSTRUCTIONS["agent_critique"])
 
@@ -164,6 +171,11 @@ class MultiAgentBridgeTests(unittest.TestCase):
             (
                 "ordinary-viewer-critic",
                 "extract_techniques",
+                "agent_critique",
+            ),
+            (
+                "content-training-evaluator",
+                "agent_proposals",
                 "agent_critique",
             ),
         )
@@ -242,12 +254,15 @@ class MultiAgentBridgeTests(unittest.TestCase):
     def test_advisory_roles_expose_strict_structured_output_contracts(self):
         strategist_type = BRIDGE_MODULE.advisory_output_type("content-strategist")
         critic_type = BRIDGE_MODULE.advisory_output_type("ordinary-viewer-critic")
+        evaluator_type = BRIDGE_MODULE.advisory_output_type("content-training-evaluator")
 
         strategist_schema = strategist_type.model_json_schema()
         critic_schema = critic_type.model_json_schema()
+        evaluator_schema = evaluator_type.model_json_schema()
 
         self.assertFalse(strategist_schema["additionalProperties"])
         self.assertFalse(critic_schema["additionalProperties"])
+        self.assertFalse(evaluator_schema["additionalProperties"])
         self.assertEqual(
             set(strategist_schema["properties"]),
             {
@@ -277,6 +292,10 @@ class MultiAgentBridgeTests(unittest.TestCase):
                 "viewerDecision",
                 "classifications",
             },
+        )
+        self.assertEqual(
+            set(evaluator_schema["properties"]),
+            {"first", "second", "comparativeFindings", "uncertainties"},
         )
         self.assertIsNone(BRIDGE_MODULE.advisory_output_type("caption-agent"))
 

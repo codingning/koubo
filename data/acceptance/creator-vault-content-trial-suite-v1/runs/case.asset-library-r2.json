@@ -1,0 +1,34 @@
+{
+  "caseId": "case.asset-library",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.529a644299ba",
+  "trialAnalysisArtifactId": "content-strategy.9ad4060b36ff",
+  "evaluationArtifactId": "content-training-evaluation.37764836895b",
+  "priorEvaluationArtifactId": "content-training-evaluation.0c081f47b433",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 两者均未把素材数量或资产治理能力误当成Agent选材能力，也未超出既定主题。",
+    "[T+00:01] 第一份将语义召回结果与后续片段反馈缺口分阶段判断，诊断路径更利于决定下一步。",
+    "[T+00:02] 第二份同时接入基础语义检索和记录人工反馈，变量绑定会削弱因果归因，因此行动性略低。",
+    "[T+00:03] 第二份对“选对素材”的评价维度描述更具体；第一份则更明确要求获取Agent当前字段、排序逻辑及前后对照。",
+    "[T+00:04] 两者都明确承认证据只能指出能力缺口，尚不能证明语义检索或反馈闭环的优先顺序。"
+  ],
+  "uncertainties": [
+    "未提供真实失败片段、基线指标或对照结果，无法验证任一分析提出的优先路径。",
+    "固定 rubric 未规定并列高分时的进一步区分规则。",
+    "时间戳采用本次评估内的相对时间，因为输入未提供可核验的绝对时间。"
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.88e371666160",
+      "contentHash": "e828ae706d736343f28d3742655e0f12e2db32b71d05831ffdbf6fc780dd4000",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.3a4c6ba1d06c",
+      "contentHash": "2aad021127bba94951a2e5ed00a4a930444aee470a50fe11c9a3437ea03be04f",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T0] 两份分析均忠实保持锁定方向，且都清楚区分“安装成功”与“真实可用”。",
+      "[T0] 第一份对证据可复核性的要求更细，明确提出版本、检查时间、运行环境、真实任务和对照基线。",
+      "[T0] 第二份更直接要求先定义具体创作任务及评价指标，有助于操作化“值得安装”。",
+      "[T0] 第一份对时效性、风险容忍度和结论被误读为长期事实的边界说明更充分。",
+      "[T0] 两份都没有触发方向漂移、无依据结论、权限越界或泛泛不可执行等硬失败。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T0] 准确围绕安装前审计与隔离试用，未将开源等同于安全，也未虚构项目事实。问题能推动补充任务目标、评价指标和否决阈值。小幅不足是对具体版本、运行环境及对照基线的要求不如第一份完整。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T0] 准确保持既定方向，明确区分现有方法、缺失案例证据与不确定性。下一步问题具体覆盖版本、环境、对照基线和判定阈值。小幅不足是受众技术能力差异虽被识别，但尚未转化为分层适用条件。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "运行环境未提供可用的绝对时钟，因此以相对时间标记“T0”记录本次异议。",
+      "固定量表仅允许整数分，无法表达第一份在证据细化和边界说明上的轻微优势。",
+      "两份分析都尚未获得真实项目审计记录，无法评价其后续案例论证质量。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "4335039dac6e240cdf2bed576a4a52746b04283b6c38aec4f93a927074cea869",
+  "evaluatedAt": "2026-07-31T07:49:03.401Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

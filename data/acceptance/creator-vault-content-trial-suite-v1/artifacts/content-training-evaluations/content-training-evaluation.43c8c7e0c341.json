@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.020dc8876a28",
+      "contentHash": "4bd413d65db0918ac40f283b11e2bbbaeddb02a006f250684c8b6a896aa87519",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.bd3c263ae7ea",
+      "contentHash": "252618e10bc0f5efb272bf7d6759dd5d10ed3d6f3af7e24f5a1669b08cf6f3c2",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00] 两者均未偏离锁定方向，也都没有把热度、开源属性或安装成功当作价值证据。",
+      "[T+00] 第一份的测试问题要求说明安全、维护、兼容性、增量价值和退出成本依据，可核查性比第二份更强。",
+      "[T+00] 第二份将决策状态表述为“安装、继续观察、放弃”，比第一份的“安装、暂缓、放弃”差异很小，均可直接指导下一步。",
+      "[T+00] 第一份明确提出安全检查能力边界及隔离试用对生产环境的代表性限制，因此边界意识更完整。",
+      "[T+00] 第二份提出单篇或系列的条件判断，但当前证据不足以判断内容密度是否确实需要拆分。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 1,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00] 准确复述方向，清楚识别真实案例、通过标准和评价指标等证据缺口，后续问题也具有可执行性。边界意识略弱：虽考虑部署方式和环境差异，但未像第一份那样明确警告审计不能构成安全保证；关于是否拆分系列的判断也缺少内容规模证据。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00] 准确保持“是否值得安装”的核心方向；明确区分现有证据、缺失材料和不可下结论之处。问题、阈值和试用指标均能推动下一步，并特别指出基础审计不等于安全保证、隔离结果未必代表生产环境。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00] 输入未提供固定绝对时间，故使用相对评估时间标记。",
+      "[T+00] 未提供两项用户证据的原文，无法核验候选对其相关性的概括是否完整。",
+      "[T+00] 固定量表未定义1分与2分的更细锚点；第二份边界意识评分基于其缺少明确“非安全保证”声明。"
+    ],
+    "winnerVariant": "trial"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "665c868cd150ce93215476800dc44e706a2fc284693411f1f3b30deaebba1eea",
+  "evaluatedAt": "2026-07-31T07:43:57.517Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

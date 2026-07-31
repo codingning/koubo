@@ -1,0 +1,32 @@
+{
+  "caseId": "case.workbench-proof",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.079b436abca0",
+  "trialAnalysisArtifactId": "content-strategy.3655cc8ee5ed",
+  "evaluationArtifactId": "content-training-evaluation.883d1546fbcd",
+  "priorEvaluationArtifactId": "content-training-evaluation.a876787aefb5",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:02] 两者都忠实保持既定方向，未滑向功能清单或夸大自动化。",
+    "[T+00:03] 第一份更强调预先定义一个首要问题及判定标准，验证路径更集中。",
+    "[T+00:04] 第一份额外指出普通观众能否识别差异、案例是否具有代表性，适用边界略完整。",
+    "[T+00:05] 第二份对耗时、错误数和返修次数的追问具体，但“三个问题”的要求可能增加范围而不利于单一结论。"
+  ],
+  "uncertainties": [
+    "[T+00:06] 固定材料未提供各版本的实际画面、审核记录或量化数据，因此无法判断候选提出的指标最终是否可取得。",
+    "[T+00:07] 未给出分析产出的篇幅或提问数量限制，因此第二份的三问题策略是否构成实际执行负担仍有不确定性。"
+  ]
+}

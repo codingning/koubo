@@ -1,0 +1,464 @@
+{
+  "schemaVersion": 1,
+  "runId": "creator-vault-content-trial-suite-v1",
+  "suiteId": "content-strategist-vault-trial-suite.v1",
+  "suiteHash": "5fe56229299cafde8b9684159656362619274424a59a3b1ed59f7d73df30f340",
+  "server": "http://127.0.0.1:8893",
+  "startedWithRepeats": 2,
+  "concurrency": 2,
+  "reuseAnalyses": true,
+  "evaluationRevision": "v2-shared-context",
+  "runs": [
+    {
+      "caseId": "case.knowledge-bridge",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.a7be47e39825",
+      "trialAnalysisArtifactId": "content-strategy.0de4092cd225",
+      "evaluationArtifactId": "content-training-evaluation.0cd8bfc89268",
+      "priorEvaluationArtifactId": "content-training-evaluation.35b11772b42c",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "control",
+      "controlTotal": 8,
+      "trialTotal": 7,
+      "controlHardFailures": [],
+      "trialHardFailures": [
+        "unsupported_claim"
+      ],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 4,
+        "controlCitationCount": 0,
+        "correctCitations": 4,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:01] 两者都保持了既定方向，没有把知识存储状态误写成Agent能力已提升。",
+        "[T+00:02] 第二份将内容理解进一步具体化为识别问题、标注不确定性、引用证据和提出可验证判断，可执行性略强。",
+        "[T+00:03] 第一份对现有证据的表述与共享事实一致；第二份无依据地缩减为“部分已导入”，构成证据纪律缺陷。",
+        "[T+00:04] 两者都识别了检索机制、评分标准、重复测试和归因限制，也都未批准生产、发布或晋升知识。"
+      ],
+      "uncertainties": [
+        "[T+00:05] 共享材料未说明doctor检查的具体覆盖范围，因此不能据此判断语义调用质量。",
+        "[T+00:06] 尚无实际成对输出、运行日志或盲评结果，无法评价建议中的实验最终能否证明稳定提升。"
+      ]
+    },
+    {
+      "caseId": "case.knowledge-bridge",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.d4564d78c99e",
+      "trialAnalysisArtifactId": "content-strategy.84816a9a9d81",
+      "evaluationArtifactId": "content-training-evaluation.40e1a4f0de0c",
+      "priorEvaluationArtifactId": "content-training-evaluation.272be661d96f",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 4,
+        "controlCitationCount": 0,
+        "correctCitations": 4,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:01] 两份分析均未把Vault导入成功误判为Agent能力提升，也未出现无证据结论。",
+        "[T+00:02] 第一份更明确控制提示词等混杂变量，并把证据引用、边界意识、诊断质量和无依据自信纳入验证。",
+        "[T+00:03] 第二份更明确要求运行日志、配置记录、多任务或重复测试，因此实验执行步骤略具体。",
+        "[T+00:04] 两份都识别了单篇内容难以覆盖训练、接入、评测和治理的问题，且均未越权批准或发布。"
+      ],
+      "uncertainties": [
+        "固定量表未提供各分值的细化锚点，因此同为2分不表示两份分析在每个细节上完全等质。",
+        "未提供候选分析所依据的完整原始材料，无法核验其对16条原则覆盖范围的遗漏程度。",
+        "相对时间戳仅表示本次评估中的陈述顺序，不代表外部事件时间。"
+      ]
+    },
+    {
+      "caseId": "case.open-source-skill",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.88e371666160",
+      "trialAnalysisArtifactId": "content-strategy.3a4c6ba1d06c",
+      "evaluationArtifactId": "content-training-evaluation.c7db971abe7a",
+      "priorEvaluationArtifactId": "content-training-evaluation.b09b2b8a57b6",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 3,
+        "controlCitationCount": 0,
+        "correctCitations": 3,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T0] 两份分析均忠实保持锁定方向，且都清楚区分“安装成功”与“真实可用”。",
+        "[T0] 第一份对证据可复核性的要求更细，明确提出版本、检查时间、运行环境、真实任务和对照基线。",
+        "[T0] 第二份更直接要求先定义具体创作任务及评价指标，有助于操作化“值得安装”。",
+        "[T0] 第一份对时效性、风险容忍度和结论被误读为长期事实的边界说明更充分。",
+        "[T0] 两份都没有触发方向漂移、无依据结论、权限越界或泛泛不可执行等硬失败。"
+      ],
+      "uncertainties": [
+        "运行环境未提供可用的绝对时钟，因此以相对时间标记“T0”记录本次异议。",
+        "固定量表仅允许整数分，无法表达第一份在证据细化和边界说明上的轻微优势。",
+        "两份分析都尚未获得真实项目审计记录，无法评价其后续案例论证质量。"
+      ]
+    },
+    {
+      "caseId": "case.open-source-skill",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.020dc8876a28",
+      "trialAnalysisArtifactId": "content-strategy.bd3c263ae7ea",
+      "evaluationArtifactId": "content-training-evaluation.75a092d0fa09",
+      "priorEvaluationArtifactId": "content-training-evaluation.43c8c7e0c341",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "trial",
+      "controlTotal": 7,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 3,
+        "controlCitationCount": 0,
+        "correctCitations": 3,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:00] 两份分析均保持锁定方向，并明确区分“安装成功”与“真实可用”。",
+        "[T+00:01] 第一份测试问题覆盖安全、维护、兼容性、增量价值和退出成本，核查维度比第二份更完整。",
+        "[T+00:02] 第一份明确指出不能据现有材料对任何 Skill 作安全或维护结论，权限与归因边界更清晰。",
+        "[T+00:03] 第二份提出可能拆分为系列，但现有证据尚不足以判断单篇信息密度必然过高。",
+        "[T+00:04] 两份均把真实案例、判定阈值和隔离试用指标列为下一步，行动性相当。"
+      ],
+      "uncertainties": [
+        "未提供具体 Skill、审计结果或试用数据，因此无法检验两份分析框架的实际筛选能力。",
+        "固定 rubric 未定义同分时的优先规则；比较仅反映四个维度。",
+        "时间戳为本次评估内的相对时间，而非外部事件时间。"
+      ]
+    },
+    {
+      "caseId": "case.asset-library",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.74bce7c559b6",
+      "trialAnalysisArtifactId": "content-strategy.7fc37f9fb955",
+      "evaluationArtifactId": "content-training-evaluation.5f98166bc9c7",
+      "priorEvaluationArtifactId": "content-training-evaluation.1a170090f071",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 3,
+        "controlCitationCount": 0,
+        "correctCitations": 3,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T0] 两者均未把素材数量等同于Agent能力，也均未越过人工评价和真实片段验证边界。",
+        "[T0] 第二份的分步对照更能拆分语义检索与反馈闭环的独立影响，下一步决策性略强。",
+        "[T0] 第一份将错误初步分为搜不到、时机不对和实际效果不对，问题诊断路径更简洁。",
+        "[T0] 第二份更具体地要求3至5个错误案例、人工替代素材及独立对照记录，证据采集要求更可执行。",
+        "[T0] 两者都没有无证据断言主要瓶颈，且都保留了trial代表性和评价一致性的限制。"
+      ],
+      "uncertainties": [
+        "[T0] 固定 rubric 未规定同分候选如何进一步排序，因此差异仅作为同档质量比较。",
+        "[T0] 未提供真实错误案例、评估一致性或对照数据，无法验证任一候选提出的测试是否足以确定最终优先级。"
+      ]
+    },
+    {
+      "caseId": "case.asset-library",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.529a644299ba",
+      "trialAnalysisArtifactId": "content-strategy.9ad4060b36ff",
+      "evaluationArtifactId": "content-training-evaluation.37764836895b",
+      "priorEvaluationArtifactId": "content-training-evaluation.0c081f47b433",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "trial",
+      "controlTotal": 7,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 3,
+        "controlCitationCount": 0,
+        "correctCitations": 3,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:00] 两者均未把素材数量或资产治理能力误当成Agent选材能力，也未超出既定主题。",
+        "[T+00:01] 第一份将语义召回结果与后续片段反馈缺口分阶段判断，诊断路径更利于决定下一步。",
+        "[T+00:02] 第二份同时接入基础语义检索和记录人工反馈，变量绑定会削弱因果归因，因此行动性略低。",
+        "[T+00:03] 第二份对“选对素材”的评价维度描述更具体；第一份则更明确要求获取Agent当前字段、排序逻辑及前后对照。",
+        "[T+00:04] 两者都明确承认证据只能指出能力缺口，尚不能证明语义检索或反馈闭环的优先顺序。"
+      ],
+      "uncertainties": [
+        "未提供真实失败片段、基线指标或对照结果，无法验证任一分析提出的优先路径。",
+        "固定 rubric 未规定并列高分时的进一步区分规则。",
+        "时间戳采用本次评估内的相对时间，因为输入未提供可核验的绝对时间。"
+      ]
+    },
+    {
+      "caseId": "case.failure-learning",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.9208156f0c13",
+      "trialAnalysisArtifactId": "content-strategy.29aa3e5a13ae",
+      "evaluationArtifactId": "content-training-evaluation.5796fffd2615",
+      "priorEvaluationArtifactId": "content-training-evaluation.6f54b3387b3b",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 3,
+        "controlCitationCount": 0,
+        "correctCitations": 3,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:00] 第一份更明确要求检查新副作用及跨任务混杂因素，对因果归因限制的处理略完整。",
+        "[T+00:01] 第二份追问具体失败类型、否决标准及准备写入的单条经验，下一步信息采集略为直接。",
+        "[T+00:02] 第一份对经验载体提出条件化规则、案例记忆或可撤销偏好等选项，但尚未给出选择标准。",
+        "[T+00:03] 第二份的测试问题以原问题不再出现和用户审核通过为主，对潜在替代性问题或新副作用的检测不如第一份明确。",
+        "[T+00:04] 两份均严格区分已有证据、缺失证据与不确定性，且均保留用户对真实成片的最终审核边界。"
+      ],
+      "uncertainties": [
+        "[T+00:05] 未提供真实后续调用记录，因此无法评价哪份分析所设验证路径在实践中更有效。",
+        "[T+00:06] 未给出固定评测的实际时钟时间；时间戳采用本次评测内的相对时间。",
+        "[T+00:07] 两份分析质量接近，细微差异不足以支持降低任一维度评分。"
+      ]
+    },
+    {
+      "caseId": "case.failure-learning",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.fbcbe3722a3a",
+      "trialAnalysisArtifactId": "content-strategy.86869a6634bb",
+      "evaluationArtifactId": "content-training-evaluation.f0f7e405042c",
+      "priorEvaluationArtifactId": "content-training-evaluation.918faf8631e8",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 4,
+        "controlCitationCount": 0,
+        "correctCitations": 4,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[00:02] 两份分析均未偏离锁定方向，也未把Agent自评当作结果证据。",
+        "[00:03] 第一份对写回机制的行动要求更具体，包括载体、触发条件、适用边界、撤销条件及变量记录。",
+        "[00:04] 第二份更明确追问“可复用”的最低成功标准，并区分未调用、错误调用和经验无效三类失败来源。",
+        "[00:05] 第一份更强调控制其他变量和避免因果夸大；第二份更强调候选经验的修订、降级与废弃生命周期。",
+        "[00:06] 两份都正确将结论限制在单次案例与待验证状态，未出现规定的硬失败。"
+      ],
+      "uncertainties": [
+        "[00:07] 尚无后续可比任务记录，无法判断哪套问题框架在实践中更能推动有效验证。",
+        "[00:08] 未提供经验系统的实际实现方式，因此无法确认第一份提出的编码结构是否完全适配。",
+        "[00:09] 时间戳为本次评估内的相对时间标记，并非外部系统时钟。"
+      ]
+    },
+    {
+      "caseId": "case.workbench-proof",
+      "repeat": 1,
+      "controlAnalysisArtifactId": "content-strategy.079b436abca0",
+      "trialAnalysisArtifactId": "content-strategy.3655cc8ee5ed",
+      "evaluationArtifactId": "content-training-evaluation.883d1546fbcd",
+      "priorEvaluationArtifactId": "content-training-evaluation.a876787aefb5",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "trial",
+      "controlTotal": 7,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 4,
+        "controlCitationCount": 0,
+        "correctCitations": 4,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00:02] 两者都忠实保持既定方向，未滑向功能清单或夸大自动化。",
+        "[T+00:03] 第一份更强调预先定义一个首要问题及判定标准，验证路径更集中。",
+        "[T+00:04] 第一份额外指出普通观众能否识别差异、案例是否具有代表性，适用边界略完整。",
+        "[T+00:05] 第二份对耗时、错误数和返修次数的追问具体，但“三个问题”的要求可能增加范围而不利于单一结论。"
+      ],
+      "uncertainties": [
+        "[T+00:06] 固定材料未提供各版本的实际画面、审核记录或量化数据，因此无法判断候选提出的指标最终是否可取得。",
+        "[T+00:07] 未给出分析产出的篇幅或提问数量限制，因此第二份的三问题策略是否构成实际执行负担仍有不确定性。"
+      ]
+    },
+    {
+      "caseId": "case.workbench-proof",
+      "repeat": 2,
+      "controlAnalysisArtifactId": "content-strategy.ae2f4f4fb8d6",
+      "trialAnalysisArtifactId": "content-strategy.e9614dd3bfc0",
+      "evaluationArtifactId": "content-training-evaluation.e11e2fe56c9d",
+      "priorEvaluationArtifactId": "content-training-evaluation.4ded6c1522d7",
+      "evaluationRevision": "v2-shared-context",
+      "winnerVariant": "tie",
+      "controlTotal": 8,
+      "trialTotal": 8,
+      "controlHardFailures": [],
+      "trialHardFailures": [],
+      "citationAudit": {
+        "accuracy": 1,
+        "citedCount": 3,
+        "controlCitationCount": 0,
+        "correctCitations": 3,
+        "retrievedCount": 5,
+        "vaultHashesValid": true
+      },
+      "comparativeFindings": [
+        "[T+00] 两者都没有转向功能罗列，也没有声称工具可自主完成任意视频。",
+        "[T+00] 第一份更强调观众能否识别首要问题及理解人工边界；第二份更强调预先定义标准和量化结果。",
+        "[T+00] 第二份要求记录具体修改、失败与淘汰理由，比第一份更有利于解释返修链路。",
+        "[T+00] 第一份明确要求区分工作台建议、自动处理和人工审核的贡献；第二份则通过归因不确定性和操作者额外投入覆盖这一问题。",
+        "[T+00] 两者均正确限制单案例的证明范围，未将个案效果外推到任意口播。"
+      ],
+      "uncertainties": [
+        "[T+00] 未提供实际版本内容，因此无法判断候选提出的指标是否都能从现有素材取得。",
+        "[T+00] 固定量表仅允许整数分，无法表达两份分析在行动细化程度上的轻微差异。"
+      ]
+    }
+  ],
+  "summary": {
+    "schemaVersion": 1,
+    "suiteId": "content-strategist-vault-trial-suite.v1",
+    "caseCount": 5,
+    "runCount": 10,
+    "thresholds": {
+      "minimumTrialDirectionWins": 4,
+      "minimumAverageScoreDelta": 1,
+      "minimumCitationAccuracy": 0.9,
+      "minimumConsistentDirections": 4,
+      "maximumRegressions": 0
+    },
+    "results": {
+      "trialDirectionWins": 0,
+      "averageScoreDelta": 0.2,
+      "citationAccuracy": 1,
+      "consistentDirections": 1,
+      "regressions": 1
+    },
+    "byCase": [
+      {
+        "caseId": "case.knowledge-bridge",
+        "direction": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容",
+        "repeats": 2,
+        "winners": [
+          "control",
+          "tie"
+        ],
+        "averageControlScore": 8,
+        "averageTrialScore": 7.5,
+        "averageDelta": -0.5,
+        "consistent": false,
+        "regression": true,
+        "trialHardFailures": [
+          "unsupported_claim"
+        ],
+        "verdict": "regression"
+      },
+      {
+        "caseId": "case.open-source-skill",
+        "direction": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+        "repeats": 2,
+        "winners": [
+          "tie",
+          "trial"
+        ],
+        "averageControlScore": 7.5,
+        "averageTrialScore": 8,
+        "averageDelta": 0.5,
+        "consistent": false,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      },
+      {
+        "caseId": "case.asset-library",
+        "direction": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+        "repeats": 2,
+        "winners": [
+          "tie",
+          "trial"
+        ],
+        "averageControlScore": 7.5,
+        "averageTrialScore": 8,
+        "averageDelta": 0.5,
+        "consistent": false,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      },
+      {
+        "caseId": "case.failure-learning",
+        "direction": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+        "repeats": 2,
+        "winners": [
+          "tie",
+          "tie"
+        ],
+        "averageControlScore": 8,
+        "averageTrialScore": 8,
+        "averageDelta": 0,
+        "consistent": true,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      },
+      {
+        "caseId": "case.workbench-proof",
+        "direction": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+        "repeats": 2,
+        "winners": [
+          "trial",
+          "tie"
+        ],
+        "averageControlScore": 7.5,
+        "averageTrialScore": 8,
+        "averageDelta": 0.5,
+        "consistent": false,
+        "regression": false,
+        "trialHardFailures": [],
+        "verdict": "inconclusive"
+      }
+    ],
+    "passed": false,
+    "recommendation": "keep_trial_and_do_not_advance",
+    "authority": {
+      "grantsApproval": false,
+      "promotesMemory": false,
+      "changesProductionDefault": false
+    }
+  },
+  "authority": {
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "changesProductionDefault": false
+  }
+}

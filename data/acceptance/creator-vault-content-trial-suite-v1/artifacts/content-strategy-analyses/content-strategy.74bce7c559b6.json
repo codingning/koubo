@@ -1,0 +1,130 @@
+{
+  "analysis": {
+    "audience": "素材积累充足但AI剪辑选材仍不稳定的短视频创作者",
+    "directionRestatement": "分析素材总库已经具备稳定资产管理能力后，视频Agent仍无法正确选材的原因，并判断应优先补齐哪项能力，而不是继续增加素材数量。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.asset-vault",
+          "provenance": "user_provided",
+          "relevance": "支持素材库已经具备资产ID、哈希、授权与项目冻结能力，但这些能力主要解决资产治理问题。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.asset-agent-gap",
+          "provenance": "user_provided",
+          "relevance": "支持Sound Agent尚未连接Vault语义检索和真实片段反馈，构成当前选材不稳定的直接能力缺口。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "Agent选错素材的真实片段案例及错误类型标注。",
+        "trial中素材数量、任务数量和选材成功率等基线数据。",
+        "对“选对素材”的评价标准，以及人工判断是否一致。"
+      ]
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "nextQuestions": [
+      "你观察到的主要错误更接近搜不到、搜到了但时机不对，还是放入片段后效果不对？",
+      "你准备如何定义并记录一次“选对素材”？",
+      "现有trial能否提供若干真实片段及人工评价，作为改动前后的对照？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "问题聚焦于明确的系统能力断层，符合目标受众的实际困境。",
+      "已有事实支持区分“素材可管理”与“Agent会使用”。",
+      "可以形成一个可验证的优先级判断，而非泛泛讨论素材库建设。"
+    ],
+    "testableQuestion": "在固定一组真实剪辑任务中，接入Vault语义检索并加入片段效果反馈后，Agent的合适素材命中率是否显著高于仅扩大素材数量的方案？",
+    "uncertainties": [
+      "语义检索与真实片段反馈各自对结果的影响尚未拆分。",
+      "少量音效trial是否覆盖典型使用场景尚不明确。",
+      "人工评价标准能否稳定复用尚未确认。"
+    ],
+    "viewerBenefit": "理解资产管理与Agent选材能力的区别，并确定下一步应优先验证语义检索、使用决策还是片段效果反馈。",
+    "weaknesses": [
+      "“自动选对素材”尚未定义可观察的成功标准。",
+      "目前无法区分主要瓶颈是语义召回、使用时机判断，还是片段效果反馈缺失。",
+      "只有少量音效进入trial，现有结果可能不足以代表整个素材系统。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T07:44:08.105Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "7f62a37b7db55a6d38df27d64160e2de851842485cefce04a6bc2bab0c256b5a",
+  "input": {
+    "audienceContext": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+    "constraints": [
+      "不得把素材数量当成Agent能力",
+      "不得自动批准素材",
+      "不得跳过真实片段效果验证"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.asset-vault",
+        "kind": "vault-state",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "Creator Vault已经支持资产ID、哈希、授权和项目冻结"
+      },
+      {
+        "id": "evidence.asset-agent-gap",
+        "kind": "runtime-gap",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "Sound Agent尚未接入Vault语义检索和真实片段反馈"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "素材总库与项目时间线是两个系统",
+      "素材拥有稳定ID和授权证据不等于Agent知道何时使用",
+      "当前只有少量音效进入trial"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

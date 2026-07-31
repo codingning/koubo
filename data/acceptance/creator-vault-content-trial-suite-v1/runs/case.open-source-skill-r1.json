@@ -1,0 +1,34 @@
+{
+  "caseId": "case.open-source-skill",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.88e371666160",
+  "trialAnalysisArtifactId": "content-strategy.3a4c6ba1d06c",
+  "evaluationArtifactId": "content-training-evaluation.c7db971abe7a",
+  "priorEvaluationArtifactId": "content-training-evaluation.b09b2b8a57b6",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T0] 两份分析均忠实保持锁定方向，且都清楚区分“安装成功”与“真实可用”。",
+    "[T0] 第一份对证据可复核性的要求更细，明确提出版本、检查时间、运行环境、真实任务和对照基线。",
+    "[T0] 第二份更直接要求先定义具体创作任务及评价指标，有助于操作化“值得安装”。",
+    "[T0] 第一份对时效性、风险容忍度和结论被误读为长期事实的边界说明更充分。",
+    "[T0] 两份都没有触发方向漂移、无依据结论、权限越界或泛泛不可执行等硬失败。"
+  ],
+  "uncertainties": [
+    "运行环境未提供可用的绝对时钟，因此以相对时间标记“T0”记录本次异议。",
+    "固定量表仅允许整数分，无法表达第一份在证据细化和边界说明上的轻微优势。",
+    "两份分析都尚未获得真实项目审计记录，无法评价其后续案例论证质量。"
+  ]
+}

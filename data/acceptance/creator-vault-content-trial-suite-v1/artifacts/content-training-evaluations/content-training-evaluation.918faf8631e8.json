@@ -1,0 +1,84 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.fbcbe3722a3a",
+      "contentHash": "2fa78ff42f77bb6eac252b13f3dbcd340c745a04024fb58a5e4ded3e76783854",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.86869a6634bb",
+      "contentHash": "e0fa819a9538ea1dfb1ae030950ebc89bc6c4c15b6ce5aec8a74cc1d8615d20e",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+02] 两者都准确保持方向，且均未把Agent自评当作成功证据。",
+      "[T+03] 第一份对经验载体、触发条件、撤销条件和混杂变量的追问更具体，执行路径稍完整。",
+      "[T+04] 第二份对最低成功标准、经验无效与调用失败的区分更清晰，但经验写回机制不如第一份具体。",
+      "[T+05] 两者均识别单案例归因限制和后续真实成片审核需求；第一份对因果限制表述更明确。",
+      "[T+06] 两者都包含相同类型的无证据能力陈述，因此证据纪律均未获满分。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [
+          "unsupported_claim"
+        ],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 1
+        },
+        "summary": "[T+00] 准确保持既定方向，清楚区分静态复盘与经后续任务调用、验证和纠正的经验，并给出成功标准与跨任务证据问题。[T+01] 异议：同样无依据地声称输出可绑定媒体和转录哈希，并称已有失败原因与返修记录，超出了所列可用证据的明确内容。部分问题侧重观众流程，较少直接追问经验写回载体和撤销机制。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [
+          "unsupported_claim"
+        ],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 1
+        },
+        "summary": "[T+00] 紧扣“把失败转化为可调用但不自动固化的经验”，并提出经验载体、触发条件、撤销机制和跨任务验证等明确下一步。[T+01] 异议：将“真实输出可绑定媒体和转录哈希”列为优势，但给定证据未支持该能力；同时一面称已有修改项和最终结果，一面又将其具体内容列为缺失，表述略有冲突。",
+        "total": 7
+      }
+    },
+    "uncertainties": [
+      "未提供两项用户证据的原始内容，只能依据候选对证据范围的声明判断。",
+      "无法确认媒体和转录哈希能力是否存在于未展示的上下文中；按当前材料只能视为未支持。",
+      "固定量表未定义何种严重程度才触发硬失败；此处将明确的无依据能力陈述记为unsupported_claim。"
+    ],
+    "winnerVariant": "reject_both"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "c99f403d4ee1015cbec0f337f4afd448cb8f92af4b5306cbd52e1b119cebe61d",
+  "evaluatedAt": "2026-07-31T07:45:29.210Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

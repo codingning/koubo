@@ -1,0 +1,34 @@
+{
+  "caseId": "case.failure-learning",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.fbcbe3722a3a",
+  "trialAnalysisArtifactId": "content-strategy.86869a6634bb",
+  "evaluationArtifactId": "content-training-evaluation.f0f7e405042c",
+  "priorEvaluationArtifactId": "content-training-evaluation.918faf8631e8",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[00:02] 两份分析均未偏离锁定方向，也未把Agent自评当作结果证据。",
+    "[00:03] 第一份对写回机制的行动要求更具体，包括载体、触发条件、适用边界、撤销条件及变量记录。",
+    "[00:04] 第二份更明确追问“可复用”的最低成功标准，并区分未调用、错误调用和经验无效三类失败来源。",
+    "[00:05] 第一份更强调控制其他变量和避免因果夸大；第二份更强调候选经验的修订、降级与废弃生命周期。",
+    "[00:06] 两份都正确将结论限制在单次案例与待验证状态，未出现规定的硬失败。"
+  ],
+  "uncertainties": [
+    "[00:07] 尚无后续可比任务记录，无法判断哪套问题框架在实践中更能推动有效验证。",
+    "[00:08] 未提供经验系统的实际实现方式，因此无法确认第一份提出的编码结构是否完全适配。",
+    "[00:09] 时间戳为本次评估内的相对时间标记，并非外部系统时钟。"
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.ae2f4f4fb8d6",
+      "contentHash": "b24b67b8431c7f87c7a0d3a7ac88768f5600defe36d5e43d3fb3c19490d2305f",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.e9614dd3bfc0",
+      "contentHash": "df99790165826bdaf388b2251fdc6ae54d093cfc926346d7729ecab2e5f2dd26",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00] 两者都没有转向功能罗列，也没有声称工具可自主完成任意视频。",
+      "[T+00] 第一份更强调观众能否识别首要问题及理解人工边界；第二份更强调预先定义标准和量化结果。",
+      "[T+00] 第二份要求记录具体修改、失败与淘汰理由，比第一份更有利于解释返修链路。",
+      "[T+00] 第一份明确要求区分工作台建议、自动处理和人工审核的贡献；第二份则通过归因不确定性和操作者额外投入覆盖这一问题。",
+      "[T+00] 两者均正确限制单案例的证明范围，未将个案效果外推到任意口播。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00] 准确保持“用真实变化证明问题解决”的方向；清楚区分已有证据、缺失指标与归因不确定性。问题和下一步可执行，但对具体修改过程及失败原因的追问略少。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00] 准确保持原方向，并将证明要求进一步落实到预设标准、修改记录、淘汰理由和可核验结果；同时明确单案例外推和工具归因限制。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[T+00] 未提供实际版本内容，因此无法判断候选提出的指标是否都能从现有素材取得。",
+      "[T+00] 固定量表仅允许整数分，无法表达两份分析在行动细化程度上的轻微差异。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "6794e61c496f6d9c8bb4177833be1a32834c0140304f42710b8a14158187606e",
+  "evaluatedAt": "2026-07-31T07:49:57.137Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

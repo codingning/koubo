@@ -1,0 +1,33 @@
+{
+  "caseId": "case.workbench-proof",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.ae2f4f4fb8d6",
+  "trialAnalysisArtifactId": "content-strategy.e9614dd3bfc0",
+  "evaluationArtifactId": "content-training-evaluation.e11e2fe56c9d",
+  "priorEvaluationArtifactId": "content-training-evaluation.4ded6c1522d7",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00] 两者都没有转向功能罗列，也没有声称工具可自主完成任意视频。",
+    "[T+00] 第一份更强调观众能否识别首要问题及理解人工边界；第二份更强调预先定义标准和量化结果。",
+    "[T+00] 第二份要求记录具体修改、失败与淘汰理由，比第一份更有利于解释返修链路。",
+    "[T+00] 第一份明确要求区分工作台建议、自动处理和人工审核的贡献；第二份则通过归因不确定性和操作者额外投入覆盖这一问题。",
+    "[T+00] 两者均正确限制单案例的证明范围，未将个案效果外推到任意口播。"
+  ],
+  "uncertainties": [
+    "[T+00] 未提供实际版本内容，因此无法判断候选提出的指标是否都能从现有素材取得。",
+    "[T+00] 固定量表仅允许整数分，无法表达两份分析在行动细化程度上的轻微差异。"
+  ]
+}

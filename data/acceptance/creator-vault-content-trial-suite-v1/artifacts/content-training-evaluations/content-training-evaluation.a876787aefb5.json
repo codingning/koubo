@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.079b436abca0",
+      "contentHash": "5ed8e357a34c93555fa62175d6dd3531ccfc4008c8039c37ce89e1bcdef5ab8c",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.3655cc8ee5ed",
+      "contentHash": "ead619d4752422e0872902969aca863a8e21aa75130ddacc5c3694e1984b3cad",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[timestamp:not_provided] 第一份更强调先定义一个首要问题和判定标准，验证范围更集中；第二份要求列出三个问题，信息覆盖更广但可能分散首轮验证。",
+      "[timestamp:not_provided] 第一份额外质疑普通观众能否直接识别版本差异，并明确当前素材结论的适用范围，代表性审查略细。",
+      "[timestamp:not_provided] 第二份更直接把耗时、错误数量和返修次数写入可检验问题，对量化验证的表达略强。",
+      "[timestamp:not_provided] 两份均正确区分工具处理、人工返修和最终审核，没有制造效果结论或越权批准生产。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[timestamp:not_provided] 准确围绕同一素材的阶段对照验证具体改善，未转向功能介绍；系统列出缺失指标、修改原因和人机贡献归因。后续问题可执行，并明确人工决策与单案例代表性边界。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[timestamp:not_provided] 准确维持“用真实案例证明价值而非罗列功能”的方向；明确区分现有证据、缺失数据与未知项。问题聚焦一个首要问题、返修理由和核验记录，下一步清晰；同时指出人工归因、单案例代表性及适用范围限制。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "输入未提供评价发生时间，因此无法给出真实ISO时间戳。",
+      "未提供两项用户证据的原始内容，只能评价候选对所声明证据的使用方式，不能核验其摘要是否完整。",
+      "固定量表粒度较低；两份分析的细微差异不足以可靠地区分为不同整数档位。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "a1b78eeaf030895e111039d8f841ea7ce8129053ad2b3392926a072e3d17a35f",
+  "evaluatedAt": "2026-07-31T07:46:07.600Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

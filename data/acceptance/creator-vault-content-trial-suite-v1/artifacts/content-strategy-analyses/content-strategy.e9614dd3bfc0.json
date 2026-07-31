@@ -1,0 +1,233 @@
+{
+  "analysis": {
+    "audience": "对AI视频工具感兴趣、但已厌倦功能罗列和夸张宣传的普通观众。",
+    "directionRestatement": "你希望通过同一条口播从原片、样片、返修到最终输出的真实变化，证明工作台解决了具体问题，同时明确人工输入、审核和工具能力边界。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.workbench-before-after",
+          "provenance": "user_provided",
+          "relevance": "支持展示同一条口播从原片、样片、返修到最终结果的真实前后差异。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.workbench-boundary",
+          "provenance": "user_provided",
+          "relevance": "支持明确工作台依赖用户提供方向、证据和最终审核，避免一键自主剪辑的夸张表述。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "该案例开始时需要解决的一个明确问题及其判断标准。",
+        "各版本之间发生了哪些具体修改、为何修改，以及哪些方案被否决。",
+        "至少一项可核验结果，如处理耗时、返修次数、错误数量或目标观众反馈。"
+      ]
+    },
+    "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+    "nextQuestions": [
+      "这条口播在进入工作台前，最需要解决的一个具体问题是什么？",
+      "你能提供哪些可核验的前后指标，例如耗时、返修次数、错误数量或观众反馈？",
+      "样片到返修版之间，最关键的一次失败、修改及淘汰理由分别是什么？"
+    ],
+    "principleCitations": [
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "f1c137468ffdecbedf83f72ad373b981564b48d3fcde0c8f08169d91c4bb1eb0",
+        "principleId": "content-principle.version-failures-and-results.v1",
+        "relevance": "该候选原则建议展示原判断、修改、结果和淘汰理由；与现有原片、样片和返修材料直接相关（来源时段06:04–07:08、07:50–08:40），但仅作为分析参考。",
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "07:08",
+            "endSeconds": 428,
+            "startLabel": "06:04",
+            "startSeconds": 364
+          },
+          {
+            "endLabel": "08:40",
+            "endSeconds": 520,
+            "startLabel": "07:50",
+            "startSeconds": 470
+          }
+        ]
+      },
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "024b6190c25add14df14caf69521d64b1720b0e1225c7c928e28f2f5737af837",
+        "principleId": "content-principle.real-use-directs-next-version.v1",
+        "relevance": "该候选原则建议从一次真实使用、失败和具体缺口判断价值（来源时段01:42–01:59），可用于检验案例是否超越功能展示。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "01:59",
+            "endSeconds": 119,
+            "startLabel": "01:42",
+            "startSeconds": 102
+          }
+        ]
+      },
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "9da41624ae1eb7b23e2ff29efb7dade66945e1e0347cbead98062b409a04d08c",
+        "principleId": "content-principle.manual-fallback-teaches-automation.v1",
+        "relevance": "该候选原则强调展示人工兜底与重新处理（来源时段01:59–03:22），与工作台需要最终人工审核的边界一致。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "02:47",
+            "endSeconds": 167,
+            "startLabel": "01:59",
+            "startSeconds": 119
+          },
+          {
+            "endLabel": "03:22",
+            "endSeconds": 202,
+            "startLabel": "02:48",
+            "startSeconds": 168
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "已有同一素材的原片、样片、返修版本和最终输出，具备连续对比基础。",
+      "转录、语义剪辑、字幕动效和人工审核形成了可观察的实际工作流程。",
+      "主动承认工具不能一键剪好任意视频，有助于建立可信边界。",
+      "方向聚焦于解决问题的证据，而非扩大功能清单。"
+    ],
+    "testableQuestion": "在同一条真实口播中，工作台是否能在保留人工审核的前提下，按照预先定义的标准减少具体剪辑问题或返修成本？",
+    "uncertainties": [
+      "现有版本差异是否足够明显，普通观众无需专业知识也能判断。",
+      "是否保存了处理耗时、修改记录或反馈等可核验证据。",
+      "单个案例的结果是否主要来自工作台，还是来自操作者额外投入。"
+    ],
+    "viewerBenefit": "观众能依据真实前后差异和返修过程，判断这套工作台适合解决什么问题、需要多少人工参与。",
+    "weaknesses": [
+      "尚未定义这条口播在使用工作台前的具体问题及严重程度。",
+      "目前只有版本材料，缺少可核验的评价标准，例如返修次数、耗时、错误减少或信息表达改善。",
+      "尚不清楚返修是由工具失误、用户方向不清，还是审美选择引起。",
+      "单个案例能证明具体场景中的变化，但不足以证明对任意口播都有效。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T07:45:54.827Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "df99790165826bdaf388b2251fdc6ae54d093cfc926346d7729ecab2e5f2dd26",
+  "input": {
+    "audienceContext": "对AI视频工具感兴趣，但已经看腻功能列表和夸张宣传的普通观众",
+    "constraints": [
+      "不得只罗列功能",
+      "不得宣称一键自主剪辑任意视频",
+      "必须让观众看到真实前后差异"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.workbench-before-after",
+        "kind": "media-comparison",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "同一条口播可以展示原片、样片和返修结果"
+      },
+      {
+        "id": "evidence.workbench-boundary",
+        "kind": "product-boundary",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "工作台仍需要用户提供方向、证据和最终审核"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "工作台可以完成转录、语义剪辑、字幕动效和人工审核",
+      "已有原片、样片、返修版本和最终输出",
+      "工具仍不能一键剪好任意视频"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "includeTrial": true,
+    "mode": "trial-opt-in",
+    "query": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+    "records": [
+      {
+        "contentHash": "da849b82ff6d9ee7c8cc3bab76d2cccba9da0e7d0d0e2ee47922274cacaf32be",
+        "id": "content-principle.rough-v1-solves-recurring-problem.v1",
+        "namespace": "shared.content-principles",
+        "rank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "4d4b516ce32ca3950924f7da8fcf1342d2ba701f81e04f26be8f6c1e46270498",
+        "id": "content-principle.version-failures-and-results.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "status": "trial"
+      },
+      {
+        "contentHash": "ac60246b90ee4ff11c267565e98955a7d99b84ecb19010857818dad206f07a3b",
+        "id": "content-principle.learning-corrects-errors.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "status": "trial"
+      },
+      {
+        "contentHash": "2a98a4e3c5fbb2032c1bbbfadb9cac87421226b2bf20c75377d0a42a6c7b34b7",
+        "id": "content-principle.manual-fallback-teaches-automation.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f8427d87fde6e6f1afe981c6e9a308a6ece0e8c91306ecc56473a4c139198501",
+        "id": "content-principle.real-use-directs-next-version.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "status": "trial"
+      }
+    ],
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-principle.rough-v1-solves-recurring-problem.v1",
+    "content-principle.version-failures-and-results.v1",
+    "content-principle.learning-corrects-errors.v1",
+    "content-principle.manual-fallback-teaches-automation.v1",
+    "content-principle.real-use-directs-next-version.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

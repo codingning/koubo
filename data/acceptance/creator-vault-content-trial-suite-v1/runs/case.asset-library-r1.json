@@ -1,0 +1,33 @@
+{
+  "caseId": "case.asset-library",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.74bce7c559b6",
+  "trialAnalysisArtifactId": "content-strategy.7fc37f9fb955",
+  "evaluationArtifactId": "content-training-evaluation.5f98166bc9c7",
+  "priorEvaluationArtifactId": "content-training-evaluation.1a170090f071",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T0] 两者均未把素材数量等同于Agent能力，也均未越过人工评价和真实片段验证边界。",
+    "[T0] 第二份的分步对照更能拆分语义检索与反馈闭环的独立影响，下一步决策性略强。",
+    "[T0] 第一份将错误初步分为搜不到、时机不对和实际效果不对，问题诊断路径更简洁。",
+    "[T0] 第二份更具体地要求3至5个错误案例、人工替代素材及独立对照记录，证据采集要求更可执行。",
+    "[T0] 两者都没有无证据断言主要瓶颈，且都保留了trial代表性和评价一致性的限制。"
+  ],
+  "uncertainties": [
+    "[T0] 固定 rubric 未规定同分候选如何进一步排序，因此差异仅作为同档质量比较。",
+    "[T0] 未提供真实错误案例、评估一致性或对照数据，无法验证任一候选提出的测试是否足以确定最终优先级。"
+  ]
+}

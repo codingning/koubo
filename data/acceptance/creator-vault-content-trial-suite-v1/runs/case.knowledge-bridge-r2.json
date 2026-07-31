@@ -1,0 +1,33 @@
+{
+  "caseId": "case.knowledge-bridge",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.d4564d78c99e",
+  "trialAnalysisArtifactId": "content-strategy.84816a9a9d81",
+  "evaluationArtifactId": "content-training-evaluation.40e1a4f0de0c",
+  "priorEvaluationArtifactId": "content-training-evaluation.272be661d96f",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:01] 两份分析均未把Vault导入成功误判为Agent能力提升，也未出现无证据结论。",
+    "[T+00:02] 第一份更明确控制提示词等混杂变量，并把证据引用、边界意识、诊断质量和无依据自信纳入验证。",
+    "[T+00:03] 第二份更明确要求运行日志、配置记录、多任务或重复测试，因此实验执行步骤略具体。",
+    "[T+00:04] 两份都识别了单篇内容难以覆盖训练、接入、评测和治理的问题，且均未越权批准或发布。"
+  ],
+  "uncertainties": [
+    "固定量表未提供各分值的细化锚点，因此同为2分不表示两份分析在每个细节上完全等质。",
+    "未提供候选分析所依据的完整原始材料，无法核验其对16条原则覆盖范围的遗漏程度。",
+    "相对时间戳仅表示本次评估中的陈述顺序，不代表外部事件时间。"
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "caseId": "case.failure-learning",
+  "repeat": 1,
+  "controlAnalysisArtifactId": "content-strategy.9208156f0c13",
+  "trialAnalysisArtifactId": "content-strategy.29aa3e5a13ae",
+  "evaluationArtifactId": "content-training-evaluation.5796fffd2615",
+  "priorEvaluationArtifactId": "content-training-evaluation.6f54b3387b3b",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "tie",
+  "controlTotal": 8,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 第一份更明确要求检查新副作用及跨任务混杂因素，对因果归因限制的处理略完整。",
+    "[T+00:01] 第二份追问具体失败类型、否决标准及准备写入的单条经验，下一步信息采集略为直接。",
+    "[T+00:02] 第一份对经验载体提出条件化规则、案例记忆或可撤销偏好等选项，但尚未给出选择标准。",
+    "[T+00:03] 第二份的测试问题以原问题不再出现和用户审核通过为主，对潜在替代性问题或新副作用的检测不如第一份明确。",
+    "[T+00:04] 两份均严格区分已有证据、缺失证据与不确定性，且均保留用户对真实成片的最终审核边界。"
+  ],
+  "uncertainties": [
+    "[T+00:05] 未提供真实后续调用记录，因此无法评价哪份分析所设验证路径在实践中更有效。",
+    "[T+00:06] 未给出固定评测的实际时钟时间；时间戳采用本次评测内的相对时间。",
+    "[T+00:07] 两份分析质量接近，细微差异不足以支持降低任一维度评分。"
+  ]
+}

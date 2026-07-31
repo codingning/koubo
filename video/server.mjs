@@ -26,6 +26,7 @@ import {
 } from "./visual_director.mjs";
 import { createMultiAgentApi } from "./multi-agent/api.mjs";
 import { createCreatorVaultKnowledgeAdapter } from "./multi-agent/creator-vault-knowledge.mjs";
+import { createContentTrainingEvaluator } from "./multi-agent/content-training-evaluator.mjs";
 import { buildBlindReviewBundle } from "./multi-agent/evaluation.mjs";
 import { buildExpertKnowledgeLibrary } from "./multi-agent/expert-knowledge-library.mjs";
 import { canonicalJson, contentHash, loadAgentProfiles, validateLibrary } from "./multi-agent/contracts.mjs";
@@ -4966,6 +4967,12 @@ const multiAgentOrdinaryViewerCritic = createOrdinaryViewerCritic({
     agentId: "ordinary-viewer-critic",
   }),
 });
+const multiAgentContentTrainingEvaluator = createContentTrainingEvaluator({
+  invokeAgent: request => invokeMultiAgentBridge({
+    ...request,
+    agentId: "content-training-evaluator",
+  }),
+});
 
 const multiAgentOrchestrator = createOrchestrator({
   invokeAgent: invokeMultiAgentBridge,
@@ -5185,6 +5192,7 @@ const multiAgentApi = createMultiAgentApi({
   },
   contentPrinciples: multiAgentContentPrinciples,
   retrieveContentKnowledge: input => creatorVaultKnowledge.retrieve(input),
+  contentTrainingEvaluator: multiAgentContentTrainingEvaluator,
   ordinaryViewerCritic: multiAgentOrdinaryViewerCritic,
   buildBlindReviewBundle,
   createWorkspaceEvidence: createWorkspaceEvidenceSnapshot,

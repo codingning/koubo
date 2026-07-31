@@ -1,0 +1,132 @@
+{
+  "analysis": {
+    "audience": "想使用开源AI工具，但担心安全风险、维护成本和工作流兼容性的普通创作者。",
+    "directionRestatement": "分析普通创作者如何在安装热门开源AI Skill前，从安全、维护、兼容性、实际价值与退出成本等方面做出判断，并区分“安装成功”和“真实可用”。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.skill-audit",
+          "provenance": "user_provided",
+          "relevance": "支持从许可证、安全、维护、兼容性和退出成本进行安装前审计的分析框架。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.skill-trial",
+          "provenance": "user_provided",
+          "relevance": "支持通过隔离试用验证增量价值，并避免直接修改生产工作流。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "至少一个经过脱敏的真实审计案例，包括发现的问题与最终是否安装的决定。",
+        "各检查维度的最低通过标准或停止条件，以便把方法转化为可重复判断。",
+        "隔离试用中用于区分“能够运行”和“对真实工作流有增量价值”的评价指标。"
+      ]
+    },
+    "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "nextQuestions": [
+      "你能否提供一个脱敏的真实项目审计案例，以及最终安装、观察或放弃的决定？",
+      "哪些问题属于一票否决项，哪些问题可以通过隔离试用继续验证？",
+      "你通常用哪些可观察指标判断一个Skill不只是安装成功，而是真的改善了工作流？"
+    ],
+    "principleCitations": [],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "问题具体且贴近热门开源AI工具的实际采用决策。",
+      "已有明确的审计顺序，可以支撑结构化判断，而非依赖推荐热度。",
+      "隔离试用为验证真实增量价值提供了低风险路径。",
+      "方向主动纠正“开源天然安全”和“安装成功等于可用”两类常见误区。"
+    ],
+    "testableQuestion": "普通创作者使用这套安装前审计与隔离试用方法后，能否在不接入生产工作流的前提下，明确判断一个热门开源AI Skill应当安装、继续观察还是放弃？",
+    "uncertainties": [
+      "尚不清楚目标受众主要使用哪些宿主工具、操作系统或部署方式。",
+      "尚不清楚该方法是否只适用于本地安装，还是也覆盖云端或混合部署。",
+      "如果真实案例与判定阈值得到补充，单篇即可成立；若需分别覆盖安全审计、兼容测试和价值验证，再考虑拆分为系列。"
+    ],
+    "viewerBenefit": "获得一套安装前判断与隔离验证方法，减少因跟风安装造成的安全风险、时间浪费和工作流破坏。",
+    "weaknesses": [
+      "“值得安装”的判定阈值尚未明确，可能导致结论仍偏主观。",
+      "缺少具体审计案例或结果，暂时难以证明这套方法能筛掉哪些风险项目。",
+      "不同操作系统、AI工具宿主和创作者工作流的兼容性差异较大，单一判断方法可能无法覆盖所有情境。",
+      "安全、维护、兼容性、价值和退出成本五个维度较多，若全部展开，单篇内容可能信息密度过高。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T07:43:30.405Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "4bd413d65db0918ac40f283b11e2bbbaeddb02a006f250684c8b6a896aa87519",
+  "input": {
+    "audienceContext": "想使用开源AI工具但担心安全、维护成本和兼容性的普通创作者",
+    "constraints": [
+      "不得把开源说成天然安全",
+      "不得虚构项目维护状态",
+      "必须区分安装成功与真实可用"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.skill-audit",
+        "kind": "audit-method",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "已有许可证、安全、维护、兼容性和退出成本检查顺序"
+      },
+      {
+        "id": "evidence.skill-trial",
+        "kind": "local-trial",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "隔离试用可以在不修改生产路径的情况下验证增量价值"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "已经做过多个开源项目的本地审计",
+      "开源不等于安全或适合当前工作流",
+      "真实安装前可以先做隔离试用"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "includeTrial": false,
+    "mode": "explicit-control",
+    "query": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+    "records": [],
+    "source": "none",
+    "topK": 0
+  },
+  "principleIds": [],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

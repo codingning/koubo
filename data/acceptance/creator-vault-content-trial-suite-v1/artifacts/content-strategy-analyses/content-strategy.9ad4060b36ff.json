@@ -1,0 +1,234 @@
+{
+  "analysis": {
+    "audience": "已经积累大量素材、但AI剪辑选材仍不稳定的短视频创作者",
+    "directionRestatement": "分析素材库基础设施已经建立后，视频Agent仍无法稳定选对素材的原因，并判断应优先验证语义检索、使用规则还是片段反馈闭环。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.asset-vault",
+          "provenance": "user_provided",
+          "relevance": "支持素材库已经具备稳定身份、授权与冻结能力，但这些能力本身不等于Agent能够判断使用时机。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.asset-agent-gap",
+          "provenance": "user_provided",
+          "relevance": "直接支持当前存在语义检索和真实片段反馈缺口，可作为优先验证对象。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "至少3至5个真实片段中的选材失败记录，包括输入语境、Agent候选、人工选择及选择理由。",
+        "Agent当前能够读取的时间线信息、检索字段和排序逻辑。",
+        "可衡量的选材成功标准，例如候选召回率、人工替换率或片段效果盲评结果。",
+        "接入语义检索前后或加入真实片段反馈前后的对照结果。"
+      ]
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "nextQuestions": [
+      "能否提供3个Agent选错素材的真实片段，并说明人工最终为何改选？",
+      "Agent目前能读取哪些时间线语境，又依据哪些字段检索和排序素材？",
+      "你准备用什么指标判断“选对了”，例如人工替换率、盲评结果还是发布后表现？"
+    ],
+    "principleCitations": [
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "27a6a4c359bbb86c15a1db4ba6ed94b175a3363bd9233aa0d85bd7268a3c9797",
+        "principleId": "content-principle.ai-generates-hypotheses-not-verdicts.v1",
+        "relevance": "当前只能把语义检索或反馈缺失视为待验证原因，不能直接裁定为平台或Agent规律。",
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "05:14",
+            "endSeconds": 314,
+            "startLabel": "03:30",
+            "startSeconds": 210
+          }
+        ]
+      },
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "9da41624ae1eb7b23e2ff29efb7dade66945e1e0347cbead98062b409a04d08c",
+        "principleId": "content-principle.manual-fallback-teaches-automation.v1",
+        "relevance": "真实失败案例、人工选材理由和验证结果可用于识别哪些判断能够被重新编码进系统；该原则仅作为试行中的建议候选。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "02:47",
+            "endSeconds": 167,
+            "startLabel": "01:59",
+            "startSeconds": 119
+          },
+          {
+            "endLabel": "03:22",
+            "endSeconds": 202,
+            "startLabel": "02:48",
+            "startSeconds": 168
+          }
+        ]
+      },
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "d053610f8a4e0d59e8a90d4d4d38b5b6a5ab523765d36c0e4b0314233be31aa8",
+        "principleId": "content-principle.asset-survives-tomorrow.v1",
+        "relevance": "有助于区分可复用资产基础与可复用选材决策能力，但不能据此假定资产化已经完成Agent训练。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "00:23",
+            "endSeconds": 23,
+            "startLabel": "00:00",
+            "startSeconds": 0
+          },
+          {
+            "endLabel": "06:06",
+            "endSeconds": 366,
+            "startLabel": "04:53",
+            "startSeconds": 293
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "问题具体，明确区分了素材总库与Agent选材能力。",
+      "已有稳定资产ID、哈希、授权和项目冻结能力，可以排除部分资产治理问题。",
+      "语义检索和真实片段反馈尚未接入，形成了可检验的系统缺口。",
+      "适合用真实选材案例呈现失败、人工判断与改进结果，而非泛泛讨论素材数量。"
+    ],
+    "testableQuestion": "在同一组真实片段上，先让Agent基于时间线语境从Vault召回并排序候选素材，是否能显著降低人工替换率；若不能，错误是否主要集中在缺少片段效果反馈？",
+    "uncertainties": [
+      "语义检索缺失是否是首要瓶颈，尚未经过对照验证。",
+      "真实片段反馈应作用于召回、排序还是最终批准环节，目前不明确。",
+      "少量trial音效是否足以覆盖目标视频类型和语境，尚不确定。"
+    ],
+    "viewerBenefit": "理解“资产可管理”与“Agent会选用”的差距，并获得一个可验证的优先排查方向。",
+    "weaknesses": [
+      "目前没有具体错误片段，无法判断主要问题是召回不到、排序错误、上下文理解不足，还是效果验证缺失。",
+      "“先解决什么”仍缺少成功指标，无法比较语义检索与反馈闭环的优先级。",
+      "当前只有少量音效进入trial，样本覆盖可能不足以支持稳定结论。",
+      "素材总库与项目时间线分离，Agent是否能读取片段语境尚不明确。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T07:44:23.281Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "6971b1be793af79661ac516a16ea577f827efbd9d830df9d6298cb51839edb1c",
+  "input": {
+    "audienceContext": "已经收集很多素材，但AI剪辑结果仍不稳定的短视频创作者",
+    "constraints": [
+      "不得把素材数量当成Agent能力",
+      "不得自动批准素材",
+      "不得跳过真实片段效果验证"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.asset-vault",
+        "kind": "vault-state",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "Creator Vault已经支持资产ID、哈希、授权和项目冻结"
+      },
+      {
+        "id": "evidence.asset-agent-gap",
+        "kind": "runtime-gap",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "Sound Agent尚未接入Vault语义检索和真实片段反馈"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "素材总库与项目时间线是两个系统",
+      "素材拥有稳定ID和授权证据不等于Agent知道何时使用",
+      "当前只有少量音效进入trial"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "includeTrial": true,
+    "mode": "trial-opt-in",
+    "query": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+    "records": [
+      {
+        "contentHash": "9cfb06df97975b02ac0a91a4f6a7a0c65097af6e5790d0e0eb25f6a0ed8fc123",
+        "id": "content-principle.verifiable-history-builds-trust.v1",
+        "namespace": "shared.content-principles",
+        "rank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "78bf2447c88c2dddc7cb437fa7dc6c25ac87021efcdd9bc42650b4f4b0ba66d1",
+        "id": "content-principle.ai-generates-hypotheses-not-verdicts.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "status": "trial"
+      },
+      {
+        "contentHash": "1061d17d8249b42840f85b9ca54189a1af037094fa3394da151a8507ba96f13e",
+        "id": "content-principle.asset-survives-tomorrow.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "status": "trial"
+      },
+      {
+        "contentHash": "2a98a4e3c5fbb2032c1bbbfadb9cac87421226b2bf20c75377d0a42a6c7b34b7",
+        "id": "content-principle.manual-fallback-teaches-automation.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "cb0f6a3f46b9908f82c6332c8c610d620d4119cdaae48c650b49400bdfc0b7b9",
+        "id": "content-principle.production-is-not-distribution.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "status": "trial"
+      }
+    ],
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-principle.verifiable-history-builds-trust.v1",
+    "content-principle.ai-generates-hypotheses-not-verdicts.v1",
+    "content-principle.asset-survives-tomorrow.v1",
+    "content-principle.manual-fallback-teaches-automation.v1",
+    "content-principle.production-is-not-distribution.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

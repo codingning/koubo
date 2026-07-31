@@ -1,0 +1,233 @@
+{
+  "analysis": {
+    "audience": "反复让AI返修视频、却持续遇到同类问题的创作者。",
+    "directionRestatement": "你希望分析一次真实的口播视频返修失败，判断怎样将失败原因、人工纠正与验证结果编码为Agent下次可调用但不会自动晋升为长期规则的经验。",
+    "evidence": {
+      "available": [
+        {
+          "id": "evidence.failure-version",
+          "provenance": "user_provided",
+          "relevance": "支持精确展示失败版本、具体修改与最终结果之间的区别。",
+          "sourceId": "user-provided-1"
+        },
+        {
+          "id": "evidence.failure-review",
+          "provenance": "user_provided",
+          "relevance": "支持由用户依据真实成片进行结果审核并保留整体否决权。",
+          "sourceId": "user-provided-2"
+        }
+      ],
+      "missing": [
+        "一次后续同类任务中，Agent实际调用该经验的记录。",
+        "调用前后基于同一审核标准的结果对比，包括是否再次出现原问题。",
+        "经验的适用条件、禁止泛化范围、人工兜底触发条件及撤销机制。"
+      ]
+    },
+    "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "nextQuestions": [
+      "这次返修失败的具体问题是什么，用户依据什么标准否决了成片？",
+      "你准备把哪一条纠正经验写入Agent，它的适用条件和禁止泛化范围分别是什么？",
+      "是否已有下一次同类任务可用于验证调用记录和用户审核结果？"
+    ],
+    "principleCitations": [
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "f1c137468ffdecbedf83f72ad373b981564b48d3fcde0c8f08169d91c4bb1eb0",
+        "principleId": "content-principle.version-failures-and-results.v1",
+        "relevance": "作为咨询性候选原则，其来源片段06:04–07:08、07:50–08:40支持检查原判断、修改、结果和淘汰理由是否完整保留。",
+        "sourceVideoId": "7665371144572177700",
+        "timecodes": [
+          {
+            "endLabel": "07:08",
+            "endSeconds": 428,
+            "startLabel": "06:04",
+            "startSeconds": 364
+          },
+          {
+            "endLabel": "08:40",
+            "endSeconds": 520,
+            "startLabel": "07:50",
+            "startSeconds": 470
+          }
+        ]
+      },
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "9da41624ae1eb7b23e2ff29efb7dade66945e1e0347cbead98062b409a04d08c",
+        "principleId": "content-principle.manual-fallback-teaches-automation.v1",
+        "relevance": "作为咨询性候选原则，其来源片段01:59–03:22支持关注人工走通正确过程后如何写回系统，同时保留人工兜底。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "02:47",
+            "endSeconds": 167,
+            "startLabel": "01:59",
+            "startSeconds": 119
+          },
+          {
+            "endLabel": "03:22",
+            "endSeconds": 202,
+            "startLabel": "02:48",
+            "startSeconds": 168
+          }
+        ]
+      },
+      {
+        "authority": "advisory_candidate_only",
+        "contentHash": "024b6190c25add14df14caf69521d64b1720b0e1225c7c928e28f2f5737af837",
+        "principleId": "content-principle.real-use-directs-next-version.v1",
+        "relevance": "作为咨询性候选原则，其来源片段01:42–01:59支持先验证一次真实调用、一次失败和具体缺口，再讨论扩展。",
+        "sourceVideoId": "7665003502212582683",
+        "timecodes": [
+          {
+            "endLabel": "01:59",
+            "endSeconds": 119,
+            "startLabel": "01:42",
+            "startSeconds": 102
+          }
+        ]
+      }
+    ],
+    "recommendation": "single_piece",
+    "schemaVersion": 1,
+    "scriptGate": {
+      "mayHandOffToScriptAgent": false,
+      "reason": "awaiting_user_confirmation",
+      "strategistMayDraft": false
+    },
+    "status": "needs_evidence",
+    "strengths": [
+      "方向聚焦于一次真实失败及其后续复用，问题具体。",
+      "现有版本记录能够区分失败版本、修改项和最终结果，为追踪经验来源提供基础。",
+      "人工拥有最终否决权，符合不得用Agent自评替代用户结果审核的约束。",
+      "媒体与转录哈希可绑定真实输出，有助于避免经验与样本脱节。"
+    ],
+    "testableQuestion": "把本次失败转成带有适用条件和人工审核门槛的Agent经验后，在下一次同类口播返修中，原问题是否不再出现，并且最终成片能否通过用户审核？",
+    "uncertainties": [
+      "尚不清楚失败属于判断错误、执行错误、上下文缺失还是审核标准未编码。",
+      "尚不清楚可复用经验将以何种可调用形式保存。",
+      "若后续积累多个不同失败类型及复测结果，可发展为系列；目前只足以支持单案例分析。"
+    ],
+    "viewerBenefit": "学会区分“保存复盘”与“形成可验证的Agent经验”，减少同类返修问题重复发生。",
+    "weaknesses": [
+      "尚无证据说明哪条经验已经在下一次同类任务中被调用并改善结果。",
+      "尚未定义从失败记录到可调用经验的转换标准、适用边界和失效条件。",
+      "单次成功不得自动晋升为长期规则，因此当前材料不足以证明经验具有稳定复用价值。",
+      "若缺少返修前后可比较的用户审核结果，内容容易停留在流程描述，而非有效性验证。"
+    ]
+  },
+  "analyzedAt": "2026-07-31T07:45:02.963Z",
+  "authority": {
+    "directionOwner": "user",
+    "grantsApproval": false,
+    "mutatesContent": false,
+    "mutatesJob": false,
+    "promotesMemory": false,
+    "publishes": false,
+    "strategistMayDraft": false
+  },
+  "contentHash": "839133cd3faaec0823012f4e6a1973e0c777af750d1d3f2b50ae5289e7144dbc",
+  "input": {
+    "audienceContext": "反复让AI返修视频但同类问题仍会再次出现的创作者",
+    "constraints": [
+      "不得隐藏失败版本",
+      "不得把相关性说成因果",
+      "不得用Agent自评代替用户结果审核"
+    ],
+    "directionAuthority": {
+      "owner": "user",
+      "source": "explicit_user_direction",
+      "strategistMayNarrowOrSplit": true,
+      "strategistMayRecommendDeferralOrAbandonment": true,
+      "strategistMayReplace": false
+    },
+    "evidence": [
+      {
+        "id": "evidence.failure-version",
+        "kind": "version-history",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-1",
+        "summary": "失败版本、修改项和最终结果可以被精确区分"
+      },
+      {
+        "id": "evidence.failure-review",
+        "kind": "human-review",
+        "provenance": "user_provided",
+        "sourceId": "user-provided-2",
+        "summary": "用户只审核真实成片效果并可整体否决"
+      }
+    ],
+    "interviewAnswers": [],
+    "interviewPolicy": {
+      "analyzeBeforeDrafting": true,
+      "maxNextQuestions": 3
+    },
+    "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "schemaVersion": 1,
+    "stage": "direction_analysis",
+    "userConfirmation": {
+      "analysisApproved": false,
+      "confirmedDirection": null
+    },
+    "userFacts": [
+      "项目保留版本、失败原因和返修记录",
+      "Agent不得把一次成功自动晋升为长期规则",
+      "真实输出可以绑定媒体和转录哈希"
+    ]
+  },
+  "kind": "content_strategy_analysis",
+  "knowledgeContext": {
+    "agentId": "content-strategist",
+    "includeTrial": true,
+    "mode": "trial-opt-in",
+    "query": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+    "records": [
+      {
+        "contentHash": "4d4b516ce32ca3950924f7da8fcf1342d2ba701f81e04f26be8f6c1e46270498",
+        "id": "content-principle.version-failures-and-results.v1",
+        "namespace": "shared.content-principles",
+        "rank": 1,
+        "status": "trial"
+      },
+      {
+        "contentHash": "9cfb06df97975b02ac0a91a4f6a7a0c65097af6e5790d0e0eb25f6a0ed8fc123",
+        "id": "content-principle.verifiable-history-builds-trust.v1",
+        "namespace": "shared.content-principles",
+        "rank": 2,
+        "status": "trial"
+      },
+      {
+        "contentHash": "1061d17d8249b42840f85b9ca54189a1af037094fa3394da151a8507ba96f13e",
+        "id": "content-principle.asset-survives-tomorrow.v1",
+        "namespace": "shared.content-principles",
+        "rank": 3,
+        "status": "trial"
+      },
+      {
+        "contentHash": "2a98a4e3c5fbb2032c1bbbfadb9cac87421226b2bf20c75377d0a42a6c7b34b7",
+        "id": "content-principle.manual-fallback-teaches-automation.v1",
+        "namespace": "shared.content-principles",
+        "rank": 4,
+        "status": "trial"
+      },
+      {
+        "contentHash": "f8427d87fde6e6f1afe981c6e9a308a6ece0e8c91306ecc56473a4c139198501",
+        "id": "content-principle.real-use-directs-next-version.v1",
+        "namespace": "shared.content-principles",
+        "rank": 5,
+        "status": "trial"
+      }
+    ],
+    "source": "creator-vault",
+    "topK": 5
+  },
+  "principleIds": [
+    "content-principle.version-failures-and-results.v1",
+    "content-principle.verifiable-history-builds-trust.v1",
+    "content-principle.asset-survives-tomorrow.v1",
+    "content-principle.manual-fallback-teaches-automation.v1",
+    "content-principle.real-use-directs-next-version.v1"
+  ],
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

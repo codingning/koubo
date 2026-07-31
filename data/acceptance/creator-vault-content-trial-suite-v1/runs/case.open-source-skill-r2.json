@@ -1,0 +1,34 @@
+{
+  "caseId": "case.open-source-skill",
+  "repeat": 2,
+  "controlAnalysisArtifactId": "content-strategy.020dc8876a28",
+  "trialAnalysisArtifactId": "content-strategy.bd3c263ae7ea",
+  "evaluationArtifactId": "content-training-evaluation.75a092d0fa09",
+  "priorEvaluationArtifactId": "content-training-evaluation.43c8c7e0c341",
+  "evaluationRevision": "v2-shared-context",
+  "winnerVariant": "trial",
+  "controlTotal": 7,
+  "trialTotal": 8,
+  "controlHardFailures": [],
+  "trialHardFailures": [],
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "comparativeFindings": [
+    "[T+00:00] 两份分析均保持锁定方向，并明确区分“安装成功”与“真实可用”。",
+    "[T+00:01] 第一份测试问题覆盖安全、维护、兼容性、增量价值和退出成本，核查维度比第二份更完整。",
+    "[T+00:02] 第一份明确指出不能据现有材料对任何 Skill 作安全或维护结论，权限与归因边界更清晰。",
+    "[T+00:03] 第二份提出可能拆分为系列，但现有证据尚不足以判断单篇信息密度必然过高。",
+    "[T+00:04] 两份均把真实案例、判定阈值和隔离试用指标列为下一步，行动性相当。"
+  ],
+  "uncertainties": [
+    "未提供具体 Skill、审计结果或试用数据，因此无法检验两份分析框架的实际筛选能力。",
+    "固定 rubric 未定义同分时的优先规则；比较仅反映四个维度。",
+    "时间戳为本次评估内的相对时间，而非外部事件时间。"
+  ]
+}

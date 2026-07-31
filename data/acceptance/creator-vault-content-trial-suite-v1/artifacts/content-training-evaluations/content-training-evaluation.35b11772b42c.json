@@ -1,0 +1,83 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.a7be47e39825",
+      "contentHash": "5d40b3573f644d8819d562cb55d93b596ecbda66064bcabb1cfbd217a0ea35f4",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.0de4092cd225",
+      "contentHash": "08aa97ee8d285ee86f410fa1f347f0f2f05856495f17fa951e366f9847d08f09",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[T+00:00] 两者都准确区分了“知识已存储”和“Agent能力已提升”，没有偏离锁定方向。",
+      "[T+00:01] 第二份对调用机制、原则采用或拒绝的审计以及盲评配置描述更具体，归因设计略完整。",
+      "[T+00:02] 第一份存在更明显的内部冲突：一面宣称已有运行审计，一面又将运行记录列为缺失。",
+      "[T+00:03] 第二份同样加入了证据清单未明确提供的时间码、转录哈希及默认读取状态，因此不能获得满分证据纪律。",
+      "[T+00:04] 两者均识别了任务匹配、重复测试、主观评分及单篇范围过大的边界问题。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [
+          "unsupported_claim"
+        ],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 1
+        },
+        "summary": "紧扣既定方向，并提出指标、成对输出、运行记录和盲评等可执行步骤。主要问题是把“运行审计”列为现有优势，同时又将运行记录列为缺失证据，形成内部矛盾；“16条原则完成导入”也与另一分析所述“仅部分导入”存在待核实冲突。",
+        "total": 7
+      },
+      "trial": {
+        "hardFailures": [
+          "unsupported_claim"
+        ],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 1
+        },
+        "summary": "准确保持实验验证方向，对运行时调用、盲评、审计和归因限制的处理更具体。主要问题是声称已有“来源时间码和转录哈希”，但所列可用证据未明确支持这些细节；“生产Agent尚未默认读取”也比现有证据能够直接证明的范围更强。",
+        "total": 7
+      }
+    },
+    "uncertainties": [
+      "[T+00:05] 未提供两项user_provided证据的原文，无法判断“全部导入”还是“部分导入”哪种表述准确。",
+      "[T+00:06] 无法确认时间码、转录哈希、doctor检查范围及生产Agent默认配置是否存在于未展示的上下文中。"
+    ],
+    "winnerVariant": "reject_both"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "78443c5f3dde0077265ccb8a9e09bdc24507635338cd0853337dfc07822194d4",
+  "evaluatedAt": "2026-07-31T07:43:09.426Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

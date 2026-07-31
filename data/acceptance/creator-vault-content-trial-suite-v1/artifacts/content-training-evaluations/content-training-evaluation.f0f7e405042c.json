@@ -1,0 +1,80 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.fbcbe3722a3a",
+      "contentHash": "2fa78ff42f77bb6eac252b13f3dbcd340c745a04024fb58a5e4ded3e76783854",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.86869a6634bb",
+      "contentHash": "e0fa819a9538ea1dfb1ae030950ebc89bc6c4c15b6ce5aec8a74cc1d8615d20e",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "[00:02] 两份分析均未偏离锁定方向，也未把Agent自评当作结果证据。",
+      "[00:03] 第一份对写回机制的行动要求更具体，包括载体、触发条件、适用边界、撤销条件及变量记录。",
+      "[00:04] 第二份更明确追问“可复用”的最低成功标准，并区分未调用、错误调用和经验无效三类失败来源。",
+      "[00:05] 第一份更强调控制其他变量和避免因果夸大；第二份更强调候选经验的修订、降级与废弃生命周期。",
+      "[00:06] 两份都正确将结论限制在单次案例与待验证状态，未出现规定的硬失败。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[00:01] 准确保持方向，清楚区分现有证据、跨任务验证缺口和候选经验的修订或废弃条件。 objection：下一步问题更偏成功标准与观众流程，较少直接追问经验写回载体、触发机制和冲突处理，因此执行路径略弱于第一份。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[00:00] 准确锁定“从复盘到可调用经验”的方向，并具体要求经验载体、触发条件、适用边界、撤销条件及后续真实任务验证。 objection：部分缺失项预设了经验单元的编码结构，虽可执行，但未必适用于所有实现机制。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "[00:07] 尚无后续可比任务记录，无法判断哪套问题框架在实践中更能推动有效验证。",
+      "[00:08] 未提供经验系统的实际实现方式，因此无法确认第一份提出的编码结构是否完全适配。",
+      "[00:09] 时间戳为本次评估内的相对时间标记，并非外部系统时钟。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 4,
+    "controlCitationCount": 0,
+    "correctCitations": 4,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "f8f5652758a33d6af6cbd65baca1db0a0e91711f6d143ca23fc1e519470ed930",
+  "evaluatedAt": "2026-07-31T07:49:40.264Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

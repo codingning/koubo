@@ -56,10 +56,18 @@ ROLE_INSTRUCTIONS = {
         "promote memory. Never claim visual or audio observations beyond the declared inspection "
         "mode and supplied frame evidence."
     ),
+    "content-training-evaluator": (
+        "Blindly compare the two supplied Content Strategist analyses using only the fixed "
+        "four-dimension rubric. Do not guess which candidate used a knowledge base, trial "
+        "memory, a specific Agent, or a particular experiment group. Score each dimension "
+        "from 0 to 2, use only the declared hard-failure values, and explain concrete "
+        "differences. Do not draft content, approve production, publish, or promote memory."
+    ),
 }
 ROLE_OPERATIONS = {
     "content-strategist": "agent_proposals",
     "ordinary-viewer-critic": "agent_critique",
+    "content-training-evaluator": "agent_critique",
 }
 SENSITIVE_KEYS = {
     "apikey",
@@ -284,6 +292,34 @@ def advisory_output_type(agent_id: str) -> type[Any] | None:
             }
         )
         return ContentStrategistOutput
+
+    if agent_id == "content-training-evaluator":
+        class TrainingCandidateScore(StrictOutput):
+            directionUnderstanding: int = Field(ge=0, le=2)
+            evidenceDiscipline: int = Field(ge=0, le=2)
+            actionability: int = Field(ge=0, le=2)
+            boundaryAwareness: int = Field(ge=0, le=2)
+            hardFailures: list[Literal[
+                "direction_drift",
+                "unsupported_claim",
+                "authority_overreach",
+                "generic_non_actionable",
+            ]]
+            summary: str
+
+        class ContentTrainingEvaluationOutput(StrictOutput):
+            first: TrainingCandidateScore
+            second: TrainingCandidateScore
+            comparativeFindings: list[str] = Field(min_length=2, max_length=6)
+            uncertainties: list[str] = Field(max_length=5)
+
+        ContentTrainingEvaluationOutput.model_rebuild(
+            _types_namespace={
+                "TrainingCandidateScore": TrainingCandidateScore,
+                "Literal": Literal,
+            }
+        )
+        return ContentTrainingEvaluationOutput
 
     class OrdinaryViewerBlocker(StrictOutput):
         issue: str

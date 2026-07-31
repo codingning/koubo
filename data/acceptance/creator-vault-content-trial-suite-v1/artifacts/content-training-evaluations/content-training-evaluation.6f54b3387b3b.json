@@ -1,0 +1,79 @@
+{
+  "analyses": {
+    "left": {
+      "artifactId": "content-strategy.9208156f0c13",
+      "contentHash": "ee28990aefea175160364b64ad7e7d46a9d61c612a235a2e8d9cf66458b20d29",
+      "variant": "control"
+    },
+    "right": {
+      "artifactId": "content-strategy.29aa3e5a13ae",
+      "contentHash": "839133cd3faaec0823012f4e6a1973e0c777af750d1d3f2b50ae5289e7144dbc",
+      "variant": "trial"
+    }
+  },
+  "authority": {
+    "changesProductionDefault": false,
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "publishes": false
+  },
+  "blindEvaluation": {
+    "comparativeFindings": [
+      "两者都明确指出现有材料只能追踪失败，不能证明经验已被调用或产生稳定改善。",
+      "第一份更强调来源追踪、跨任务可比性、撤销条件和避免把相关性误述为因果。",
+      "第二份的追问更具操作顺序：先明确失败与否决标准，再定义经验及禁止泛化范围，最后安排复测。",
+      "第一份测试问题纳入“不引入新的明显问题”，有效性标准更完整；第二份则更直接绑定原问题复发和用户审核。",
+      "两者均尊重人工整体否决权，未以Agent自评替代真实成片审核，也未越权批准生产或固化经验。"
+    ],
+    "dimensions": [
+      "directionUnderstanding",
+      "evidenceDiscipline",
+      "actionability",
+      "boundaryAwareness"
+    ],
+    "rubricId": "content-strategy-training-ab-v1",
+    "scoresByVariant": {
+      "control": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确锁定“失败如何转化为可调用、可验证且可撤销的经验”，并清楚区分现有证据与跨任务验证缺口。异议：下一步问题偏向先确定经验载体，尚未优先补齐具体失败类型及用户否决标准。",
+        "total": 8
+      },
+      "trial": {
+        "hardFailures": [],
+        "scores": {
+          "actionability": 2,
+          "boundaryAwareness": 2,
+          "directionUnderstanding": 2,
+          "evidenceDiscipline": 2
+        },
+        "summary": "[T+00:00] 准确保持既定方向，问题顺序从具体失败、编码边界到后续验证，执行路径更直接。异议：测试问题主要以“原问题不再出现且通过审核”为结果，未明确检查新副作用，也较少处理跨任务差异造成的归因限制。",
+        "total": 8
+      }
+    },
+    "uncertainties": [
+      "未提供更具体的原始任务背景，无法判断两者遗漏的失败细节是否已存在于上游材料。",
+      "缺少评分档位的细化锚点；本次将完整满足维度要求且仅有轻微侧重点差异的表现评为2分。"
+    ],
+    "winnerVariant": "tie"
+  },
+  "citationAudit": {
+    "accuracy": 1,
+    "citedCount": 3,
+    "controlCitationCount": 0,
+    "correctCitations": 3,
+    "retrievedCount": 5,
+    "vaultHashesValid": true
+  },
+  "contentHash": "92ea5617e05e414da765b98cc9bf7ad246f1736ffeff060282f6a21fa0083649",
+  "evaluatedAt": "2026-07-31T07:45:20.824Z",
+  "kind": "content_strategy_training_ab_evaluation",
+  "lockedDirection": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+  "schemaVersion": 1,
+  "workspaceId": "local-default"
+}

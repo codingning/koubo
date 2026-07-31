@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "content-strategist-vault-trial-suite.v1",
+  "caseCount": 5,
+  "runCount": 10,
+  "thresholds": {
+    "minimumTrialDirectionWins": 4,
+    "minimumAverageScoreDelta": 1,
+    "minimumCitationAccuracy": 0.9,
+    "minimumConsistentDirections": 4,
+    "maximumRegressions": 0
+  },
+  "results": {
+    "trialDirectionWins": 0,
+    "averageScoreDelta": 0.2,
+    "citationAccuracy": 1,
+    "consistentDirections": 1,
+    "regressions": 1
+  },
+  "byCase": [
+    {
+      "caseId": "case.knowledge-bridge",
+      "direction": "我如何把从抖音博主蒸馏出的观点、框架和思考方式训练给短视频Agent，并验证它是否真的更懂内容",
+      "repeats": 2,
+      "winners": [
+        "control",
+        "tie"
+      ],
+      "averageControlScore": 8,
+      "averageTrialScore": 7.5,
+      "averageDelta": -0.5,
+      "consistent": false,
+      "regression": true,
+      "trialHardFailures": [
+        "unsupported_claim"
+      ],
+      "verdict": "regression"
+    },
+    {
+      "caseId": "case.open-source-skill",
+      "direction": "我如何判断一个网上很火的开源AI Skill是否真的值得安装，而不是看见别人推荐就直接用",
+      "repeats": 2,
+      "winners": [
+        "tie",
+        "trial"
+      ],
+      "averageControlScore": 7.5,
+      "averageTrialScore": 8,
+      "averageDelta": 0.5,
+      "consistent": false,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    },
+    {
+      "caseId": "case.asset-library",
+      "direction": "为什么我已经建立了音效和素材总库，视频Agent还是不会自动选对素材，我应该先解决什么",
+      "repeats": 2,
+      "winners": [
+        "tie",
+        "trial"
+      ],
+      "averageControlScore": 7.5,
+      "averageTrialScore": 8,
+      "averageDelta": 0.5,
+      "consistent": false,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    },
+    {
+      "caseId": "case.failure-learning",
+      "direction": "我如何把一次口播视频返修失败真正变成Agent下次能复用的经验，而不是只保存一份复盘文档",
+      "repeats": 2,
+      "winners": [
+        "tie",
+        "tie"
+      ],
+      "averageControlScore": 8,
+      "averageTrialScore": 8,
+      "averageDelta": 0,
+      "consistent": true,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    },
+    {
+      "caseId": "case.workbench-proof",
+      "direction": "我想介绍自己的AI口播工作台，但怎样证明它真的解决了问题，而不是做一条功能介绍视频",
+      "repeats": 2,
+      "winners": [
+        "trial",
+        "tie"
+      ],
+      "averageControlScore": 7.5,
+      "averageTrialScore": 8,
+      "averageDelta": 0.5,
+      "consistent": false,
+      "regression": false,
+      "trialHardFailures": [],
+      "verdict": "inconclusive"
+    }
+  ],
+  "passed": false,
+  "recommendation": "keep_trial_and_do_not_advance",
+  "authority": {
+    "grantsApproval": false,
+    "promotesMemory": false,
+    "changesProductionDefault": false
+  }
+}
