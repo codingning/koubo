@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "koubo://schemas/review-score/v1",
+  "title": "Koubo Review Score v1",
+  "type": "object",
+  "x-koubo-common-record": true,
+  "required": [
+    "id", "schemaVersion", "createdAt", "createdBy", "status", "source", "evidence",
+    "applicability", "prohibitions", "versions", "contentHash",
+    "reviewerId", "candidateId", "rubricId", "scores", "timecodedFindings"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "status": { "type": "string", "enum": ["draft", "complete", "invalidated"] },
+    "reviewerId": { "type": "string" },
+    "candidateId": { "type": "string" },
+    "rubricId": { "type": "string" },
+    "scores": { "type": "object" },
+    "timecodedFindings": { "type": "array", "items": { "type": "object" } }
+  },
+  "additionalProperties": true
+}

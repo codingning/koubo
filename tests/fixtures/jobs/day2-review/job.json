@@ -1,0 +1,33 @@
+{
+  "id": "day2-review",
+  "pipeline": "ffmpeg-v3",
+  "status": "awaiting_review",
+  "fileName": "day2-rich-review.mp4",
+  "script": "先看成片，再看素材、第一版和具体返修。",
+  "transcript": {
+    "segments": [
+      {
+        "start": 0,
+        "end": 18,
+        "text": "先看成片，再看素材、第一版和具体返修。"
+      }
+    ]
+  },
+  "assets": [
+    {
+      "id": "local-proof",
+      "sourceType": "local-generated",
+      "reviewStatus": "approved"
+    }
+  ],
+  "versions": [
+    {
+      "version": 5,
+      "reviewBundle": "review-bundle-v5.json"
+    }
+  ],
+  "options": {
+    "captions": true,
+    "informationPanels": true
+  }
+}

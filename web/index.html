@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>AI口播成长工作台</title>
+  <title>Codex / Agent / Skill 实测工作台</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
         <div class="brand-mark">口</div>
         <div>
           <strong>AI口播工作台</strong>
-          <span>从知道到做到</span>
+          <span>真实跑通 · 可复用资产</span>
         </div>
       </div>
 
@@ -25,9 +25,9 @@
         <button class="nav-item" data-view="creative"><span class="nav-icon">4</span><span>标题和封面</span></button>
 
         <button class="nav-item" data-view="edit"><span class="nav-icon">剪</span><span>拍完AI剪辑</span></button>
-        <button class="nav-item" data-view="publish"><span class="nav-icon">发</span><span>发布文案</span></button>
+        <button class="nav-item" data-view="publish"><span class="nav-icon">发</span><span>发布准备</span></button>
         <button class="nav-item" data-view="evidence"><span class="nav-icon">证</span><span>证据和风险</span></button>
-        <button class="nav-item" data-view="roadmap"><span class="nav-icon">30</span><span>成长路线</span></button>
+        <button class="nav-item" data-view="experiments"><span class="nav-icon">测</span><span>选题实验</span></button>
         <button class="nav-item" data-view="library"><span class="nav-icon">库</span><span>历史内容</span></button>
       </nav>
 
@@ -60,15 +60,47 @@
             <div>
               <span class="start-kicker">不用找文件 · 不用运行脚本</span>
               <h2>别再继续准备，第一条先做起来</h2>
-              <p>以后只要双击项目根目录的 <strong>打开AI口播工作台.vbs</strong>，点击生成、照着拍、上传原片，最后审核成片。</p>
+              <p>以后只要双击项目根目录的 <strong>打开AI口播工作台.vbs</strong>，先锁定方向、阅读分析并确认，再生成口播、上传原片，最后审核成片。</p>
             </div>
             <div class="entry-path">
               <span>固定入口</span>
               <code>项目根目录\打开AI口播工作台.vbs</code>
-              <button id="generate-content" class="btn btn-primary" disabled>AI生成新口播</button>
-              <small id="generation-status">正在连接本地工作流……</small>
+              <small>新口播先由你锁定方向，再由内容顾问分析；系统不会自动替你选题或确认。</small>
             </div>
           </div>
+
+          <section class="panel content-strategy-gate" aria-labelledby="content-strategy-title">
+            <div class="panel-head strategy-gate-head">
+              <div>
+                <span class="step-tag">写稿前两步门</span>
+                <h3 id="content-strategy-title">先确认这次到底要讲什么</h3>
+                <p>填写一个明确方向和一段真实经历。分析只帮助你看清价值与证据，不会写稿、换题或自动确认。</p>
+              </div>
+            </div>
+            <div class="strategy-gate-grid">
+              <div class="strategy-form">
+                <label for="content-direction">本次方向</label>
+                <input id="content-direction" type="text" maxlength="240" placeholder="例如：分享我如何审计并试用一个开源 Skill">
+                <label for="content-evidence-summary">真实经历 / 证据摘要</label>
+                <textarea id="content-evidence-summary" rows="5" maxlength="1600" placeholder="只写真实发生过的过程、输入、失败、修改和结果；没有的不要补。"></textarea>
+                <button id="analyze-content-direction" class="btn btn-secondary" disabled>第 1 步：分析方向</button>
+              </div>
+              <div id="content-strategy-analysis" class="strategy-analysis is-empty" aria-live="polite">
+                填写左侧两项后点击“分析方向”，这里会展示观众收益、优缺点、证据缺口和最多三个追问。
+              </div>
+            </div>
+            <div class="strategy-confirmation">
+              <label>
+                <input id="confirm-content-strategy" type="checkbox" disabled>
+                <span>我已阅读分析，确认方向和证据无误，并同意进入写稿。</span>
+              </label>
+              <button id="generate-content" class="btn btn-primary" disabled>第 2 步：确认并生成口播</button>
+              <small id="generation-status">正在连接本地工作流……</small>
+            </div>
+            <section id="ordinary-viewer-result" class="ordinary-viewer-result is-empty" aria-live="polite">
+              新口播生成后，普通观众 Agent 会在这里给出最尖锐的一句话、具体阻碍和最小修改。
+            </section>
+          </section>
 
           <div class="operation-steps" aria-label="拍摄操作步骤">
             <button class="operation-step is-current" data-go="today"><b>1</b><span><strong>确认拍哪条</strong><small>当前页已经选好主稿</small></span></button>
@@ -92,14 +124,14 @@
             <div class="hero-actions">
               <button class="btn btn-primary" data-go="script">查看完整口播稿</button>
               <button id="start-teleprompter" class="btn btn-dark">开始提词器</button>
-              <button id="copy-short-hero" class="btn btn-secondary">复制2—3分钟完整版</button>
+              <button id="copy-short-hero" class="btn btn-secondary">复制当前正式稿</button>
             </div>
           </div>
 
           <div class="focus-grid">
             <article class="panel quick-script-panel">
               <div class="panel-head">
-                <div><span class="step-tag">默认拍2—3分钟完整版</span><h3>打开相机后，直接念这一版</h3></div>
+                <div><span class="step-tag">时长由证据密度决定</span><h3>确认价值和证据后，再拍这一版</h3></div>
                 <span id="home-script-duration" class="mini-label"></span>
               </div>
               <p id="home-script-preview" class="home-script-preview"></p>
@@ -132,11 +164,11 @@
             <article class="panel story-panel">
               <div class="panel-head"><h3>这一集为什么值得拍</h3><span class="mini-label">真实进展</span></div>
               <div class="story-flow">
-                <div><span>之前</span><p id="story-yesterday"></p></div>
+                <div><span>问题</span><p id="story-yesterday"></p></div>
                 <div class="flow-arrow">→</div>
-                <div><span>今天</span><p id="story-today"></p></div>
+                <div><span>本次验证</span><p id="story-today"></p></div>
                 <div class="flow-arrow">→</div>
-                <div><span>明天</span><p id="story-tomorrow"></p></div>
+                <div><span>边界/下一分支</span><p id="story-tomorrow"></p></div>
               </div>
             </article>
 
@@ -160,7 +192,7 @@
               <div><span>唯一核心问题</span><p id="structure-question"></p></div>
               <div><span>可收藏框架</span><p id="structure-framework"></p></div>
               <div><span>观众代入点</span><p id="viewer-mirror"></p></div>
-              <div><span>今天的最小任务</span><p id="viewer-task"></p></div>
+              <div><span>立即可执行</span><p id="viewer-task"></p></div>
               <div><span>轻松点 / 热梗</span><p id="humor-beat"></p></div>
               <div><span>评论问题</span><p id="comment-prompt"></p></div>
               <div><span>继续关注的理由</span><p id="follow-promise"></p></div>
@@ -171,7 +203,7 @@
           </article>
 
           <article class="panel progress-panel">
-            <div class="panel-head"><h3>今天真实完成了什么</h3><button class="text-button" data-go="evidence">查看证据</button></div>
+            <div class="panel-head"><h3>本次真实证据与交付物</h3><button class="text-button" data-go="evidence">查看证据</button></div>
             <ul id="progress-list" class="check-list"></ul>
           </article>
 
@@ -204,7 +236,7 @@
           </div>
 
           <div id="short-script-panel" class="script-card is-hidden">
-            <div class="script-card-head"><span>60—90秒衍生短版</span><button class="text-button" id="copy-short-script">复制</button></div>
+            <div class="script-card-head"><span>可选精简版</span><button class="text-button" id="copy-short-script">复制</button></div>
             <p id="short-script-text" class="editable-display"></p>
           </div>
 
@@ -269,12 +301,12 @@
           </div>
         </section>
 
-        <section id="view-edit" class="view" data-title="拍完AI剪辑" data-eyebrow="上传后全自动处理，只在最后审核">
+        <section id="view-edit" class="view" data-title="拍完AI剪辑" data-eyebrow="先看关键帧，再看动态样片，最后看全片">
           <div class="edit-intro">
             <div>
-              <span class="start-kicker">只做两件事：上传原片，最后审核</span>
-              <h2>转录、删错句、字幕、重点卡片、调音量、渲染和QA由工作流自动完成</h2>
-              <p>原视频始终留在本机。文本模型只接收脱敏后的口播稿与文字转录，用来生成剪辑决策，不会收到原视频文件。</p>
+              <span id="edit-intro-kicker" class="start-kicker">默认视觉导演 v4 · 每一步可配置</span>
+              <h2 id="edit-intro-title">先分析同题高质量视频，再拆解口播、审关键帧、审动态样片，最后渲染2K全片</h2>
+              <p id="edit-intro-description">不改设置就使用默认提示词。关键帧和15—25秒动态样片分别是硬审核门；未批准不会继续生成完整视频。旧任务仍可按原 FFmpeg v3 流程打开。</p>
             </div>
             <div class="service-card">
               <span id="video-service-status" class="service-status is-checking">正在检查自动化工作流</span>
@@ -282,13 +314,38 @@
             </div>
           </div>
 
-          <div class="automation-rail" aria-label="自动化阶段">
-            <div data-stage="upload"><b>1</b><span>上传原片</span></div>
-            <div data-stage="transcribe"><b>2</b><span>本地逐字转录</span></div>
-            <div data-stage="plan"><b>3</b><span>AI剪辑决策</span></div>
-            <div data-stage="assets"><b>4</b><span>你审核素材</span></div>
-            <div data-stage="render"><b>5</b><span>字幕包装与渲染</span></div>
-            <div data-stage="review"><b>6</b><span>你最终审核</span></div>
+          <div class="edit-experience-toolbar">
+            <div class="edit-mode-switch" role="group" aria-label="工作台显示模式">
+              <button id="edit-mode-daily" class="edit-mode-button is-active" data-edit-mode="daily">日常模式</button>
+              <button id="edit-mode-demo" class="edit-mode-button" data-edit-mode="demo">演示模式</button>
+            </div>
+            <label class="video-job-picker-label" for="video-job-picker">
+              <span>打开已有任务</span>
+              <select id="video-job-picker" class="video-job-picker"><option value="">正在读取本地任务……</option></select>
+            </label>
+            <button id="refresh-video-jobs" class="btn btn-secondary">刷新任务</button>
+          </div>
+
+          <div class="demo-mode-intro demo-only">
+            <div><strong>拍完口播后只走这条路</strong><span>上传原片 → 等待处理 → 看真实效果 → 用一句话返修 → 下载成片</span></div>
+            <small>没有标准成片的任务会明确说明，不会用占位画面冒充结果。</small>
+          </div>
+
+          <div class="automation-rail demo-hide" aria-label="自动化阶段">
+            <div data-stage="style_research"><b>1</b><span>同题风格分析</span></div>
+            <div data-stage="content_breakdown"><b>2</b><span>ASR与内容拆解</span></div>
+            <div data-stage="keyframes"><b>3</b><span>关键帧生成</span></div>
+            <div data-stage="keyframe_review"><b>4</b><span>关键帧审核</span></div>
+            <div data-stage="motion_sample"><b>5</b><span>动态样片审核</span></div>
+            <div data-stage="full_render"><b>6</b><span>2K全片与QA</span></div>
+          </div>
+
+          <div class="demo-flow-rail demo-only" aria-label="普通用户处理步骤">
+            <div><b>1</b><span>上传原片</span></div>
+            <div><b>2</b><span>工作台处理中</span></div>
+            <div><b>3</b><span>查看真实效果</span></div>
+            <div><b>4</b><span>一句话返修</span></div>
+            <div><b>5</b><span>下载成片</span></div>
           </div>
 
           <div class="edit-layout-grid">
@@ -298,39 +355,144 @@
                 <input id="video-file" type="file" accept="video/*">
                 <span class="video-drop-icon">＋</span>
                 <strong>点击选择视频</strong>
-                <small>只复制到本项目的 video-jobs 目录</small>
+                <small class="demo-hide">只复制到本项目的 video-jobs 目录</small>
+                <small class="demo-only">原视频只保留在本机，不会自动上传</small>
               </label>
               <video id="video-preview" class="video-preview is-hidden" controls playsinline></video>
               <div id="selected-video-info" class="selected-video-info">尚未选择视频</div>
+              <div class="demo-upload-action demo-only">
+                <p>默认使用已经配置好的字幕、信息动效和输出设置，不需要理解剪辑参数。</p>
+                <button id="demo-analyze-video" class="btn btn-primary btn-block" disabled>交给工作台处理</button>
+              </div>
             </article>
 
-            <article class="panel edit-options-panel">
-              <div class="panel-head"><h3>2. 自动处理设置</h3><span class="mini-label">默认值可直接使用</span></div>
-              <label class="edit-option-row"><span><strong>输出画面</strong><small>默认按参考博主风格重构为 16:9 科技感横版</small></span><select id="edit-layout"><option value="landscape-tech">16:9 科技感横版</option><option value="vertical">9:16 竖屏</option><option value="original">保持原比例</option><option value="square">1:1 方形</option></select></label>
-              <label class="edit-option-row"><span><strong>删除长停顿和明显重复</strong><small>先检测停顿，再由AI根据逐字稿保守删减</small></span><input id="edit-remove-silence" type="checkbox" checked></label>
+            <article class="panel edit-options-panel demo-hide">
+              <div class="panel-head"><h3>2. 通用输出设置</h3><span class="mini-label">阶段参数在下方逐步配置</span></div>
+              <label class="edit-option-row"><span><strong>输出画面</strong><small>视觉导演流程固定先生成 16:9 横版；平台变体从审核母版派生</small></span><select id="edit-layout"><option value="landscape-tech">16:9 视觉导演横版</option></select></label>
               <label class="edit-option-row"><span><strong>动态逐字字幕</strong><small>按真实语音时间轴切短句，重点词自动高亮</small></span><input id="edit-captions" type="checkbox" checked></label>
               <label class="edit-option-row"><span><strong>字幕包装</strong><small>关键词弹入接近参考视频的节奏，失败会自动降级</small></span><select id="edit-caption-style"><option value="keyword-pop" selected>关键词弹入（推荐）</option><option value="clean-card">卡片字幕</option><option value="static">简洁静态</option></select></label>
               <label class="edit-option-row"><span><strong>结构化分屏信息板</strong><small>只在步骤、清单等关键段落出现，条目依次滑入</small></span><input id="edit-information-panels" type="checkbox" checked></label>
               <label class="edit-option-row"><span><strong>生成三种平台画幅</strong><small>竖屏、方形和原比例均从同一审核母版派生</small></span><input id="edit-generate-variants" type="checkbox" checked></label>
               <label class="edit-option-row"><span><strong>生成醒目文字封面</strong><small>自动独立排版 9:16、3:4、16:9 横版和 4:3 横版</small></span><input id="edit-generate-cover" type="checkbox" checked></label>
               <label class="edit-option-row"><span><strong>封面主标题（可选）</strong><small>用“/”分行；留空时由 AI 从口播稿提炼</small></span><input id="edit-cover-title" type="text" maxlength="42" placeholder="例如：我用 Codex / 做了一个 / AI口播工作台"></label>
-              <label class="edit-option-row"><span><strong>剪辑节奏</strong><small>自然模式会保留必要呼吸</small></span><select id="edit-silence-duration"><option value="0.35">更紧凑</option><option value="0.45" selected>自然</option><option value="0.65">更保守</option></select></label>
-              <label class="edit-option-row"><span><strong>中文转录精度</strong><small>small 更快，medium 更准但更慢</small></span><select id="edit-transcription-model"><option value="small" selected>标准（推荐）</option><option value="medium">高精度</option></select></label>
-              <button id="analyze-video" class="btn btn-primary btn-block" disabled>上传并开始全自动剪辑</button>
+              <button id="analyze-video" class="btn btn-primary btn-block" disabled>上传并启动视觉导演流程</button>
             </article>
           </div>
 
           <article class="panel edit-run-panel">
             <div class="edit-run-head">
-              <div><h3>自动处理进度</h3><p>开始后无需继续点击。网页会自动等待转录、剪辑、渲染和技术检查完成。</p></div>
+              <div><h3>自动处理进度</h3><p>上传后会自动处理；到关键帧和动态样片时只需看结果并确认，其他步骤不用反复操作。</p></div>
               <div class="inline-actions"><button id="replan-video" class="btn btn-secondary is-hidden">复用逐字稿重新规划</button><button id="retry-video" class="btn btn-secondary is-hidden">重试任务</button></div>
             </div>
             <div class="job-progress"><div id="edit-progress-bar"></div></div>
             <div id="edit-job-status" class="job-status">等待选择视频</div>
-            <div id="edit-analysis" class="edit-analysis is-hidden"></div>
+            <div id="edit-analysis" class="edit-analysis is-hidden demo-hide"></div>
           </article>
 
-          <article id="asset-review-panel" class="panel asset-review-panel is-hidden">
+          <article id="demo-preview-panel" class="panel demo-preview-panel demo-only is-hidden">
+            <div class="panel-head">
+              <div><h3 id="demo-preview-title">效果预览暂不可用</h3><p id="demo-preview-message"></p></div>
+              <span id="demo-preview-badge" class="mini-label">真实结果边界</span>
+            </div>
+            <div id="demo-keyframe-grid" class="demo-keyframe-grid is-hidden"></div>
+            <video id="demo-sample-video" class="demo-sample-video is-hidden" controls playsinline preload="metadata"></video>
+            <div id="demo-stage-review-actions" class="demo-stage-review-actions is-hidden">
+              <label for="demo-stage-feedback">
+                <strong id="demo-stage-feedback-title">哪里需要修改</strong>
+                <small id="demo-stage-feedback-help">写清具体画面、字幕、动效或声音问题。</small>
+              </label>
+              <textarea id="demo-stage-feedback" rows="3" placeholder="例如：第二张字太小；结尾提示词需要完整保留。"></textarea>
+              <div class="inline-actions">
+                <button id="demo-stage-revise" class="btn btn-secondary">按意见重做</button>
+                <button id="demo-stage-reject" class="btn btn-secondary">整版不接受，先停在这里</button>
+                <button id="demo-stage-approve" class="btn btn-primary">通过并进入下一步</button>
+              </div>
+              <small id="demo-stage-boundary" class="demo-stage-boundary">未通过时不会继续生成后续视频。</small>
+            </div>
+          </article>
+
+          <article id="director-workflow-panel" class="panel director-workflow-panel demo-hide">
+            <div class="panel-head director-workflow-head">
+              <div><h3>视觉导演流程配置与审核</h3><p>六步都有默认参数和默认提示词。需要调整时只改当前步骤；上游重做会自动作废下游旧版本，但不会覆盖文件。</p></div>
+              <span id="director-workflow-version" class="mini-label">正在读取默认配置</span>
+            </div>
+            <div id="director-stage-cards" class="director-stage-cards"><div class="empty-state">正在加载六阶段配置……</div></div>
+          </article>
+
+          <article id="multi-agent-panel" class="panel multi-agent-panel demo-hide">
+            <div class="panel-head multi-agent-head">
+              <div>
+                <div class="multi-agent-title-line">
+                  <h3>多 Agent 创作实验室</h3>
+                  <span id="multi-agent-status" class="experiment-badge is-checking">正在检查</span>
+                </div>
+                <p>视觉导演 V4 仍是默认成片管线。这里以影子模式生成字幕、动效和声音提案，不会批准成片、修改品牌骨架或自动发布。</p>
+              </div>
+              <button id="multi-agent-refresh" class="btn btn-secondary">刷新实验状态</button>
+            </div>
+            <div id="multi-agent-disabled-note" class="experiment-notice">
+              多 Agent 写操作尚未开启。读取和检查仍可使用；需要实验时由本地服务显式设置 <code>KOUBO_MULTI_AGENT_ENABLED=1</code> 后重启。
+            </div>
+            <div id="multi-agent-workspace" class="multi-agent-workspace is-hidden">
+              <section class="experiment-section">
+                <div class="experiment-section-head">
+                  <div><strong>1. 生成受控提案</strong><small>三个专家只读取自己的已批准记忆；导演最多组合两个结构差异明显的候选。</small></div>
+                  <button id="multi-agent-generate" class="btn btn-primary" disabled>为当前任务生成提案</button>
+                </div>
+                <label class="experiment-field" for="multi-agent-constraints">本次约束（可选）
+                  <textarea id="multi-agent-constraints" rows="3" placeholder="例如：保留第 6.2–7.0 秒的思考停顿；字幕不要遮挡产品画面。"></textarea>
+                </label>
+                <div id="multi-agent-proposals" class="multi-agent-proposals">
+                  <div class="empty-state">打开一个已有视频任务后，才能生成不改动 V4 成片的影子提案。</div>
+                </div>
+              </section>
+
+              <section class="experiment-section">
+                <div class="experiment-section-head">
+                  <div><strong>2. 匿名 A/B 与双重质检</strong><small>只有实际渲染且带 SHA-256 的候选才能进入盲评；界面不会显示候选作者或生成顺序。</small></div>
+                  <div class="inline-actions">
+                    <button id="multi-agent-build-ab" class="btn btn-secondary" disabled>建立匿名 A/B</button>
+                    <button id="multi-agent-run-review" class="btn btn-secondary" disabled>运行盲评与留存质检</button>
+                  </div>
+                </div>
+                <div id="multi-agent-ab-review" class="multi-agent-ab-review">
+                  <div class="empty-state">等待两个可验证的候选成片。没有真实 renderHash 时不会伪造比较。</div>
+                </div>
+              </section>
+            </div>
+          </article>
+
+          <div class="multi-agent-governance-grid demo-hide">
+            <article id="tutorial-ingest-panel" class="panel tutorial-ingest-panel">
+              <div class="panel-head">
+                <div><h3>教程技巧入库</h3><p>只读取允许目录内的本地视频；先登记来源和许可，再断点提取，不复制原视频。</p></div>
+                <span class="mini-label">流程 A · 知识提取</span>
+              </div>
+              <div class="governance-form">
+                <label>本地教程路径<input id="tutorial-input-path" type="text" placeholder="F:\code\koubo\.cache\my-tutorial\lesson.mp4"></label>
+                <div class="governance-form-row">
+                  <label>作者 / 来源<input id="tutorial-author" type="text" placeholder="本人或公开作者名"></label>
+                  <label>许可依据<input id="tutorial-license" type="text" placeholder="self-created / explicit-authorization"></label>
+                </div>
+                <button id="tutorial-ingest" class="btn btn-secondary" disabled>登记并提取技巧</button>
+              </div>
+              <div id="tutorial-checkpoint" class="governance-output"><div class="empty-state">尚未登记教程。</div></div>
+            </article>
+
+            <article id="memory-governance-panel" class="panel memory-governance-panel">
+              <div class="panel-head">
+                <div><h3>Agent 本地记忆治理</h3><p>技巧必须经历复刻、项目试用和人工证据才能晋级；所有变化可审计、可回滚。</p></div>
+                <button id="memory-refresh" class="btn btn-secondary">刷新记忆</button>
+              </div>
+              <label class="experiment-field" for="memory-evidence-json">本次人工证据（JSON 数组）
+                <textarea id="memory-evidence-json" rows="4" spellcheck="false" placeholder='[{"type":"human-review","decision":"approved","reviewerId":"owner","projectId":"job-id"}]'></textarea>
+              </label>
+              <div class="memory-safety-note">界面会把当前 contentHash 作为 expectedHash 提交，防止覆盖别人刚更新的记忆。批准与晋级必须由你显式点击。</div>
+              <div id="memory-records" class="memory-records"><div class="empty-state">正在读取本地记忆……</div></div>
+            </article>
+          </div>
+
+          <article id="asset-review-panel" class="panel asset-review-panel demo-hide is-hidden">
             <div class="panel-head"><div><h3>素材审核板</h3><p>默认生成真实原片衍生画面、前后对比、工作台画面和动态流程；文字卡片只作点缀。</p></div><span id="asset-review-summary" class="mini-label">等待候选</span></div>
             <div class="source-priority">当前策略：真人口播 → 真实工作台/项目画面 → 前后对比 → 动态流程图 → AI生成视觉 → 少量动态文字；参考视频仅在必要时使用2—5秒并标注来源。</div>
             <div class="inline-actions"><input id="media-file" type="file" accept="image/*,video/*"><button id="upload-media" class="btn btn-secondary" disabled>加入本地候选</button><button id="rediscover-media" class="btn btn-secondary" disabled>重新生成富媒体候选</button><button id="auto-review-preview" class="btn btn-primary" disabled>自动采用本地素材并生成完整预览</button><button id="render-with-assets" class="btn btn-secondary" disabled>按当前决定生成预览</button></div>
@@ -339,20 +501,20 @@
           </article>
 
           <article id="edit-results" class="panel result-panel is-hidden">
-            <div class="panel-head"><div><h3>完整预览与分段审核</h3><p>先看完整节奏，再用15—30秒上下文小样定位问题；通过后才进入最终审核。</p></div><span id="result-version" class="mini-label">版本 1</span></div>
+            <div class="panel-head"><div><h3 id="edit-result-title">完整预览与分段审核</h3><p id="edit-result-description">先看完整节奏，再用15—30秒上下文小样定位问题；通过后才进入最终审核。</p></div><span id="result-version" class="mini-label">版本 1</span></div>
             <div class="result-grid">
               <div class="review-media-column">
                 <div id="review-preview-note" class="review-preview-note">正在准备完整审核预览……</div>
                 <video id="final-video" class="final-video" controls playsinline></video>
-                <section class="review-segment-section">
+                <section class="review-segment-section demo-hide">
                   <div class="section-heading"><h3>分段上下文小样</h3><p>每段保留素材出现前后的口播，反馈时直接说“小样几、第几秒”。</p></div>
                   <div id="review-segments" class="review-segments"></div>
                 </section>
               </div>
               <div>
-                <div id="final-qa" class="final-qa"></div>
-                <div id="capability-status" class="capability-status"></div>
-                <section id="cover-result" class="cover-result is-hidden">
+                <div id="final-qa" class="final-qa demo-hide"></div>
+                <div id="capability-status" class="capability-status demo-hide"></div>
+                <section id="cover-result" class="cover-result demo-hide is-hidden">
                   <div class="cover-result-head"><div><strong>发布封面</strong><small id="cover-copy">自动生成四种画幅</small></div><span class="mini-label">本地生成</span></div>
                   <img id="cover-preview" class="cover-preview" alt="当前视频封面预览">
                   <label for="result-cover-title"><strong>调整封面大字</strong><small>用“/”控制分行，不会重新渲染视频</small></label>
@@ -360,8 +522,14 @@
                   <button id="regenerate-cover" class="btn btn-secondary btn-block">只重做四张封面</button>
                   <div id="cover-downloads" class="artifact-links cover-downloads"></div>
                 </section>
-                <p id="edit-summary" class="edit-summary"></p>
-                <div id="version-list" class="version-list"></div>
+                <p id="edit-summary" class="edit-summary demo-hide"></p>
+                <section id="version-history-panel" class="version-history-panel">
+                  <div class="version-history-head">
+                    <strong id="version-history-title">保留的旧版本</strong>
+                    <small id="version-history-help">每次返修都会留下旧版，可以随时切换预览和下载。</small>
+                  </div>
+                  <div id="version-list" class="version-list"></div>
+                </section>
                 <div class="review-box">
                   <label for="video-review-feedback"><strong>哪里不合格，直接用自然语言告诉AI</strong><small>例如：开头重复删掉；第12秒字幕错了；重点卡片太多；这段停顿要保留。</small></label>
                   <textarea id="video-review-feedback" rows="4" placeholder="没有问题就点击“审核通过”；有问题就写修改意见。"></textarea>
@@ -369,14 +537,14 @@
                   <div id="review-history" class="review-history"></div>
                 </div>
                 <div id="variant-downloads" class="artifact-links"></div>
-                <div id="version-artifacts" class="artifact-links"></div>
+                <div id="version-artifacts" class="artifact-links demo-hide"></div>
                 <div class="inline-actions result-actions"><a id="download-final" class="btn btn-dark" href="#" download>下载当前成片</a></div>
-                <code id="job-folder" class="job-folder"></code>
+                <code id="job-folder" class="job-folder demo-hide"></code>
               </div>
             </div>
           </article>
 
-          <article class="panel inherited-skills-panel">
+          <article class="panel inherited-skills-panel demo-hide">
             <div class="panel-head"><h3>六项能力的实际落点</h3><span class="mini-label">每个版本都有可核对产物</span></div>
             <div class="skill-capability-grid">
               <div><b>01</b><strong>HyperFrames</strong><span>透明动态卡片；失败时记录原因并回退 ASS</span></div>
@@ -390,18 +558,47 @@
           </article>
         </section>
 
-        <section id="view-publish" class="view" data-title="发布文案" data-eyebrow="审核后再手动发布">
+        <section id="view-publish" class="view" data-title="发布准备" data-eyebrow="审核通过后生成本地素材包">
+          <div id="publish-package-state" class="warning-banner"><strong>等待成片</strong><span>审核通过最终成片后，这里会自动生成标题、发布文案、关联话题和两种封面。</span></div>
+          <article class="panel publish-package-panel">
+            <div class="publish-package-head">
+              <div><span>当前发布素材包</span><small id="publish-package-meta">尚未绑定已审核成片</small></div>
+              <a id="download-publish-package" class="btn btn-dark is-hidden" href="#" download>下载全部素材包</a>
+            </div>
+
+            <section id="publish-title-section" class="publish-block is-hidden">
+              <div class="section-heading compact"><h3>选择标题</h3><p>提供 3 个候选，也可以直接修改最终标题。</p></div>
+              <div id="publish-title-options" class="publish-title-options"></div>
+              <label for="publish-title"><strong>最终标题</strong><small>修改后保存时会同步重做 9:16 和 16:9 封面，不会重渲染视频。</small></label>
+              <input id="publish-title" type="text" maxlength="42" placeholder="输入最终发布标题">
+            </section>
+
           <div class="platform-tabs">
             <button class="platform-tab is-active" data-platform="douyin">抖音</button>
             <button class="platform-tab" data-platform="xiaohongshu">小红书</button>
-            <button class="platform-tab" data-platform="weibo">微博</button>
+            <button class="platform-tab" data-platform="wechat">视频号</button>
           </div>
-          <article class="panel publish-panel">
+          <div class="publish-panel">
             <div class="publish-head">
-              <div><span id="platform-name">抖音发布文案</span><small>不会自动发布，只能复制</small></div>
+              <div><span id="platform-name">抖音发布文案</span><small>可以修改、保存和复制，但不会自动发布</small></div>
               <button id="copy-publish" class="btn btn-primary">复制文案</button>
             </div>
-            <textarea id="publish-text" class="publish-text" readonly></textarea>
+            <textarea id="publish-text" class="publish-text"></textarea>
+            <label class="publish-topic-label" for="publish-hashtags"><strong>关联话题</strong><small>用空格分隔，保存后会写入发布素材包。</small></label>
+            <textarea id="publish-hashtags" class="publish-hashtags" rows="2" placeholder="#AI #口播短视频"></textarea>
+            <div id="publish-package-actions" class="inline-actions publish-package-actions is-hidden">
+              <button id="save-publish-package" class="btn btn-primary">保存并同步封面</button>
+              <button id="regenerate-publish-package" class="btn btn-secondary">重新生成素材包</button>
+            </div>
+          </div>
+
+            <section id="publish-cover-section" class="publish-block is-hidden">
+              <div class="section-heading compact"><h3>发布封面</h3><p>统一采用真人像＋大文本的简洁风格。</p></div>
+              <div class="publish-cover-grid">
+                <article><strong>9:16 手机封面</strong><img id="publish-cover-vertical" alt="9:16 手机封面"><a id="download-publish-cover-vertical" download>下载 9:16 封面</a></article>
+                <article><strong>16:9 横版封面</strong><img id="publish-cover-wide" alt="16:9 横版封面"><a id="download-publish-cover-wide" download>下载 16:9 封面</a></article>
+              </div>
+            </section>
           </article>
           <div class="warning-banner"><strong>发布边界</strong><span>请先确认真实证据、隐私、版权、标题和封面。此网页不会连接任何平台账号。</span></div>
         </section>
@@ -423,27 +620,21 @@
           </article>
         </section>
 
-        <section id="view-roadmap" class="view" data-title="30天成长路线" data-eyebrow="计划不等于完成">
-          <div class="roadmap-head">
-            <div><strong>当前进度</strong><span>Day 1 / 30</span></div>
-            <div class="progress-track"><div class="progress-fill" style="width:3.33%"></div></div>
-          </div>
-          <div class="phase-legend">
-            <span><i class="legend-dot phase-1"></i>建立记录系统</span>
-            <span><i class="legend-dot phase-2"></i>第一个真实项目</span>
-            <span><i class="legend-dot phase-3"></i>提高判断能力</span>
-            <span><i class="legend-dot phase-4"></i>稳定与作品集</span>
-          </div>
-          <div id="roadmap-grid" class="roadmap-grid"></div>
+        <section id="view-experiments" class="view" data-title="开放选题实验" data-eyebrow="没有证据和资产就不凑内容">
+          <article class="experiment-head">
+            <strong>不设30天、Day编号、日更或每日目标</strong>
+            <p>每次从真实证据出发，只选择一个开发者问题，并在视频内给出核心方法，在群内提供文件化资源与更新。</p>
+          </article>
+          <div id="experiment-grid" class="experiment-grid"></div>
         </section>
 
-        <section id="view-library" class="view" data-title="历史内容" data-eyebrow="成长版和旧基线都保留">
+        <section id="view-library" class="view" data-title="历史内容" data-eyebrow="历史证据保留，但不再驱动新稿">
           <div class="library-toolbar">
             <input id="library-search" type="search" placeholder="搜索标题、栏目或日期">
             <div class="library-filters">
               <button class="filter-btn is-active" data-filter="all">全部</button>
-              <button class="filter-btn" data-filter="growth">成长版</button>
-              <button class="filter-btn" data-filter="legacy">旧基线</button>
+              <button class="filter-btn" data-filter="developer">开发者实测</button>
+              <button class="filter-btn" data-filter="legacy">历史证据</button>
             </div>
           </div>
           <div id="library-list" class="library-list"></div>

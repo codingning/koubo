@@ -26,10 +26,10 @@
     creative: ["选择最终包装", "标题和封面"],
     shoot: ["B-roll、字幕和准备事项", "拍什么画面"],
     edit: ["视频只在本机处理", "拍完AI剪辑"],
-    publish: ["审核后再手动发布", "发布文案"],
+    publish: ["审核通过后生成本地素材包", "发布准备"],
     evidence: ["只讲能证明的事实", "证据和风险"],
-    roadmap: ["计划不等于完成", "30天成长路线"],
-    library: ["成长版和旧基线都保留", "历史内容"]
+    experiments: ["没有证据就不凑内容", "开放选题实验"],
+    library: ["新定位与历史证据分开", "历史内容"]
   };
 
   const defaultShootChecks = [
@@ -37,11 +37,16 @@
     "标题和封面与正文一致",
     "所有展示画面已完成脱敏",
     "收音、光线和背景已经准备",
-    "明日挑战是实际准备继续做的任务"
+    "资源文件、适用边界和领取说明已经准备好"
   ];
 
   let currentView = "today";
   let currentItem = data.contentItems.find(item => item.id === persisted.currentId) || data.contentItems[0];
+  if (currentItem?.id === "growth-day-1" && data.contentItems[0]?.kind === "developer") {
+    currentItem = data.contentItems[0];
+    persisted.currentId = currentItem.id;
+  }
+  let publishPackageDraft = null;
   let teleRunning = false;
   let teleFrame = null;
   let teleLastTime = null;
@@ -53,7 +58,34 @@
   let contentGenerating = false;
   let selectedVideoFile = null;
   let currentVideoJob = null;
+  let selectedVideoOutputVersion = null;
+  let availableVideoJobs = [];
+  let videoJobsLoading = false;
+  let editExperienceMode = persisted.editExperienceMode === "demo" ? "demo" : "daily";
   let videoPollTimer = null;
+  let videoJobContextToken = 0;
+  const directorStageOrder = ["style_research", "content_breakdown", "keyframes", "keyframe_review", "motion_sample", "full_render"];
+  const videoRunningStatuses = ["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising", "researching_style", "breaking_down_content", "generating_keyframes", "rendering_sample", "rendering_final"];
+  let directorWorkflowDefaults = null;
+  let directorDraftConfig = null;
+  let directorRenderSignature = "";
+  let multiAgentStatus = null;
+  let proposalBundle = null;
+  let blindReviewBundle = null;
+  let tutorialCheckpoint = null;
+  let memoryRecords = [];
+  let multiAgentReviews = null;
+  let contentStrategyAnalyzing = false;
+  let contentStrategyDraft = {
+    direction: "",
+    evidenceSummary: "",
+    analysisArtifactId: "",
+    analysis: null,
+    confirmationArtifactId: "",
+    generatedContentId: "",
+  };
+  const ordinaryViewerReviewCache = new Map();
+  const ordinaryViewerReviewLoading = new Map();
 
   function itemState(item = currentItem) {
     if (!persisted.items[item.id]) {
@@ -151,10 +183,13 @@
   function switchView(view) {
     if (!pageNames[view]) return;
     currentView = view;
+    document.body.classList.toggle("is-edit-view", view === "edit");
     $$(".view").forEach(section => section.classList.toggle("is-active", section.id === `view-${view}`));
     $$(".nav-item").forEach(button => button.classList.toggle("is-active", button.dataset.view === view));
     byId("page-eyebrow").textContent = pageNames[view][0];
     byId("page-title").textContent = pageNames[view][1];
+    if (view === "edit") renderEditExperienceMode();
+    if (view === "publish") renderPublish();
     $(".sidebar").classList.remove("is-open");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -193,19 +228,19 @@
     byId("hero-benefit").textContent = currentItem.audienceBenefit;
     const engagement = currentItem.engagement || {};
     const design = currentItem.structureDesign || {};
-    const archetypeNames = { "evidence-story": "证据故事", "saveable-map": "可收藏路径图", "short-resonance": "短共鸣" };
+    const archetypeNames = { "quick-proof": "快速实测", "evidence-story": "失败修复", "saveable-map": "可收藏工作流", "deep-audit": "深度审计", "short-resonance": "历史短共鸣" };
     byId("structure-archetype").textContent = archetypeNames[design.archetype] || "旧稿未标注，生成新口播时自动选择";
     byId("structure-question").textContent = design.coreQuestion || "围绕一个观众问题组织整条内容。";
     byId("structure-framework").textContent = Array.isArray(design.saveableFramework) && design.saveableFramework.length
       ? design.saveableFramework.map(item => `${item.label}：${item.action}（信号：${item.expectedSignal}）`).join("；")
       : "新稿会为每一步同时给出动作和可观察信号。";
     byId("viewer-mirror").textContent = engagement.audienceMirror || currentItem.audienceBenefit || "先把个人经历翻译成观众能使用的经验。";
-    byId("viewer-task").textContent = engagement.viewerTask || currentItem.actionExperiment?.viewerTask || "给观众一个今天就能完成的最小动作。";
+    byId("viewer-task").textContent = engagement.viewerTask || currentItem.actionExperiment?.viewerTask || "给开发者一个可以立即复制、运行或检查的最小动作。";
     const tone = currentItem.creativeTone || {};
     const memeLine = tone.trendMeme?.adaptedLine || "";
     byId("humor-beat").textContent = [tone.humorBeat, memeLine].filter(Boolean).join(" · ") || "用一句自然自嘲或反差降低严肃感。";
-    byId("comment-prompt").textContent = engagement.commentPrompt || "用一个具体选择题邀请观众参与下一步实验。";
-    byId("follow-promise").textContent = engagement.followPromise || currentItem.storyPosition?.tomorrow || "说明下一集会验证什么真实结果。";
+    byId("comment-prompt").textContent = engagement.commentPrompt || "只问一个会改变资源版本或下一次实测分支的具体问题。";
+    byId("follow-promise").textContent = engagement.followPromise || currentItem.storyPosition?.nextVerification || currentItem.storyPosition?.tomorrow || "说明下一次会验证哪个具体分支。";
     byId("primary-close").textContent = engagement.primaryClose || "旧稿未标注；新稿会从评论、任务和下一次验证中只选一个主动作。";
     const referenceResearch = currentItem.referenceResearch || {};
     byId("reference-sources").textContent = Array.isArray(referenceResearch.sourceIds) && referenceResearch.sourceIds.length
@@ -215,13 +250,13 @@
       ...(Array.isArray(referenceResearch.borrowedKnowledge) ? referenceResearch.borrowedKnowledge.slice(0, 2) : []),
       ...(Array.isArray(referenceResearch.structuralChoices) ? referenceResearch.structuralChoices.slice(0, 1) : [])
     ].join("；") || "只借鉴知识、结构和互动机制，不复制原句、案例或人设。";
-    byId("home-script-duration").textContent = currentItem.durationFull || "约2—3分钟";
+    byId("home-script-duration").textContent = currentItem.durationFull || "按证据密度决定";
     byId("home-script-preview").textContent = fullPlainText(currentItem);
     byId("source-package-path").textContent = sourcePackagePath(currentItem);
     byId("open-source-package").href = sourcePackageHref(currentItem);
-    byId("story-yesterday").textContent = currentItem.storyPosition?.yesterday || "旧定位基线内容，没有成长连续任务。";
-    byId("story-today").textContent = currentItem.storyPosition?.today || "保留旧样本供对照。";
-    byId("story-tomorrow").textContent = currentItem.storyPosition?.tomorrow || "打开旧素材包查看原计划。";
+    byId("story-yesterday").textContent = currentItem.storyPosition?.problem || currentItem.storyPosition?.yesterday || "这条内容要解决的开发者问题。";
+    byId("story-today").textContent = currentItem.storyPosition?.current || currentItem.storyPosition?.today || "本次真实安装、运行、失败或修复证据。";
+    byId("story-tomorrow").textContent = currentItem.storyPosition?.nextVerification || currentItem.storyPosition?.tomorrow || "尚待验证的边界或替代方案。";
 
     const progress = currentItem.progress || ["旧定位内容已完整保留，可从历史内容打开。"];
     byId("progress-list").innerHTML = progress.map(item => `<li>${htmlEscape(item)}</li>`).join("");
@@ -316,16 +351,144 @@
 
   function renderPublish() {
     const platform = persisted.platform || "douyin";
+    const packageValue = currentVideoJob?.publishPackage;
+    const ready = currentVideoJob?.status === "approved" && packageValue?.status === "ready" && Number(packageValue.outputVersion) === Number(currentVideoJob.output?.version);
+    const state = byId("publish-package-state");
+    const titleSection = byId("publish-title-section");
+    const coverSection = byId("publish-cover-section");
+    const actions = byId("publish-package-actions");
+    const download = byId("download-publish-package");
+    if (ready) {
+      publishPackageDraft = structuredClone(packageValue);
+      state.innerHTML = `<strong>发布素材包已就绪</strong><span>已绑定成片 v${htmlEscape(packageValue.outputVersion)}；所有内容只保存在本机，不会自动发布。</span>`;
+      state.classList.add("is-ready");
+      byId("publish-package-meta").textContent = `成片 v${packageValue.outputVersion} · ${packageValue.generation?.engine === "local-content-derived" ? "从真实稿件生成" : "本地生成"} · ${new Date(packageValue.generatedAt).toLocaleString("zh-CN")}`;
+      titleSection.classList.remove("is-hidden");
+      coverSection.classList.remove("is-hidden");
+      actions.classList.remove("is-hidden");
+      byId("save-publish-package").disabled = false;
+      byId("regenerate-publish-package").disabled = false;
+      const selectedTitle = packageValue.selectedTitle || packageValue.titleCandidates?.[0]?.title || "";
+      byId("publish-title").value = selectedTitle;
+      byId("publish-title-options").innerHTML = (packageValue.titleCandidates || []).map(item => `<button class="publish-title-option ${item.title === selectedTitle ? "is-active" : ""}" data-publish-title="${htmlEscape(item.title)}"><span>${htmlEscape(item.title)}</span><small>${htmlEscape(item.angle || "标题候选")}</small></button>`).join("");
+      const coverMap = [
+        ["vertical", "publish-cover-vertical", "download-publish-cover-vertical"],
+        ["wide16x9", "publish-cover-wide", "download-publish-cover-wide"],
+      ];
+      for (const [name, imageId, linkId] of coverMap) {
+        const cover = packageValue.covers?.[name];
+        const image = byId(imageId), link = byId(linkId);
+        if (cover?.url) {
+          image.src = `${videoApiBase}${cover.pngUrl || cover.url}?t=${Date.now()}`;
+          image.classList.remove("is-hidden");
+          link.href = `${videoApiBase}${cover.pngUrl || cover.url}`;
+          link.classList.remove("is-hidden");
+        } else {
+          image.removeAttribute("src");
+          image.classList.add("is-hidden");
+          link.classList.add("is-hidden");
+        }
+      }
+      if (packageValue.artifacts?.zip) {
+        download.href = `${videoApiBase}${packageValue.artifacts.zip}`;
+        download.classList.remove("is-hidden");
+      } else download.classList.add("is-hidden");
+    } else {
+      publishPackageDraft = null;
+      state.classList.remove("is-ready");
+      state.innerHTML = currentVideoJob?.status === "approved" && packageValue?.status === "error"
+        ? `<strong>发布素材包生成失败</strong><span>${htmlEscape(packageValue.error || "可以点击重新生成后再试")}</span>`
+        : `<strong>等待成片</strong><span>审核通过最终成片后，这里会自动生成标题、发布文案、关联话题和两种封面。</span>`;
+      byId("publish-package-meta").textContent = currentVideoJob?.output ? `当前成片 v${currentVideoJob.output.version} 尚未完成最终发布准备` : "尚未绑定已审核成片";
+      titleSection.classList.add("is-hidden");
+      coverSection.classList.add("is-hidden");
+      actions.classList.toggle("is-hidden", !(currentVideoJob?.status === "approved"));
+      byId("save-publish-package").disabled = true;
+      byId("regenerate-publish-package").disabled = currentVideoJob?.status !== "approved";
+      download.classList.add("is-hidden");
+    }
     setPlatform(platform, false);
   }
 
+  function capturePublishDraft() {
+    if (!publishPackageDraft) return;
+    const platform = persisted.platform || "douyin";
+    publishPackageDraft.selectedTitle = byId("publish-title").value.trim() || publishPackageDraft.selectedTitle;
+    publishPackageDraft.platforms ||= {};
+    publishPackageDraft.platforms[platform] ||= { label: platform };
+    publishPackageDraft.platforms[platform].body = byId("publish-text").value.trim();
+    publishPackageDraft.platforms[platform].hashtags = byId("publish-hashtags").value.trim().split(/[\s,，、]+/).filter(Boolean);
+    publishPackageDraft.hashtags = publishPackageDraft.platforms[platform].hashtags;
+  }
+
   function setPlatform(platform, save = true) {
-    const labels = { douyin: "抖音发布文案", xiaohongshu: "小红书发布文案", weibo: "微博发布文案" };
+    if (save) capturePublishDraft();
+    const labels = { douyin: "抖音发布文案", xiaohongshu: "小红书发布文案", wechat: "视频号发布文案" };
+    if (!labels[platform]) platform = "douyin";
     persisted.platform = platform;
     $$(".platform-tab").forEach(button => button.classList.toggle("is-active", button.dataset.platform === platform));
     byId("platform-name").textContent = labels[platform];
-    byId("publish-text").value = currentItem.publish?.[platform] || "旧定位基线发布文案请打开原素材包查看。";
+    const packageCopy = publishPackageDraft?.platforms?.[platform];
+    const legacyCopy = currentItem.publish?.[platform] || (platform === "wechat" ? currentItem.publish?.weibo : "") || currentItem.platformCopy?.[platform];
+    byId("publish-text").value = packageCopy?.body || legacyCopy || "审核通过成片后，将在这里生成与最终版本绑定的发布文案。";
+    byId("publish-hashtags").value = (packageCopy?.hashtags || publishPackageDraft?.hashtags || []).join(" ");
+    byId("publish-text").readOnly = !publishPackageDraft;
+    byId("publish-hashtags").readOnly = !publishPackageDraft;
     if (save) saveState();
+  }
+
+  function selectPublishTitle(title) {
+    if (!publishPackageDraft) return;
+    byId("publish-title").value = title;
+    publishPackageDraft.selectedTitle = title;
+    $$("[data-publish-title]", byId("publish-title-options")).forEach(button => button.classList.toggle("is-active", button.dataset.publishTitle === title));
+  }
+
+  function publishRequestBody(mode) {
+    capturePublishDraft();
+    const body = {
+      expectedVersion: Number(currentVideoJob?.output?.version),
+      mode,
+      selectedTitle: byId("publish-title").value.trim(),
+      syncCovers: true,
+    };
+    if (mode === "save") {
+      body.hashtags = publishPackageDraft?.hashtags || [];
+      body.platforms = publishPackageDraft?.platforms || {};
+    }
+    return body;
+  }
+
+  async function updatePublishPackage(mode) {
+    if (!currentVideoJob?.id || currentVideoJob.status !== "approved") return toast("请先审核通过最终成片");
+    const button = mode === "save" ? byId("save-publish-package") : byId("regenerate-publish-package");
+    const idleText = button.textContent;
+    button.disabled = true;
+    button.textContent = mode === "save" ? "正在保存并同步封面…" : "正在重新生成…";
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/publish-package`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(publishRequestBody(mode)),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "发布素材包生成失败");
+      currentVideoJob = payload.job;
+      upsertAvailableVideoJob(currentVideoJob);
+      renderPublish();
+      toast(mode === "save" ? "发布素材包已保存，封面已同步" : "发布素材包已重新生成");
+    } catch (error) {
+      toast(`发布素材包失败：${error.message}`);
+    } finally {
+      button.disabled = false;
+      button.textContent = idleText;
+    }
+  }
+
+  function copyCurrentPublishCopy() {
+    const body = byId("publish-text").value.trim();
+    const topics = byId("publish-hashtags").value.trim();
+    copyText([body, topics].filter(Boolean).join("\n\n"), "发布文案和话题已复制");
   }
 
   function renderEvidence() {
@@ -348,11 +511,10 @@
     byId("risk-progress").textContent = `${done}/${checks.length} 已确认`;
   }
 
-  function renderRoadmap() {
-    byId("roadmap-grid").innerHTML = data.roadmap.map(([day, phase, challenge, status]) => {
-      const phaseIndex = day <= 7 ? 1 : day <= 14 ? 2 : day <= 21 ? 3 : 4;
-      return `<article class="roadmap-day phase-index-${phaseIndex} ${status === "已完成" ? "is-done" : ""} ${status === "下一步" ? "is-next" : ""}">
-        <div class="day-number">Day ${day}</div><span class="day-phase">${htmlEscape(phase)}</span><p>${htmlEscape(challenge)}</p><span class="day-status">${htmlEscape(status)}</span>
+  function renderExperiments() {
+    byId("experiment-grid").innerHTML = (data.experiments || []).map((item, index) => {
+      return `<article class="experiment-card track-index-${index + 1}">
+        <div class="experiment-type">${htmlEscape(item.type)}</div><strong>${htmlEscape(item.question)}</strong><p>${htmlEscape(item.evidence)}</p><span>${htmlEscape(item.asset)}</span>
       </article>`;
     }).join("");
   }
@@ -367,7 +529,7 @@
     byId("library-list").innerHTML = items.length ? items.map(item => `
       <article class="library-card">
         <div>
-          <div class="library-meta"><span class="pill ${item.kind === "growth" ? "kind-growth" : "kind-legacy"}">${item.kind === "growth" ? "AI成长版" : "旧定位基线"}</span><span class="pill">${htmlEscape(item.date)}</span><span class="pill">${htmlEscape(item.day)}</span></div>
+          <div class="library-meta"><span class="pill ${item.kind === "developer" ? "kind-growth" : "kind-legacy"}">${item.kind === "developer" ? "开发者实测" : "历史证据"}</span><span class="pill">${htmlEscape(item.date)}</span><span class="pill">${htmlEscape(item.day)}</span></div>
           <h3>${htmlEscape(item.mainTopic)}</h3><p>${htmlEscape(item.column)} · ${htmlEscape(item.status)}</p>
         </div>
         <div class="library-actions"><button class="btn btn-secondary" data-open-item="${htmlEscape(item.id)}">打开查看</button></div>
@@ -375,7 +537,9 @@
   }
 
   function renderAll() {
-    renderPicker(); renderStatus(); renderToday(); renderScripts(); renderCreative(); renderShoot(); renderPublish(); renderEvidence(); renderRoadmap(); renderLibrary();
+    renderPicker(); renderStatus(); renderToday(); renderScripts(); renderCreative(); renderShoot(); renderPublish(); renderEvidence(); renderExperiments(); renderLibrary();
+    renderOrdinaryViewerResult();
+    void hydrateOrdinaryViewerReview(currentItem);
   }
 
   function setScriptMode(mode) {
@@ -463,9 +627,537 @@
     return `${minutes}分${String(rest).padStart(2, "0")}秒`;
   }
 
+  function jobHasStandardOutput(job) {
+    return !!job?.output?.url;
+  }
+
+  function jobMotionSample(job) {
+    const artifacts = job?.workflow?.stages?.motion_sample?.artifacts;
+    return artifacts?.url ? artifacts : null;
+  }
+
+  function jobKeyframeReview(job) {
+    const stage = job?.workflow?.stages?.keyframes;
+    const gate = job?.workflow?.stages?.keyframe_review;
+    const frames = Array.isArray(stage?.artifacts?.frames) ? stage.artifacts.frames : [];
+    if (!frames.length || !["awaiting_review", "rejected"].includes(gate?.status)) return null;
+    return { stage, gate, frames, version: Number(stage.currentVersion || gate.currentVersion || 0) };
+  }
+
+  function jobMotionReview(job) {
+    const stage = job?.workflow?.stages?.motion_sample;
+    if (!stage?.artifacts?.url || !["awaiting_review", "rejected"].includes(stage.status)) return null;
+    return { stage, artifacts: stage.artifacts, version: Number(stage.currentVersion || 0) };
+  }
+
+  function jobDateLabel(job) {
+    const date = new Date(job?.updatedAt || job?.createdAt || "");
+    if (!Number.isFinite(date.getTime())) return "时间未知";
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(date).replaceAll("/", "-");
+  }
+
+  function demoKeyframeReviewCopy(frame, index) {
+    const purpose = String(frame?.purpose || "");
+    if (/开场|对比/u.test(purpose)) return { title: `画面 ${index + 1} · 开头对比`, question: "一眼能看懂“别急着学工具，要先迈出第一步”吗？" };
+    if (/备忘录/u.test(purpose)) return { title: `画面 ${index + 1} · 具体动作`, question: "备忘录里的唯一动作够清楚吗？" };
+    if (/提示词|复制/u.test(purpose)) return { title: `画面 ${index + 1} · 完整提示词`, question: "整句提示词够大、能完整读完吗？" };
+    return { title: `画面 ${index + 1}`, question: "这张图一眼能看懂，文字也能看清吗？" };
+  }
+
+  function jobResultLabel(job) {
+    if (jobHasStandardOutput(job)) return job?.status === "approved" ? "已通过，可预览和下载" : "可预览、返修和下载";
+    const keyframeReview = jobKeyframeReview(job);
+    if (keyframeReview) return keyframeReview.gate.status === "rejected" ? "关键帧已拒绝，已暂停" : `待审核：${keyframeReview.frames.length}张关键帧`;
+    const motionReview = jobMotionReview(job);
+    if (motionReview) return motionReview.stage.status === "rejected" ? "动态样片已拒绝，已暂停" : "待审核：动态样片";
+    if (videoRunningStatuses.includes(job?.status)) return "正在处理";
+    if (jobMotionSample(job)) return "只有真实动态样片";
+    return "没有标准成片";
+  }
+
+  function jobPickerTitle(job) {
+    const source = String(job?.fileName || job?.contentId || job?.id || "本地任务");
+    return `${jobDateLabel(job)} · ${jobResultLabel(job)} · ${source}`;
+  }
+
+  function upsertAvailableVideoJob(job) {
+    if (!job?.id) return;
+    availableVideoJobs = [job, ...availableVideoJobs.filter(item => item.id !== job.id)]
+      .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")));
+  }
+
+  function renderVideoJobPicker() {
+    const picker = byId("video-job-picker");
+    if (!picker) return;
+    picker.innerHTML = [
+      '<option value="">新建任务：上传一段原片</option>',
+      ...availableVideoJobs.map(job => `<option value="${htmlEscape(job.id)}">${htmlEscape(jobPickerTitle(job))}</option>`),
+    ].join("");
+    picker.value = currentVideoJob?.id && availableVideoJobs.some(job => job.id === currentVideoJob.id)
+      ? currentVideoJob.id
+      : "";
+    picker.disabled = videoJobsLoading || !videoServiceOnline;
+    byId("refresh-video-jobs").disabled = videoJobsLoading || !videoServiceOnline;
+  }
+
+  function renderVideoServiceDetail() {
+    const detail = byId("video-service-detail");
+    const status = byId("video-service-status");
+    if (!detail) return;
+    if (!videoServiceOnline) {
+      detail.textContent = "请双击项目根目录的“打开AI口播工作台.vbs”；它会静默启动服务并重新打开网页。";
+      return;
+    }
+    if (editExperienceMode === "demo") {
+      if (status) status.textContent = "本地工作台已就绪";
+      detail.textContent = "本地工作台已连接。原视频保留在本机，有真实结果时才会显示预览。";
+      return;
+    }
+    if (status) status.textContent = "视觉导演 v4 工作流已就绪";
+    const modelText = serviceHealth?.ai?.configured ? `文本模型 ${serviceHealth.ai.model}` : "文本模型未配置";
+    detail.textContent = `HyperFrames默认 · 2K母版 · 两道审核门 · ${modelText} · 本地转录 ${serviceHealth?.ai?.transcriptionModel || "faster-whisper/small"}`;
+  }
+
+  function renderDemoPreview(job = currentVideoJob) {
+    const panel = byId("demo-preview-panel");
+    const video = byId("demo-sample-video");
+    const keyframes = byId("demo-keyframe-grid");
+    const actions = byId("demo-stage-review-actions");
+    const feedback = byId("demo-stage-feedback");
+    const revise = byId("demo-stage-revise");
+    const reject = byId("demo-stage-reject");
+    const approve = byId("demo-stage-approve");
+    if (!panel || !video || !keyframes || !actions || !feedback || !revise || !reject || !approve) return;
+    video.pause();
+    video.classList.add("is-hidden");
+    video.removeAttribute("src");
+    keyframes.classList.add("is-hidden");
+    keyframes.innerHTML = "";
+    actions.classList.add("is-hidden");
+    if (editExperienceMode !== "demo" || jobHasStandardOutput(job)) {
+      panel.classList.add("is-hidden");
+      return;
+    }
+    panel.classList.remove("is-hidden");
+
+    const configureReviewActions = ({ stageId, version, rejected, approveDisabled = false, reviseText, approveText, feedbackTitle, feedbackHelp, feedbackPlaceholder, boundary, initialFeedback = "" }) => {
+      const context = `${job.id}:${stageId}:${version}`;
+      if (actions.dataset.context !== context) feedback.value = initialFeedback;
+      actions.dataset.context = context;
+      actions.classList.remove("is-hidden");
+      byId("demo-stage-feedback-title").textContent = feedbackTitle;
+      byId("demo-stage-feedback-help").textContent = feedbackHelp;
+      feedback.placeholder = feedbackPlaceholder || "直接说哪一处不满意，以及希望怎样改。";
+      byId("demo-stage-boundary").textContent = boundary;
+      for (const button of [revise, reject, approve]) {
+        button.dataset.demoJobId = job.id;
+        button.dataset.demoStageId = stageId;
+        button.dataset.demoExpectedVersion = String(version);
+        button.disabled = false;
+      }
+      revise.dataset.demoStageAction = "run";
+      reject.dataset.demoStageAction = "reject";
+      approve.dataset.demoStageAction = "approve";
+      revise.textContent = reviseText;
+      reject.textContent = rejected ? "本轮已拒绝，任务已暂停" : "整版不接受，先停在这里";
+      approve.textContent = approveText;
+      reject.disabled = rejected;
+      approve.disabled = rejected || approveDisabled;
+    };
+
+    const keyframeReview = jobKeyframeReview(job);
+    if (keyframeReview) {
+      const rejected = keyframeReview.gate.status === "rejected";
+      const sampleDuration = Number(job.workflow?.config?.stages?.motion_sample?.settings?.durationSeconds || 20);
+      byId("demo-preview-title").textContent = rejected ? "这版关键帧已拒绝，任务已暂停" : `先看这 ${keyframeReview.frames.length} 张关键帧`;
+      byId("demo-preview-message").textContent = rejected
+        ? "旧图会保留，不会继续生成样片。如需继续，请写清问题后重做关键帧。"
+        : `按顺序看三张图，只看三件事：一眼能不能懂、字能不能看清、有没有挡脸。通过后只生成约 ${sampleDuration} 秒动态样片。`;
+      byId("demo-preview-badge").textContent = rejected ? "已拒绝 · 零后续生成" : "第1道人工审核";
+      keyframes.innerHTML = keyframeReview.frames.map((frame, index) => {
+        const copy = demoKeyframeReviewCopy(frame, index);
+        return `<a href="${videoApiBase}${htmlEscape(frame.url)}" target="_blank" rel="noreferrer" title="打开原图"><img src="${videoApiBase}${htmlEscape(frame.url)}?v=${keyframeReview.version}" alt="${htmlEscape(copy.title)}"><span><strong>${htmlEscape(copy.title)}</strong><small>${htmlEscape(copy.question)}</small></span></a>`;
+      }).join("");
+      keyframes.classList.remove("is-hidden");
+      configureReviewActions({
+        stageId: "keyframe_review",
+        version: keyframeReview.version,
+        rejected,
+        reviseText: "按我说的重做这三张",
+        approveText: `通过并生成约${sampleDuration}秒样片`,
+        feedbackTitle: "哪张图需要改",
+        feedbackHelp: "哪张看不懂、字太小或挡脸，直接说出来。",
+        feedbackPlaceholder: "例如：第2张备忘录里的字太小；第3张提示词没有完整显示。",
+        boundary: rejected ? "当前不会生成任何后续视频；只有你主动重做，工作流才会继续。" : "整版拒绝只记录决定并停在这里；不会自动重做，也不会生成样片。",
+        initialFeedback: rejected ? String(keyframeReview.gate.feedback || "") : "",
+      });
+      return;
+    }
+
+    const motionReview = jobMotionReview(job);
+    if (motionReview) {
+      const rejected = motionReview.stage.status === "rejected";
+      const assetsReady = job.assetReview?.reviewComplete === true && job.assetReview?.renderReady === true;
+      byId("demo-preview-title").textContent = rejected ? "这版动态样片已拒绝，任务已暂停" : "先看真实动态样片";
+      byId("demo-preview-message").textContent = rejected
+        ? "旧样片会保留，不会继续生成完整视频。如需继续，请写清问题后重做样片。"
+        : "重点检查字幕是否跟随、动效是否帮助理解、声音是否清楚。通过后才会生成完整视频。";
+      byId("demo-preview-badge").textContent = rejected ? "已拒绝 · 零后续生成" : "第2道人工审核";
+      video.src = `${videoApiBase}${motionReview.artifacts.url}`;
+      video.classList.remove("is-hidden");
+      configureReviewActions({
+        stageId: "motion_sample",
+        version: motionReview.version,
+        rejected,
+        approveDisabled: !assetsReady,
+        reviseText: "按意见重做动态样片",
+        approveText: "通过并生成完整视频",
+        feedbackTitle: "样片哪里需要修改",
+        feedbackHelp: "返修时写清时间点、具体问题和目标效果。",
+        feedbackPlaceholder: "例如：第8秒字幕太快；说到“声音”时提示音不清楚。",
+        boundary: rejected
+          ? "当前不会生成完整视频；只有你主动重做，工作流才会继续。"
+          : assetsReady
+            ? "整版拒绝只记录决定并停在这里；不会自动重做，也不会生成完整视频。"
+            : "样片关联素材状态异常，工作台已禁止进入全片；请先重做动态样片。",
+        initialFeedback: rejected ? String(motionReview.stage.feedback || "") : "",
+      });
+      return;
+    }
+
+    const sample = jobMotionSample(job);
+    if (sample) {
+      byId("demo-preview-title").textContent = "真实动态样片";
+      byId("demo-preview-message").textContent = "这段视频可以检查字幕、动效和声音方向，但它还不是完整成片，因此这里不会开放最终返修和下载。";
+      byId("demo-preview-badge").textContent = "仅样片，不冒充成片";
+      video.src = `${videoApiBase}${sample.url}`;
+      video.classList.remove("is-hidden");
+      return;
+    }
+    byId("demo-preview-badge").textContent = "真实结果边界";
+    if (!job) {
+      byId("demo-preview-title").textContent = "还没有选择处理任务";
+      byId("demo-preview-message").textContent = "上传一段原片开始新任务，或者从上方选择一个标有“可预览、返修和下载”的已有任务。";
+      return;
+    }
+    if (videoRunningStatuses.includes(job.status)) {
+      byId("demo-preview-title").textContent = "任务仍在处理中";
+      byId("demo-preview-message").textContent = "工作台还没有生成可核验的标准成片，完成前不会显示占位预览。";
+      return;
+    }
+    byId("demo-preview-title").textContent = "这个任务没有标准成片";
+    byId("demo-preview-message").textContent = "它可能是效果方向证明、历史发布记录或未完成任务，不能在这里当作完整结果返修或下载。请选择带“可预览、返修和下载”的任务，或上传新原片。";
+  }
+
+  function renderReplanAvailability(job = currentVideoJob) {
+    const rejected = ["keyframe_review_rejected", "motion_sample_rejected"].includes(job?.status);
+    const available = !!job?.transcript && !videoRunningStatuses.includes(job.status) && editExperienceMode !== "demo" && !rejected;
+    byId("replan-video").classList.toggle("is-hidden", !available);
+  }
+
+  function renderEditExperienceMode() {
+    const demo = editExperienceMode === "demo";
+    document.body.classList.toggle("is-demo-mode", demo);
+    byId("edit-mode-daily").classList.toggle("is-active", !demo);
+    byId("edit-mode-demo").classList.toggle("is-active", demo);
+    byId("edit-intro-kicker").textContent = demo ? "不会剪辑，也能先看真实效果" : "默认视觉导演 v4 · 每一步可配置";
+    byId("edit-intro-title").textContent = demo
+      ? "上传原片，等工作台处理；不满意就直接说哪里要改"
+      : "先分析同题高质量视频，再拆解口播、审关键帧、审动态样片，最后渲染2K全片";
+    byId("edit-intro-description").textContent = demo
+      ? "页面只保留上传、处理进度、效果预览、自然语言返修和下载。没有真实结果时会明确说明。"
+      : "不改设置就使用默认提示词。关键帧和15—25秒动态样片分别是硬审核门；未批准不会继续生成完整视频。旧任务仍可按原 FFmpeg v3 流程打开。";
+    byId("edit-result-title").textContent = demo ? "效果预览" : "完整预览与分段审核";
+    byId("edit-result-description").textContent = demo
+      ? "先看工作台真实生成的成片；不满意就在右侧用一句话说明，满意后直接下载。"
+      : "先看完整节奏，再用15—30秒上下文小样定位问题；通过后才进入最终审核。";
+    if (currentView === "edit") byId("page-eyebrow").textContent = demo ? "拍完口播，交给工作台" : pageNames.edit[0];
+    renderVideoServiceDetail();
+    renderDemoPreview(currentVideoJob);
+    renderReplanAvailability(currentVideoJob);
+    if (currentVideoJob?.output) showVideoVersion(currentVideoJob.output.version);
+  }
+
+  function setEditExperienceMode(mode, save = true) {
+    editExperienceMode = mode === "demo" ? "demo" : "daily";
+    if (save) {
+      persisted.editExperienceMode = editExperienceMode;
+      saveState();
+    }
+    renderEditExperienceMode();
+  }
+
+  function setAnalyzeVideoDisabled(disabled) {
+    byId("analyze-video").disabled = disabled;
+    byId("demo-analyze-video").disabled = disabled;
+  }
+
   function setEditProgress(value, message) {
     byId("edit-progress-bar").style.width = `${Math.max(0, Math.min(100, Number(value || 0)))}%`;
     if (message) byId("edit-job-status").textContent = message;
+  }
+
+  function contentStrategyInputs() {
+    return {
+      direction: byId("content-direction").value.trim(),
+      evidenceSummary: byId("content-evidence-summary").value.trim(),
+    };
+  }
+
+  function contentAdvisoryReady() {
+    return videoServiceOnline
+      && serviceHealth?.ai?.configured === true
+      && multiAgentStatus?.advisoryEnabled === true;
+  }
+
+  function contentStrategyReadyForConfirmation() {
+    const current = contentStrategyInputs();
+    const analysis = contentStrategyDraft.analysis;
+    return !!analysis
+      && !!contentStrategyDraft.analysisArtifactId
+      && current.direction === contentStrategyDraft.direction
+      && current.evidenceSummary === contentStrategyDraft.evidenceSummary
+      && analysis.lockedDirection === current.direction
+      && analysis.status === "ready_for_script"
+      && Array.isArray(analysis.evidence?.available)
+      && analysis.evidence.available.length > 0
+      && Array.isArray(analysis.evidence?.missing)
+      && analysis.evidence.missing.length === 0;
+  }
+
+  function updateContentStrategyControls() {
+    const { direction, evidenceSummary } = contentStrategyInputs();
+    const busy = contentStrategyAnalyzing || contentGenerating;
+    const ready = contentStrategyReadyForConfirmation();
+    const generated = !!contentStrategyDraft.generatedContentId;
+    const analyze = byId("analyze-content-direction");
+    const confirmation = byId("confirm-content-strategy");
+    const generate = byId("generate-content");
+    byId("content-direction").disabled = busy;
+    byId("content-evidence-summary").disabled = busy;
+    analyze.disabled = !(contentAdvisoryReady() && direction && evidenceSummary && !busy);
+    confirmation.disabled = !(contentAdvisoryReady() && ready && !busy && !generated);
+    if (confirmation.disabled && (!ready || generated)) confirmation.checked = false;
+    generate.disabled = !(contentAdvisoryReady() && ready && confirmation.checked && !busy && !generated);
+    if (!busy) generate.textContent = generated ? "本方向已生成" : "第 2 步：确认并生成口播";
+  }
+
+  function analysisList(items, emptyText) {
+    const values = Array.isArray(items) ? items.filter(Boolean) : [];
+    return values.length
+      ? `<ul>${values.map(item => `<li>${htmlEscape(item)}</li>`).join("")}</ul>`
+      : `<p class="strategy-empty-value">${htmlEscape(emptyText)}</p>`;
+  }
+
+  function renderContentStrategyAnalysis(message = "") {
+    const host = byId("content-strategy-analysis");
+    const analysis = contentStrategyDraft.analysis;
+    if (!analysis) {
+      host.className = "strategy-analysis is-empty";
+      host.innerHTML = htmlEscape(message || "填写左侧两项后点击“分析方向”，这里会展示观众收益、优缺点、证据缺口和最多三个追问。");
+      return;
+    }
+    const statusLabels = {
+      ready_for_script: "证据已就绪",
+      needs_evidence: "需要补充证据",
+      needs_restructure: "需要收窄或重构",
+      recommend_abandon: "建议暂缓或放弃",
+    };
+    const recommendationLabels = {
+      single_piece: "适合单篇",
+      series: "适合系列",
+      defer: "建议暂缓",
+    };
+    const ready = contentStrategyReadyForConfirmation();
+    const generated = !!contentStrategyDraft.generatedContentId;
+    const available = (analysis.evidence?.available || []).map(item => item.relevance || item.id);
+    const missing = analysis.evidence?.missing || [];
+    host.className = `strategy-analysis ${ready ? "is-ready" : "needs-input"}`;
+    host.innerHTML = `
+      <div class="strategy-analysis-heading">
+        <div><span>内容顾问结论</span><strong>${htmlEscape(statusLabels[analysis.status] || analysis.status)}</strong></div>
+        <span class="strategy-recommendation">${htmlEscape(recommendationLabels[analysis.recommendation] || analysis.recommendation)}</span>
+      </div>
+      <p class="strategy-restatement">${htmlEscape(analysis.directionRestatement)}</p>
+      <div class="strategy-analysis-grid">
+        <article><span>目标受众</span><p>${htmlEscape(analysis.audience)}</p></article>
+        <article><span>观众能获得什么</span><p>${htmlEscape(analysis.viewerBenefit)}</p></article>
+        <article><span>这条内容要回答</span><p>${htmlEscape(analysis.testableQuestion)}</p></article>
+        <article><span>已引用的真实证据</span>${analysisList(available, "没有可引用证据")}</article>
+        <article><span>这个方向的优点</span>${analysisList(analysis.strengths, "暂无")}</article>
+        <article><span>这个方向的缺点</span>${analysisList(analysis.weaknesses, "暂无")}</article>
+        <article class="strategy-gap-card"><span>证据缺口</span>${analysisList(missing, "当前没有未解决的证据缺口")}</article>
+        <article><span>下一轮最多三个问题</span>${analysisList(analysis.nextQuestions, "不需要继续追问")}</article>
+      </div>
+      ${(analysis.uncertainties || []).length ? `<div class="strategy-uncertainties"><b>仍不确定：</b>${htmlEscape(analysis.uncertainties.join("；"))}</div>` : ""}
+      <p class="strategy-gate-message">${generated
+        ? "这个锁定方向已经生成一份口播。请先阅读下方普通观众点评；如需新方向，修改左侧内容后重新分析。"
+        : ready
+          ? "分析和证据已满足写稿门槛。请先阅读，再由你勾选确认；内容顾问不会替你确认。"
+        : "当前还不能写稿。请根据证据缺口或追问补充左侧信息，然后重新分析。"}</p>`;
+  }
+
+  function resetContentStrategyAnalysis(message = "方向或证据已经改变，旧分析已失效；请重新分析。") {
+    if (contentStrategyAnalyzing || contentGenerating) return;
+    const hadAnalysis = !!contentStrategyDraft.analysisArtifactId || !!contentStrategyDraft.generatedContentId;
+    contentStrategyDraft = {
+      direction: "",
+      evidenceSummary: "",
+      analysisArtifactId: "",
+      analysis: null,
+      confirmationArtifactId: "",
+      generatedContentId: "",
+    };
+    byId("confirm-content-strategy").checked = false;
+    renderContentStrategyAnalysis(hadAnalysis ? message : "");
+    if (hadAnalysis) byId("generation-status").textContent = message;
+    updateContentStrategyControls();
+  }
+
+  async function analyzeContentDirection() {
+    const { direction, evidenceSummary } = contentStrategyInputs();
+    if (!contentAdvisoryReady() || !direction || !evidenceSummary || contentStrategyAnalyzing || contentGenerating) return;
+    contentStrategyAnalyzing = true;
+    contentStrategyDraft = {
+      direction,
+      evidenceSummary,
+      analysisArtifactId: "",
+      analysis: null,
+      confirmationArtifactId: "",
+      generatedContentId: "",
+    };
+    byId("confirm-content-strategy").checked = false;
+    byId("content-strategy-analysis").className = "strategy-analysis is-loading";
+    byId("content-strategy-analysis").textContent = "内容顾问正在分析受众、价值、优缺点和证据缺口；此时不会生成口播。";
+    byId("generation-status").textContent = "正在分析你锁定的方向，不会自动换题或写稿。";
+    updateContentStrategyControls();
+    try {
+      const payload = await multiAgentRequest("/api/multi-agent/content-strategy/analyze", {
+        method: "POST",
+        body: {
+          direction,
+          userFacts: [evidenceSummary],
+          evidence: [{
+            id: "evidence.user-summary",
+            kind: "creator-provided-summary",
+            summary: evidenceSummary,
+            sourceId: "user-provided-summary",
+            provenance: "user_provided",
+          }],
+          constraints: [
+            "只分析用户锁定的方向，不得换题或直接写稿",
+            "只使用真实经历和可追溯证据，不虚构结果",
+          ],
+        },
+        idempotencyPrefix: "content-strategy-analysis",
+      });
+      contentStrategyDraft.analysisArtifactId = payload.analysisArtifactId;
+      contentStrategyDraft.analysis = payload.analysis;
+      renderContentStrategyAnalysis();
+      byId("generation-status").textContent = contentStrategyReadyForConfirmation()
+        ? "方向分析完成。请阅读结果并明确勾选确认，之后才会生成口播。"
+        : "分析发现仍有缺口；请补充左侧证据或回答追问后重新分析。";
+      toast("方向分析已完成，尚未生成口播");
+    } catch (error) {
+      contentStrategyDraft.analysisArtifactId = "";
+      contentStrategyDraft.analysis = null;
+      renderContentStrategyAnalysis(`方向分析失败：${error.message}`);
+      byId("generation-status").textContent = `方向分析失败：${error.message}`;
+      toast("方向分析失败，请查看页面提示");
+    } finally {
+      contentStrategyAnalyzing = false;
+      updateContentStrategyControls();
+    }
+  }
+
+  async function lockedDirectionHash(direction) {
+    if (!globalThis.crypto?.subtle || typeof TextEncoder !== "function") {
+      throw new Error("当前浏览器不支持方向哈希，请通过本地工作台入口重新打开页面");
+    }
+    const bytes = new TextEncoder().encode(JSON.stringify({ lockedDirection: direction }));
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  function renderOrdinaryViewerResult(item = currentItem) {
+    const host = byId("ordinary-viewer-result");
+    const audit = item?.ordinaryViewerAudit;
+    if (!audit) {
+      host.className = "ordinary-viewer-result is-empty";
+      host.innerHTML = "新口播生成后，普通观众 Agent 会在这里给出最尖锐的一句话、具体阻碍和最小修改。";
+      return;
+    }
+    const cached = ordinaryViewerReviewCache.get(item.id);
+    if (audit.status === "failed" || cached?.status === "failed") {
+      host.className = "ordinary-viewer-result is-failed";
+      host.innerHTML = `<div class="ordinary-viewer-heading"><span>普通观众点评未完成</span><strong>不能据此提示直接拍摄</strong></div><p>${htmlEscape(cached?.error || audit.error || "点评服务返回失败")}</p>`;
+      return;
+    }
+    const review = cached?.review;
+    if (!review) {
+      host.className = "ordinary-viewer-result is-loading";
+      host.innerHTML = `<div class="ordinary-viewer-heading"><span>普通观众的第一反应</span><strong>${htmlEscape(audit.viewerDecision || "正在读取")}</strong></div><blockquote>${htmlEscape(audit.sharpConclusion || "正在读取完整点评……")}</blockquote><p>正在读取“最小修改”和证据缺口，不会把生成完成直接等同于可以拍摄。</p>`;
+      return;
+    }
+    const classificationLabels = { fact: "事实问题", subjective: "主观感受", uncertain: "无法确认" };
+    const blockers = (review.blockers || []).map(item => {
+      const reference = item.quote
+        ? `原文：“${item.quote}”`
+        : (Number.isFinite(item.start) && Number.isFinite(item.end) ? `${item.start.toFixed(1)}–${item.end.toFixed(1)} 秒` : "未给出引用");
+      return `<li><b>${htmlEscape(item.issue)}</b><span>${htmlEscape(classificationLabels[item.classification] || item.classification || "观点")}</span><small>${htmlEscape(reference)}</small></li>`;
+    }).join("");
+    host.className = "ordinary-viewer-result is-complete";
+    host.innerHTML = `
+      <div class="ordinary-viewer-heading"><span>普通观众的第一反应</span><strong>${htmlEscape(review.viewerDecision)}</strong></div>
+      <blockquote>${htmlEscape(review.sharpConclusion)}</blockquote>
+      <div class="ordinary-viewer-fix"><span>最小修改</span><p>${htmlEscape(review.minimalFix)}</p></div>
+      <div class="ordinary-viewer-gaps">
+        <article><span>观众价值缺口</span><p>${htmlEscape(review.viewerValueGap)}</p></article>
+        <article><span>证据缺口</span><p>${htmlEscape(review.evidenceGap)}</p></article>
+      </div>
+      <div class="ordinary-viewer-blockers"><span>最关键的阻碍（最多三条）</span>${blockers ? `<ol>${blockers}</ol>` : "<p>没有返回阻碍，但仍需由你决定是否修改或拍摄。</p>"}</div>
+      <small class="ordinary-viewer-boundary">这是一份只读普通观众点评，不批准拍摄、发布或自动改稿。</small>`;
+  }
+
+  async function hydrateOrdinaryViewerReview(item = currentItem, { force = false } = {}) {
+    const audit = item?.ordinaryViewerAudit;
+    if (!item?.id || !audit) return null;
+    if (!videoServiceOnline) return null;
+    if (!force && ordinaryViewerReviewCache.has(item.id)) return ordinaryViewerReviewCache.get(item.id);
+    if (ordinaryViewerReviewLoading.has(item.id)) return ordinaryViewerReviewLoading.get(item.id);
+    if (audit.status === "failed") {
+      const entry = { status: "failed", error: audit.error || "普通观众点评失败" };
+      ordinaryViewerReviewCache.set(item.id, entry);
+      if (currentItem?.id === item.id) renderOrdinaryViewerResult(item);
+      return entry;
+    }
+    if (!audit.artifactHref) return null;
+    const task = (async () => {
+      try {
+        const href = String(audit.artifactHref);
+        const url = /^https?:\/\//i.test(href) ? href : `${videoApiBase}${href.startsWith("/") ? href : `/${href}`}`;
+        const response = await fetch(url, { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `点评读取失败（${response.status}）`);
+        const review = payload.review || payload.artifact?.review;
+        if (!review?.sharpConclusion || !review?.minimalFix) throw new Error("普通观众点评缺少尖锐结论或最小修改");
+        const entry = { status: "complete", review };
+        ordinaryViewerReviewCache.set(item.id, entry);
+        if (currentItem?.id === item.id) renderOrdinaryViewerResult(item);
+        return entry;
+      } catch (error) {
+        const entry = { status: "failed", error: error.message };
+        ordinaryViewerReviewCache.set(item.id, entry);
+        if (currentItem?.id === item.id) renderOrdinaryViewerResult(item);
+        return entry;
+      } finally {
+        ordinaryViewerReviewLoading.delete(item.id);
+      }
+    })();
+    ordinaryViewerReviewLoading.set(item.id, task);
+    return task;
   }
 
   function mergeGeneratedContents(items, selectId = null) {
@@ -492,27 +1184,661 @@
   }
 
   async function generateNewContent() {
-    if (!videoServiceOnline || contentGenerating) return;
+    if (!contentAdvisoryReady() || !contentStrategyReadyForConfirmation() || !byId("confirm-content-strategy").checked || contentGenerating) return;
     contentGenerating = true;
     const button = byId("generate-content");
-    button.disabled = true;
-    button.textContent = "AI正在生成……";
-    byId("generation-status").textContent = "正在汇总最近真实进展、Git记录和公开边界，然后由文本模型生成可拍口播。通常需要1—3分钟。";
+    const direction = contentStrategyDraft.direction;
+    button.textContent = "正在确认并生成……";
+    byId("generation-status").textContent = "正在把你的明确确认写成独立凭证，然后按锁定方向生成；通常需要1—3分钟。";
+    updateContentStrategyControls();
     try {
-      const response = await fetch(`${videoApiBase}/api/contents/generate`, { method: "POST" });
-      const payload = await response.json();
+      if (!contentStrategyDraft.confirmationArtifactId) {
+        const confirmationPayload = await multiAgentRequest("/api/multi-agent/content-strategy/confirm", {
+          method: "POST",
+          body: {
+            analysisArtifactId: contentStrategyDraft.analysisArtifactId,
+            decision: "approved",
+            actor: { type: "human", id: "local-owner" },
+            note: "用户已在本地工作台阅读分析并明确勾选确认",
+          },
+          idempotencyPrefix: "content-strategy-confirmation",
+        });
+        if (confirmationPayload.confirmation?.scriptHandoffAllowed !== true) {
+          throw new Error("这份分析仍未满足写稿门槛，请补充证据后重新分析");
+        }
+        contentStrategyDraft.confirmationArtifactId = confirmationPayload.confirmationArtifactId;
+      }
+      const directionHash = await lockedDirectionHash(direction);
+      byId("generation-status").textContent = "确认凭证已建立，正在按原方向研究同题内容、生成口播并运行普通观众点评。";
+      const response = await fetch(`${videoApiBase}/api/contents/generate`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lockedDirection: direction,
+          lockedDirectionHash: directionHash,
+          strategyConfirmationArtifactId: contentStrategyDraft.confirmationArtifactId,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "口播生成失败");
+      if (!payload.item?.id) throw new Error("口播生成成功，但服务端没有返回内容 ID");
+      contentStrategyDraft.generatedContentId = payload.item.id;
+      ordinaryViewerReviewCache.delete(payload.item.id);
+      mergeGeneratedContents([payload.item], payload.item.id);
       await refreshGeneratedContents(payload.item.id);
       switchView("today");
-      byId("generation-status").textContent = `已生成 ${payload.item.day} · ${payload.item.mainTopic}`;
-      toast("新口播已生成，可以直接拍摄");
+      const reviewEntry = await hydrateOrdinaryViewerReview(currentItem, { force: true });
+      byId("generation-status").textContent = reviewEntry?.status === "complete"
+        ? `已生成 ${payload.item.day} · ${payload.item.mainTopic}；请先看下方普通观众点评，再决定修改或拍摄。`
+        : `已生成 ${payload.item.day} · ${payload.item.mainTopic}，但普通观众完整点评读取失败；不要直接进入拍摄。`;
+      toast("口播已生成；普通观众点评已展示，请先判断是否修改");
     } catch (error) {
       byId("generation-status").textContent = `生成失败：${error.message}`;
       toast("生成失败，请查看页面提示");
     } finally {
       contentGenerating = false;
-      button.textContent = "AI生成新口播";
-      button.disabled = !(videoServiceOnline && serviceHealth?.ai?.configured);
+      renderContentStrategyAnalysis();
+      updateContentStrategyControls();
+    }
+  }
+
+  function cloneJson(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+  }
+
+  function visualWorkflowJob(job = currentVideoJob) {
+    return !!job && (job.pipeline === "visual-director-v4" || job.workflow?.version === "visual-director-v4");
+  }
+
+  function directorStageStatusLabel(status) {
+    return ({
+      pending: "等待中",
+      running: "生成中",
+      completed: "已生成",
+      awaiting_review: "待审核",
+      approved: "已批准",
+      rejected: "已拒绝",
+      error: "失败"
+    })[status] || status || "等待中";
+  }
+
+  function directorFieldMarkup(stageId, field, settings) {
+    const value = settings?.[field.key];
+    const id = `director-${stageId}-${field.key}`;
+    const help = field.help ? `<small>${htmlEscape(field.help)}</small>` : "";
+    if (field.type === "checkbox") return `<label class="director-field director-field-check" for="${id}"><span><strong>${htmlEscape(field.label)}</strong>${help}</span><input id="${id}" data-director-setting="${htmlEscape(field.key)}" data-field-type="checkbox" type="checkbox" ${value !== false ? "checked" : ""}></label>`;
+    if (field.type === "lines") return `<label class="director-field director-field-lines" for="${id}"><span><strong>${htmlEscape(field.label)}</strong>${help}</span><textarea id="${id}" data-director-setting="${htmlEscape(field.key)}" data-field-type="lines" rows="3" placeholder="每行一项，可留空">${htmlEscape(Array.isArray(value) ? value.join("\n") : value || "")}</textarea></label>`;
+    if (field.type === "select") return `<label class="director-field" for="${id}"><span><strong>${htmlEscape(field.label)}</strong>${help}</span><select id="${id}" data-director-setting="${htmlEscape(field.key)}" data-field-type="select">${(field.options || []).map(option => `<option value="${htmlEscape(option.value)}" ${String(option.value) === String(value) ? "selected" : ""}>${htmlEscape(option.label)}</option>`).join("")}</select></label>`;
+    return `<label class="director-field" for="${id}"><span><strong>${htmlEscape(field.label)}</strong>${help}</span><input id="${id}" data-director-setting="${htmlEscape(field.key)}" data-field-type="number" type="number" value="${htmlEscape(value ?? "")}" ${field.min === undefined ? "" : `min="${htmlEscape(field.min)}"`} ${field.max === undefined ? "" : `max="${htmlEscape(field.max)}"`} ${field.step === undefined ? "" : `step="${htmlEscape(field.step)}"`}></label>`;
+  }
+
+  function directorStyleOutput(stage) {
+    const report = stage?.artifacts?.report;
+    if (!report) return "";
+    const references = (report.selectedReferences || []).map(item => item.sourceUrl
+      ? `<a href="${htmlEscape(item.sourceUrl)}" target="_blank" rel="noreferrer">${htmlEscape(item.creatorName || item.workTitle || "参考视频")}</a>`
+      : `<span>${htmlEscape(item.creatorName || item.workTitle || "参考来源")}</span>`).join("");
+    return `<div class="director-output"><strong>风格结论</strong><p>${htmlEscape(report.summary || "已完成视觉风格分析")}</p><div class="director-reference-links">${references}</div>${stage.artifacts.reportUrl ? `<a class="director-artifact-link" href="${videoApiBase}${htmlEscape(stage.artifacts.reportUrl)}" target="_blank">打开完整风格报告</a>` : ""}</div>`;
+  }
+
+  function directorBreakdownOutput(stage) {
+    const breakdown = stage?.artifacts?.breakdown;
+    if (!breakdown?.segments?.length) return "";
+    return `<div class="director-output"><strong>已拆成 ${breakdown.segments.length} 个信息段</strong><div class="director-segment-strip">${breakdown.segments.slice(0, 12).map(segment => `<article><b>${htmlEscape(segment.id)} · ${htmlEscape(segment.upperLeftTitle)}</b><span>${htmlEscape(segment.oneSentenceSummary)}</span><small>${Number(segment.editedTime?.start || 0).toFixed(1)}—${Number(segment.editedTime?.end || 0).toFixed(1)}秒</small></article>`).join("")}</div>${stage.artifacts.breakdownUrl ? `<a class="director-artifact-link" href="${videoApiBase}${htmlEscape(stage.artifacts.breakdownUrl)}" target="_blank">打开完整内容拆解</a>` : ""}</div>`;
+  }
+
+  function directorKeyframeOutput(workflow) {
+    const artifacts = workflow?.stages?.keyframes?.artifacts;
+    if (!artifacts?.frames?.length) return "";
+    return `<div class="director-output"><strong>${artifacts.frames.length} 张 1920×1080 关键帧</strong><div class="director-keyframe-grid">${artifacts.frames.map((frame, index) => `<a href="${videoApiBase}${htmlEscape(frame.url)}" target="_blank" title="打开原图"><img src="${videoApiBase}${htmlEscape(frame.url)}?v=${Number(workflow.stages.keyframes.currentVersion || 1)}" alt="关键帧 ${index + 1}"><span>${htmlEscape(frame.id || `关键帧 ${index + 1}`)} · ${htmlEscape(frame.purpose || "构图审核")}</span></a>`).join("")}</div></div>`;
+  }
+
+  function directorSampleOutput(stage) {
+    const artifacts = stage?.artifacts;
+    if (!artifacts?.url) return "";
+    return `<div class="director-output director-sample-output"><strong>15—25秒动态样片</strong><video controls playsinline preload="metadata" poster="${artifacts.thumbnailUrl ? `${videoApiBase}${htmlEscape(artifacts.thumbnailUrl)}` : ""}" src="${videoApiBase}${htmlEscape(artifacts.url)}"></video><small>成片时间 ${Number(artifacts.sampleStart || 0).toFixed(1)}—${Number(artifacts.sampleEnd || 0).toFixed(1)} 秒 · ${artifacts.metadata?.width || 1920}×${artifacts.metadata?.height || 1080}</small></div>`;
+  }
+
+  function directorFullOutput(stage, job) {
+    if (!stage?.artifacts?.output && !job?.output) return "";
+    const output = stage?.artifacts?.output || job.output;
+    return `<div class="director-output"><strong>完整视频已生成</strong><p>${output.metadata?.width || 2560}×${output.metadata?.height || 1440} · ${formatDuration(output.metadata?.duration)} · QA ${output.qaPass ? "通过" : "需检查"}</p><span>请在下方“完整预览与分段审核”里观看、返修或最终批准。</span></div>`;
+  }
+
+  function directorStageOutput(stageId, stage, workflow, job) {
+    if (stageId === "style_research") return directorStyleOutput(stage);
+    if (stageId === "content_breakdown") return directorBreakdownOutput(stage);
+    if (stageId === "keyframe_review") return directorKeyframeOutput(workflow);
+    if (stageId === "motion_sample") return directorSampleOutput(stage);
+    if (stageId === "full_render") return directorFullOutput(stage, job);
+    return "";
+  }
+
+  function directorStageActions(stageId, stage, workflow, hasJob) {
+    const running = Object.values(workflow?.stages || {}).some(item => item.status === "running");
+    const sampleAssetsReady = currentVideoJob?.assetReview?.reviewComplete === true && currentVideoJob?.assetReview?.renderReady === true;
+    const save = `<button class="btn btn-secondary" data-director-save="${stageId}">${hasJob ? "保存本步配置" : "保留本步设置"}</button>`;
+    if (!hasJob) return save;
+    const feedback = `<textarea class="director-feedback" data-director-feedback rows="2" placeholder="可选：写本次重做意见；留空按当前配置生成"></textarea>`;
+    const reviewVersion = stageId === "keyframe_review" ? Number(workflow?.stages?.keyframes?.currentVersion || 0) : Number(stage?.currentVersion || 0);
+    const expectedVersion = reviewVersion > 0 ? ` data-director-expected-version="${reviewVersion}"` : "";
+    const reject = `<button class="btn btn-secondary" data-director-reject="${stageId}"${expectedVersion} ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>整版拒绝并暂停</button>`;
+    if (stageId === "keyframe_review") return `${feedback}<div class="inline-actions"><button class="btn btn-secondary" data-director-run="${stageId}"${expectedVersion} ${running ? "disabled" : ""}>按意见重做关键帧</button>${reject}<button class="btn btn-primary" data-director-approve="${stageId}"${expectedVersion} ${stage?.status !== "awaiting_review" || running ? "disabled" : ""}>批准并生成动态样片</button></div>`;
+    if (stageId === "motion_sample") return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}"${expectedVersion} ${workflow?.stages?.keyframe_review?.status !== "approved" || running ? "disabled" : ""}>重做动态样片</button>${reject}<button class="btn btn-primary" data-director-approve="${stageId}"${expectedVersion} ${stage?.status !== "awaiting_review" || running || !sampleAssetsReady ? "disabled" : ""}>${sampleAssetsReady ? "批准并生成2K全片" : "素材状态异常，请先重做样片"}</button></div>`;
+    if (stageId === "full_render") return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}" ${workflow?.stages?.motion_sample?.status !== "approved" || running ? "disabled" : ""}>重新渲染全片</button></div>`;
+    return `${feedback}<div class="inline-actions">${save}<button class="btn btn-secondary" data-director-run="${stageId}" ${running ? "disabled" : ""}>从本步重新生成</button></div>`;
+  }
+
+  function renderDirectorWorkflow(job = currentVideoJob, force = false) {
+    const panel = byId("director-workflow-panel");
+    const container = byId("director-stage-cards");
+    if (!panel || !container) return;
+    if (!directorWorkflowDefaults) {
+      container.innerHTML = `<div class="empty-state">视觉导演默认配置尚未加载，请确认本地服务已启动。</div>`;
+      return;
+    }
+    const activeJob = visualWorkflowJob(job) ? job : null;
+    const workflow = activeJob?.workflow || null;
+    const config = workflow?.config || directorDraftConfig || directorWorkflowDefaults;
+    const signature = JSON.stringify({ id: activeJob?.id || "draft", configVersion: workflow?.configVersion || 0, stages: directorStageOrder.map(id => [workflow?.stages?.[id]?.status || "pending", workflow?.stages?.[id]?.currentVersion || 0]) });
+    if (!force && directorRenderSignature === signature) return;
+    if (!force && panel.contains(document.activeElement)) return;
+    directorRenderSignature = signature;
+    if (workflow?.config) directorDraftConfig = cloneJson(workflow.config);
+    byId("director-workflow-version").textContent = activeJob ? `任务 ${activeJob.id} · 配置 v${workflow.configVersion || 1}` : "默认配置 · 未改即直接使用";
+    container.innerHTML = directorStageOrder.map(stageId => {
+      const stageConfig = config.stages[stageId];
+      const stage = workflow?.stages?.[stageId] || { status: "pending", currentVersion: 0 };
+      const fields = (stageConfig.uiFields || []).map(field => directorFieldMarkup(stageId, field, stageConfig.settings || {})).join("");
+      const statusClass = `is-${String(stage.status || "pending").replaceAll("_", "-")}`;
+      const output = directorStageOutput(stageId, stage, workflow, activeJob);
+      return `<section class="director-stage-card ${statusClass}" data-director-stage="${stageId}">
+        <header><b>${htmlEscape(stageConfig.number)}</b><div><h4>${htmlEscape(stageConfig.label)}</h4><p>${htmlEscape(stageConfig.description)}</p></div><span>${htmlEscape(directorStageStatusLabel(stage.status))}${stage.currentVersion ? ` · v${Number(stage.currentVersion)}` : ""}</span></header>
+        ${fields ? `<div class="director-fields">${fields}</div>` : ""}
+        <details class="director-prompt"><summary>高级：查看或修改本步提示词</summary><textarea data-director-prompt rows="8">${htmlEscape(stageConfig.prompt || "")}</textarea><small>只影响当前步骤。留空不会调用隐藏提示词，而是明确使用空提示词，请谨慎。</small></details>
+        ${output}
+        <div class="director-actions">${directorStageActions(stageId, stage, workflow, !!activeJob)}</div>
+      </section>`;
+    }).join("");
+  }
+
+  function readDirectorStageCard(stageId) {
+    const card = $(`[data-director-stage="${stageId}"]`, byId("director-stage-cards"));
+    if (!card) return { settings: {}, prompt: "", feedback: "" };
+    const baseSettings = (currentVideoJob?.workflow?.config || directorDraftConfig || directorWorkflowDefaults)?.stages?.[stageId]?.settings || {};
+    const settings = { ...baseSettings };
+    $$('[data-director-setting]', card).forEach(input => {
+      const key = input.dataset.directorSetting;
+      if (input.dataset.fieldType === "checkbox") settings[key] = input.checked;
+      else if (input.dataset.fieldType === "lines") settings[key] = input.value.split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+      else if (input.dataset.fieldType === "number") settings[key] = Number(input.value);
+      else settings[key] = typeof baseSettings[key] === "number" ? Number(input.value) : input.value;
+    });
+    return { settings, prompt: $('[data-director-prompt]', card)?.value || "", feedback: $('[data-director-feedback]', card)?.value.trim() || "" };
+  }
+
+  function collectDirectorWorkflowOverrides() {
+    if (!directorWorkflowDefaults) return {};
+    const overrides = { stages: {} };
+    for (const stageId of directorStageOrder) {
+      const card = $(`[data-director-stage="${stageId}"]`, byId("director-stage-cards"));
+      if (!card) continue;
+      const value = readDirectorStageCard(stageId);
+      const defaultStage = directorWorkflowDefaults.stages[stageId];
+      const visibleKeys = new Set((defaultStage.uiFields || []).map(field => field.key));
+      const settings = Object.fromEntries(Object.entries(value.settings).filter(([key]) => visibleKeys.has(key)));
+      overrides.stages[stageId] = { settings };
+      if (value.prompt !== defaultStage.prompt) overrides.stages[stageId].prompt = value.prompt;
+    }
+    return overrides;
+  }
+
+  async function handleDirectorAction(button) {
+    const stageId = button.dataset.directorSave || button.dataset.directorRun || button.dataset.directorApprove || button.dataset.directorReject;
+    if (!stageId) return;
+    const value = readDirectorStageCard(stageId);
+    if (!visualWorkflowJob()) {
+      directorDraftConfig ||= cloneJson(directorWorkflowDefaults);
+      directorDraftConfig.stages[stageId].settings = value.settings;
+      directorDraftConfig.stages[stageId].prompt = value.prompt;
+      toast("本步设置已保留，上传后生效");
+      return;
+    }
+    const action = button.dataset.directorSave ? "config" : button.dataset.directorApprove ? "approve" : button.dataset.directorReject ? "reject" : "run";
+    const reviewAction = ["run", "approve", "reject"].includes(action) && ["keyframe_review", "motion_sample"].includes(stageId);
+    const expectedVersion = Number(button.dataset.directorExpectedVersion || 0);
+    if (reviewAction && (!Number.isInteger(expectedVersion) || expectedVersion <= 0)) {
+      toast("审核版本已经变化，请刷新任务后再操作");
+      return;
+    }
+    button.disabled = true;
+    try {
+      const versionBinding = reviewAction ? { expectedVersion } : {};
+      const body = action === "run"
+        ? { settings: value.settings, prompt: value.prompt, feedback: value.feedback, ...versionBinding }
+        : action === "config"
+          ? { settings: value.settings, prompt: value.prompt }
+          : { feedback: value.feedback, ...versionBinding };
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/workflow/stages/${encodeURIComponent(stageId)}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "阶段操作失败");
+      currentVideoJob = payload.job || currentVideoJob;
+      directorRenderSignature = "";
+      renderDirectorWorkflow(currentVideoJob, true);
+      if (action === "config") toast("本步配置已保存，未自动重跑");
+      else if (action === "reject") toast("已记录整版不接受，任务停在当前审核门");
+      else {
+        toast(action === "approve" ? "已批准，工作流开始下一步" : "已启动本步重新生成");
+        pollVideoJob(currentVideoJob.id);
+      }
+    } catch (error) {
+      toast(`操作失败：${error.message}`);
+      if (reviewAction && currentVideoJob?.id) await loadVideoJob(currentVideoJob.id, { announce: false });
+      button.disabled = false;
+    }
+  }
+
+  async function handleDemoStageAction(button) {
+    const jobId = String(button.dataset.demoJobId || "");
+    const stageId = String(button.dataset.demoStageId || "");
+    const action = String(button.dataset.demoStageAction || "");
+    const expectedVersion = Number(button.dataset.demoExpectedVersion || 0);
+    if (!jobId || currentVideoJob?.id !== jobId || !["keyframe_review", "motion_sample"].includes(stageId) || !["run", "approve", "reject"].includes(action) || !Number.isInteger(expectedVersion) || expectedVersion <= 0) {
+      toast("当前审核任务已经变化，请刷新后再操作");
+      renderDemoPreview(currentVideoJob);
+      return;
+    }
+    const feedback = String(byId("demo-stage-feedback").value || "").trim();
+    if (action === "run" && !feedback) {
+      toast("请先写清具体问题，再启动返修");
+      byId("demo-stage-feedback").focus();
+      return;
+    }
+    const contextToken = videoJobContextToken;
+    const actionButtons = [byId("demo-stage-revise"), byId("demo-stage-reject"), byId("demo-stage-approve")];
+    actionButtons.forEach(item => { item.disabled = true; });
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(jobId)}/workflow/stages/${encodeURIComponent(stageId)}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feedback, expectedVersion }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "审核操作失败");
+      if (contextToken !== videoJobContextToken || currentVideoJob?.id !== jobId) return;
+      currentVideoJob = payload.job || currentVideoJob;
+      directorRenderSignature = "";
+      renderVideoJob(currentVideoJob);
+      if (action === "reject") toast("已记录整版不接受；没有生成任何后续视频");
+      else {
+        toast(action === "approve" ? "已通过，工作台开始下一步" : "已按意见启动返修");
+        pollVideoJob(jobId, contextToken);
+      }
+    } catch (error) {
+      toast(`审核操作失败：${error.message}`);
+      if (currentVideoJob?.id === jobId) await loadVideoJob(jobId, { announce: false });
+      else renderDemoPreview(currentVideoJob);
+    }
+  }
+
+  function multiAgentIdempotencyKey(prefix) {
+    const id = globalThis.crypto?.randomUUID?.()
+      || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    return `${prefix}-${id}`.slice(0, 128);
+  }
+
+  async function multiAgentRequest(pathname, {
+    method = "GET",
+    body,
+    idempotencyPrefix = "koubo-ui",
+  } = {}) {
+    const response = await fetch(`${videoApiBase}${pathname}`, {
+      method,
+      cache: "no-store",
+      headers: {
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(method === "POST"
+          ? { "Idempotency-Key": multiAgentIdempotencyKey(idempotencyPrefix) }
+          : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `请求失败（${response.status}）`);
+    return payload;
+  }
+
+  function multiAgentStructure(candidate = {}) {
+    const list = value => Array.isArray(value)
+      ? value.join("、")
+      : typeof value === "object" && value
+        ? JSON.stringify(value)
+        : String(value || "无");
+    return [
+      ["构图", candidate.layout || "未指定"],
+      ["字幕", candidate.captions?.identity || list(candidate.captions)],
+      ["动效", list(candidate.motion?.structure || candidate.motion)],
+      ["声音", list(candidate.sound?.structure || candidate.sound)],
+    ];
+  }
+
+  function renderMultiAgentStatus() {
+    const badge = byId("multi-agent-status");
+    const enabled = multiAgentStatus?.enabled === true;
+    badge.textContent = enabled ? "实验已开启 · 影子模式" : "实验未开启";
+    badge.className = `experiment-badge ${enabled ? "is-enabled" : "is-disabled"}`;
+    byId("multi-agent-disabled-note").classList.toggle("is-hidden", enabled);
+    byId("multi-agent-workspace").classList.toggle("is-hidden", !enabled);
+    byId("multi-agent-generate").disabled = !(enabled && currentVideoJob?.id);
+    const tutorialReady = enabled
+      && byId("tutorial-input-path").value.trim()
+      && byId("tutorial-author").value.trim()
+      && byId("tutorial-license").value.trim();
+    byId("tutorial-ingest").disabled = !tutorialReady;
+    updateContentStrategyControls();
+  }
+
+  function renderMultiAgentProposals() {
+    const host = byId("multi-agent-proposals");
+    const proposals = proposalBundle?.proposals || [];
+    const candidates = proposalBundle?.candidates || [];
+    if (!proposals.length && !candidates.length) {
+      host.innerHTML = '<div class="empty-state">打开一个已有视频任务后，才能生成不改动 V4 成片的影子提案。</div>';
+      byId("multi-agent-build-ab").disabled = true;
+      byId("multi-agent-run-review").disabled = true;
+      return;
+    }
+    const kindLabels = { caption: "字幕专家", motion: "动效专家", sound: "声音专家" };
+    const proposalHtml = proposals.map(item => `
+      <article class="proposal-card">
+        <header><strong>${htmlEscape(kindLabels[item.proposalKind] || item.proposalKind || "专家提案")}</strong><span>${item.fallbackEngine ? "V4 安全回退" : "受控提案"}</span></header>
+        <dl>${multiAgentStructure(item.candidate).map(([label, value]) => `<div><dt>${htmlEscape(label)}</dt><dd>${htmlEscape(value)}</dd></div>`).join("")}</dl>
+        <div class="proposal-evidence"><b>引用记忆</b>${(item.citations || []).length
+          ? item.citations.map(citation => `<code title="${htmlEscape(citation.contentHash || "")}">${htmlEscape(citation.recordId || "未知记录")}</code>`).join("")
+          : "<span>没有引用；保留 V4 基线</span>"}</div>
+        ${(item.uncertainties || []).length ? `<p class="proposal-uncertainty">不确定项：${htmlEscape(item.uncertainties.join("；"))}</p>` : ""}
+      </article>`).join("");
+    const candidateHtml = candidates.map((candidate, index) => `
+      <article class="candidate-card">
+        <header><strong>结构候选 ${index + 1}</strong><span>${candidate.renderHash ? "已有成片哈希" : "尚未渲染"}</span></header>
+        <dl>${multiAgentStructure(candidate).map(([label, value]) => `<div><dt>${htmlEscape(label)}</dt><dd>${htmlEscape(value)}</dd></div>`).join("")}</dl>
+        ${candidate.renderHash ? `<code class="candidate-hash">SHA-256 ${htmlEscape(candidate.renderHash)}</code>` : '<small class="candidate-pending">只有经过真实渲染与 QA 后才可进入匿名 A/B。</small>'}
+      </article>`).join("");
+    const fallback = proposalBundle?.fallback?.agents?.length
+      ? `<div class="experiment-warning">以下专家不可用，已逐项回退到 V4：${htmlEscape(proposalBundle.fallback.agents.join("、"))}</div>`
+      : "";
+    host.innerHTML = `${fallback}<div class="proposal-grid">${proposalHtml}</div>
+      <div class="candidate-heading"><strong>导演保留的两个结构候选</strong><span>这里只比较差异，不赋予批准权</span></div>
+      <div class="candidate-grid">${candidateHtml}</div>`;
+    const renderReady = candidates.length >= 2
+      && candidates.slice(0, 2).every(item => /^[a-f0-9]{64}$/.test(item.renderHash || ""));
+    byId("multi-agent-build-ab").disabled = !renderReady;
+    byId("multi-agent-run-review").disabled = candidates.length === 0;
+  }
+
+  function findingMarkup(review, label) {
+    if (!review) return "";
+    const findings = review.timecodedFindings || [];
+    return `<section class="critic-report">
+      <header><strong>${htmlEscape(label)}</strong><time>${htmlEscape(review.createdAt || multiAgentReviews?.reviewedAt || "时间未返回")}</time></header>
+      <div class="critic-scores">${Object.entries(review.scores || {}).map(([key, value]) => `<span>${htmlEscape(key)} <b>${htmlEscape(value)}</b></span>`).join("")}</div>
+      ${findings.map(item => `<article><b>${Number(item.start || 0).toFixed(1)}–${Number(item.end || 0).toFixed(1)} 秒</b><p>${htmlEscape(item.finding || item.viewingReason || item.reason || "已记录")}</p>${item.viewingReason ? `<small>观看理由：${htmlEscape(item.viewingReason)}</small>` : ""}</article>`).join("") || "<p>没有返回时间码结论。</p>"}
+    </section>`;
+  }
+
+  function renderMultiAgentReview() {
+    const host = byId("multi-agent-ab-review");
+    if (!blindReviewBundle && !multiAgentReviews) {
+      host.innerHTML = '<div class="empty-state">等待两个可验证的候选成片。没有真实 renderHash 时不会伪造比较。</div>';
+      return;
+    }
+    const blindCandidates = (blindReviewBundle?.candidates || []).map(item => `
+      <article class="blind-candidate">
+        <header><strong>候选 ${htmlEscape(item.label)}</strong><span>身份已隐藏</span></header>
+        <dl>${multiAgentStructure(item.structure).map(([label, value]) => `<div><dt>${htmlEscape(label)}</dt><dd>${htmlEscape(value)}</dd></div>`).join("")}</dl>
+        <code>${htmlEscape(item.renderHash || "")}</code>
+      </article>`).join("");
+    host.innerHTML = `${blindCandidates ? `<div class="blind-grid">${blindCandidates}</div>` : ""}
+      ${findingMarkup(multiAgentReviews?.blind, "匿名质量批评")}
+      ${findingMarkup(multiAgentReviews?.retention, "逐秒留存质检")}`;
+  }
+
+  function renderTutorialCheckpoint() {
+    const host = byId("tutorial-checkpoint");
+    if (!tutorialCheckpoint) {
+      host.innerHTML = '<div class="empty-state">尚未登记教程。</div>';
+      return;
+    }
+    const stages = tutorialCheckpoint.completedStages || tutorialCheckpoint.stages || [];
+    host.innerHTML = `<article class="checkpoint-card">
+      <header><strong>${htmlEscape(tutorialCheckpoint.id || "教程检查点")}</strong><span>${htmlEscape(tutorialCheckpoint.stage || tutorialCheckpoint.status || "已登记")}</span></header>
+      <code title="${htmlEscape(tutorialCheckpoint.sourceHash || "")}">${htmlEscape(tutorialCheckpoint.sourceHash || "等待内容哈希")}</code>
+      <p>${Array.isArray(stages) ? htmlEscape(stages.join(" → ")) : htmlEscape(stages)}</p>
+      <small>断点记录可恢复；原视频不会进入 Agent 长期记忆。</small>
+    </article>`;
+  }
+
+  function memoryActions(record) {
+    const next = {
+      inbox: ["extract", "提取为技巧卡"],
+      extracted: ["recreate", "进入隔离复刻"],
+      recreated: ["trial", "进入项目试用"],
+      trial: ["approve", "人工批准"],
+      approved: ["promote", "晋级长期记忆"],
+      promoted: ["disable", "停用"],
+    }[record.status];
+    const actions = [];
+    if (next) actions.push(`<button class="btn btn-secondary" data-memory-action="${next[0]}">${next[1]}</button>`);
+    if (!["rejected", "expired", "disabled"].includes(record.status)) {
+      actions.push('<button class="text-button danger" data-memory-action="reject">拒绝</button>');
+      actions.push('<button class="text-button" data-memory-action="expire">过期</button>');
+    }
+    if (record.latestTransitionId) actions.push('<button class="text-button" data-memory-action="rollback">回滚最近一步</button>');
+    return actions.join("");
+  }
+
+  function renderMemoryRecords() {
+    const host = byId("memory-records");
+    if (!memoryRecords.length) {
+      host.innerHTML = '<div class="empty-state">当前没有技巧记忆。教程提取后会先进入 inbox，不会直接影响成片。</div>';
+      return;
+    }
+    host.innerHTML = memoryRecords.map(record => `
+      <article class="memory-card" data-memory-kind="${htmlEscape(record.kind)}" data-memory-id="${htmlEscape(record.id)}">
+        <header><div><strong>${htmlEscape(record.title || record.id)}</strong><small>${htmlEscape(record.namespace || "未分配命名空间")}</small></div><span class="memory-status status-${htmlEscape(record.status)}">${htmlEscape(record.status)}</span></header>
+        <p>${htmlEscape(record.problem || record.primitive || record.description || "技巧记录")}</p>
+        <div class="memory-meta"><span>证据 ${(record.evidence || []).length} 条</span><code title="${htmlEscape(record.contentHash || "")}">expectedHash ${htmlEscape((record.contentHash || "").slice(0, 12))}…</code></div>
+        <details><summary>查看证据与版本</summary><pre>${htmlEscape(JSON.stringify({
+          evidence: record.evidence || [],
+          versions: record.versions || {},
+          latestTransitionId: record.latestTransitionId || null,
+        }, null, 2))}</pre></details>
+        <div class="memory-actions">${memoryActions(record)}</div>
+      </article>`).join("");
+  }
+
+  async function refreshMultiAgentStatus() {
+    try {
+      multiAgentStatus = await multiAgentRequest("/api/multi-agent/status");
+      renderMultiAgentStatus();
+      await refreshMemoryRecords();
+    } catch (error) {
+      multiAgentStatus = null;
+      const badge = byId("multi-agent-status");
+      badge.textContent = "实验服务不可用";
+      badge.className = "experiment-badge is-disabled";
+      byId("multi-agent-workspace").classList.add("is-hidden");
+      byId("multi-agent-disabled-note").classList.remove("is-hidden");
+      byId("memory-records").innerHTML = `<div class="empty-state">记忆服务读取失败：${htmlEscape(error.message)}</div>`;
+      updateContentStrategyControls();
+    }
+  }
+
+  async function generateMultiAgentProposals() {
+    if (!currentVideoJob?.id || !multiAgentStatus?.enabled) return;
+    const button = byId("multi-agent-generate");
+    button.disabled = true;
+    button.textContent = "三个专家正在并行提案…";
+    proposalBundle = null;
+    blindReviewBundle = null;
+    multiAgentReviews = null;
+    renderMultiAgentProposals();
+    renderMultiAgentReview();
+    try {
+      const constraints = byId("multi-agent-constraints").value.trim();
+      const payload = await multiAgentRequest(
+        `/api/jobs/${encodeURIComponent(currentVideoJob.id)}/multi-agent/proposals`,
+        {
+          method: "POST",
+          body: { constraints: constraints ? { brief: constraints } : {} },
+          idempotencyPrefix: "proposal",
+        }
+      );
+      proposalBundle = payload.bundle;
+      renderMultiAgentProposals();
+      toast("影子提案已生成；V4 任务和审核状态没有改变");
+    } catch (error) {
+      byId("multi-agent-proposals").innerHTML = `<div class="experiment-error">提案失败：${htmlEscape(error.message)}。V4 工作流仍可继续使用。</div>`;
+    } finally {
+      button.textContent = "为当前任务生成提案";
+      renderMultiAgentStatus();
+    }
+  }
+
+  async function buildMultiAgentAb() {
+    const candidates = (proposalBundle?.candidates || []).slice(0, 2);
+    if (candidates.length < 2) return;
+    try {
+      const payload = await multiAgentRequest(
+        `/api/jobs/${encodeURIComponent(currentVideoJob.id)}/multi-agent/ab`,
+        {
+          method: "POST",
+          body: { candidates, baselineId: "koubo-v4-baseline-v1" },
+          idempotencyPrefix: "blind-ab",
+        }
+      );
+      blindReviewBundle = payload.bundle;
+      renderMultiAgentReview();
+    } catch (error) {
+      toast(`匿名 A/B 建立失败：${error.message}`);
+    }
+  }
+
+  async function runMultiAgentReview() {
+    const candidate = (proposalBundle?.candidates || [])[1]
+      || (proposalBundle?.candidates || [])[0];
+    if (!candidate || !currentVideoJob?.id) return;
+    const button = byId("multi-agent-run-review");
+    button.disabled = true;
+    try {
+      const payload = await multiAgentRequest(
+        `/api/jobs/${encodeURIComponent(currentVideoJob.id)}/multi-agent/reviews`,
+        {
+          method: "POST",
+          body: { candidate },
+          idempotencyPrefix: "critic-review",
+        }
+      );
+      multiAgentReviews = payload.reviews;
+      renderMultiAgentReview();
+    } catch (error) {
+      toast(`双重质检失败：${error.message}`);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function ingestTutorial() {
+    const button = byId("tutorial-ingest");
+    button.disabled = true;
+    button.textContent = "正在登记、分镜和提取…";
+    try {
+      const payload = await multiAgentRequest("/api/multi-agent/tutorials", {
+        method: "POST",
+        body: {
+          inputPath: byId("tutorial-input-path").value.trim(),
+          author: byId("tutorial-author").value.trim(),
+          license: byId("tutorial-license").value.trim(),
+          resume: true,
+        },
+        idempotencyPrefix: "tutorial",
+      });
+      tutorialCheckpoint = payload.tutorial;
+      renderTutorialCheckpoint();
+      await refreshMemoryRecords();
+      toast("教程已进入可恢复的知识提取流程");
+    } catch (error) {
+      byId("tutorial-checkpoint").innerHTML = `<div class="experiment-error">教程处理失败：${htmlEscape(error.message)}</div>`;
+    } finally {
+      button.textContent = "登记并提取技巧";
+      renderMultiAgentStatus();
+    }
+  }
+
+  async function refreshMemoryRecords() {
+    try {
+      const payload = await multiAgentRequest("/api/multi-agent/memory");
+      memoryRecords = payload.records || [];
+      renderMemoryRecords();
+    } catch (error) {
+      byId("memory-records").innerHTML = `<div class="empty-state">记忆读取失败：${htmlEscape(error.message)}</div>`;
+    }
+  }
+
+  function parsedMemoryEvidence() {
+    const raw = byId("memory-evidence-json").value.trim();
+    if (!raw) return [];
+    const evidence = JSON.parse(raw);
+    if (!Array.isArray(evidence)) throw new Error("人工证据必须是 JSON 数组");
+    return evidence;
+  }
+
+  async function transitionMemory(card, action) {
+    const kind = card.dataset.memoryKind;
+    const id = card.dataset.memoryId;
+    const record = memoryRecords.find(item => item.kind === kind && item.id === id);
+    if (!record) return;
+    let evidence;
+    try {
+      evidence = parsedMemoryEvidence();
+    } catch (error) {
+      return toast(error.message);
+    }
+    if (["approve", "promote", "reject", "expire", "disable"].includes(action) && evidence.length === 0) {
+      return toast("这个操作需要先填写可审计的人工证据");
+    }
+    const body = action === "rollback"
+      ? { transitionId: record.latestTransitionId }
+      : {
+        actor: { type: "human", id: "local-owner" },
+        evidence,
+        expectedHash: record.contentHash,
+      };
+    try {
+      const payload = await multiAgentRequest(
+        `/api/multi-agent/memory/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/${action}`,
+        {
+          method: "POST",
+          body,
+          idempotencyPrefix: `memory-${action}`,
+        }
+      );
+      const updated = payload.transition?.record;
+      if (updated) {
+        memoryRecords = memoryRecords.map(item => item.kind === kind && item.id === id
+          ? { kind, ...updated, latestTransitionId: action === "rollback" ? null : payload.transition.id }
+          : item);
+        renderMemoryRecords();
+      }
+      await refreshMemoryRecords();
+      toast(action === "rollback" ? "已回滚最近一次记忆变化" : `记忆状态已更新为 ${updated?.status || action}`);
+    } catch (error) {
+      toast(`记忆治理失败：${error.message}`);
     }
   }
 
@@ -524,43 +1850,72 @@
       if (!response.ok) throw new Error("服务响应异常");
       serviceHealth = await response.json();
       videoServiceOnline = !!serviceHealth.ok && !!serviceHealth.ffmpeg;
-      status.textContent = videoServiceOnline ? "全自动口播工作流已就绪" : "已连接，但FFmpeg不可用";
+      status.textContent = videoServiceOnline ? "视觉导演 v4 工作流已就绪" : "已连接，但FFmpeg不可用";
       status.className = `service-status ${videoServiceOnline ? "is-online" : "is-offline"}`;
-      const modelText = serviceHealth.ai?.configured ? `文本模型 ${serviceHealth.ai.model}` : "文本模型未配置";
-      detail.textContent = videoServiceOnline
-        ? `本地视频处理 · ${modelText} · 本地转录 ${serviceHealth.ai?.transcriptionModel || "faster-whisper/small"}`
-        : "请确认 FFmpeg 已安装并重新打开工作台。";
+      renderVideoServiceDetail();
       byId("generation-status").textContent = serviceHealth.ai?.configured
-        ? `已连接 ${serviceHealth.ai.model}；点击即可根据最近真实进展生成新口播。`
+        ? `已连接 ${serviceHealth.ai.model}；请先输入本次方向和真实证据，再让内容顾问分析。`
         : "视频仍可本地处理，但AI口播生成和语义剪辑需要文本模型配置。";
-      byId("generate-content").disabled = !(videoServiceOnline && serviceHealth.ai?.configured);
+      updateContentStrategyControls();
+      try {
+        const workflowResponse = await fetch(`${videoApiBase}/api/video-workflow/defaults`, { cache: "no-store" });
+        const workflowPayload = await workflowResponse.json();
+        if (!workflowResponse.ok || !workflowPayload.workflow) throw new Error(workflowPayload.error || "默认配置读取失败");
+        directorWorkflowDefaults = workflowPayload.workflow;
+        directorDraftConfig ||= cloneJson(directorWorkflowDefaults);
+        directorRenderSignature = "";
+        renderDirectorWorkflow(currentVideoJob, true);
+      } catch (error) {
+        byId("director-stage-cards").innerHTML = `<div class="empty-state">六阶段配置读取失败：${htmlEscape(error.message)}</div>`;
+      }
+      await refreshMultiAgentStatus();
       await refreshGeneratedContents();
-      if (!currentVideoJob) await restoreLatestVideoJob();
+      if (!currentVideoJob) await refreshVideoJobs({ selectId: persisted.selectedVideoJobId || null });
     } catch (_) {
       serviceHealth = null;
       videoServiceOnline = false;
       status.textContent = "全自动工作流未启动";
       status.className = "service-status is-offline";
-      detail.textContent = "请双击项目根目录的“打开AI口播工作台.vbs”；它会静默启动服务并重新打开网页。";
+      renderVideoServiceDetail();
       byId("generation-status").textContent = "请先通过“打开AI口播工作台.vbs”启动本地工作流。";
-      byId("generate-content").disabled = true;
+      multiAgentStatus = null;
+      renderMultiAgentStatus();
+      renderVideoJobPicker();
+      updateContentStrategyControls();
     }
-    byId("analyze-video").disabled = !(videoServiceOnline && selectedVideoFile);
+    setAnalyzeVideoDisabled(!(videoServiceOnline && selectedVideoFile));
   }
 
   function handleVideoSelection(file) {
+    videoJobContextToken += 1;
+    const hadActiveJob = !!currentVideoJob;
     selectedVideoFile = file || null;
     currentVideoJob = null;
+    selectedVideoOutputVersion = null;
+    persisted.selectedVideoJobId = "";
+    saveState();
+    proposalBundle = null;
+    blindReviewBundle = null;
+    multiAgentReviews = null;
+    renderMultiAgentProposals();
+    renderMultiAgentReview();
+    renderMultiAgentStatus();
+    renderVideoJobPicker();
+    if (hadActiveJob && directorWorkflowDefaults) directorDraftConfig = cloneJson(directorWorkflowDefaults);
+    directorRenderSignature = "";
+    renderDirectorWorkflow(null, true);
     clearTimeout(videoPollTimer);
     byId("edit-results").classList.add("is-hidden");
+    byId("asset-review-panel").classList.add("is-hidden");
     byId("edit-analysis").classList.add("is-hidden");
     byId("retry-video").classList.add("is-hidden");
     if (!file) {
       byId("selected-video-info").textContent = "尚未选择视频";
       byId("video-preview").classList.add("is-hidden");
-      byId("analyze-video").disabled = true;
+      setAnalyzeVideoDisabled(true);
       setEditProgress(0, "等待选择视频");
       renderAutomationRail("upload");
+      renderDemoPreview(null);
       return;
     }
     const preview = byId("video-preview");
@@ -570,55 +1925,85 @@
     preview.src = objectUrl;
     preview.classList.remove("is-hidden");
     byId("selected-video-info").innerHTML = `<strong>${htmlEscape(file.name)}</strong><span>${formatBytes(file.size)} · ${htmlEscape(file.type || "视频文件")}</span>`;
-    byId("analyze-video").disabled = !videoServiceOnline;
+    setAnalyzeVideoDisabled(!videoServiceOnline);
     setEditProgress(0, "视频已选择，点击一次即可开始全自动处理");
     renderAutomationRail("upload");
+    renderDemoPreview(null);
   }
 
   function currentEditOptions() {
+    const attachCurrentContent = editExperienceMode !== "demo";
     const editedScript = String(itemState().editedScript || "").trim();
+    const workflowConfig = collectDirectorWorkflowOverrides();
+    const contentSettings = workflowConfig.stages?.content_breakdown?.settings || {};
+    const localVideoTitle = String(selectedVideoFile?.name || "口播视频").replace(/\.[^.]+$/, "").trim();
     return {
+      pipeline: "visual-director-v4",
+      workflowConfig,
       layout: byId("edit-layout").value,
-      removeSilence: byId("edit-remove-silence").checked,
+      removeSilence: contentSettings.removeSilence !== false,
       captions: byId("edit-captions").checked,
       captionStyle: byId("edit-caption-style").value,
       informationPanels: byId("edit-information-panels").checked,
       generateVariants: byId("edit-generate-variants").checked,
       generateCover: byId("edit-generate-cover").checked,
-      coverTitle: byId("edit-cover-title").value.trim(),
-      contentTitle: String(itemState().selectedTitle || currentItem.mainTopic || currentItem.shortTopic || "").trim(),
-      silenceDuration: Number(byId("edit-silence-duration").value),
-      transcriptionModel: byId("edit-transcription-model").value,
+      coverTitle: attachCurrentContent ? byId("edit-cover-title").value.trim() : "",
+      contentTitle: attachCurrentContent
+        ? String(itemState().selectedTitle || currentItem.mainTopic || currentItem.shortTopic || "").trim()
+        : localVideoTitle,
+      silenceDuration: Number(contentSettings.silenceDuration ?? 0.45),
+      transcriptionModel: contentSettings.transcriptionModel || "small",
       visualStrategy: "rich-media-first",
-      cloudImageGenerationEnabled: true,
+      cloudImageGenerationEnabled: attachCurrentContent,
       paidImageGenerationConfirmation: false,
-      rightsReviewMode: "advisory",
-      script: editedScript || shortText(currentItem)
+      rightsReviewMode: attachCurrentContent ? "advisory" : "strict",
+      script: attachCurrentContent ? editedScript || shortText(currentItem) : ""
     };
   }
 
   async function analyzeSelectedVideo() {
     if (!selectedVideoFile || !videoServiceOnline) return;
-    byId("analyze-video").disabled = true;
+    const requestToken = ++videoJobContextToken;
+    const attachCurrentContent = editExperienceMode !== "demo";
+    setAnalyzeVideoDisabled(true);
     setEditProgress(1, `正在把 ${selectedVideoFile.name} 复制到本地任务目录……`);
     try {
+      const options = currentEditOptions();
+      const draftResponse = await fetch(`${videoApiBase}/api/video-workflow/drafts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(options)
+      });
+      const draftPayload = await draftResponse.json();
+      if (!draftResponse.ok) throw new Error(draftPayload.error || "工作流配置保存失败");
+      const uploadHeaders = {
+        "Content-Type": selectedVideoFile.type || "application/octet-stream",
+        "X-File-Name": encodeURIComponent(selectedVideoFile.name),
+        "X-Workflow-Draft": draftPayload.draftId
+      };
+      if (attachCurrentContent) uploadHeaders["X-Content-Id"] = encodeURIComponent(currentItem.id);
       const response = await fetch(`${videoApiBase}/api/jobs`, {
         method: "POST",
-        headers: {
-          "Content-Type": selectedVideoFile.type || "application/octet-stream",
-          "X-File-Name": encodeURIComponent(selectedVideoFile.name),
-          "X-Content-Id": encodeURIComponent(currentItem.id),
-          "X-Options": encodeURIComponent(JSON.stringify(currentEditOptions()))
-        },
+        headers: uploadHeaders,
         body: selectedVideoFile
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "视频上传失败");
+      upsertAvailableVideoJob(payload.job);
+      if (requestToken !== videoJobContextToken) {
+        renderVideoJobPicker();
+        return;
+      }
       currentVideoJob = payload.job;
+      persisted.selectedVideoJobId = currentVideoJob.id;
+      saveState();
+      renderVideoJobPicker();
+      renderDemoPreview(currentVideoJob);
       setEditProgress(4, "上传完成，工作流会自动继续，无需再次点击");
-      pollVideoJob(currentVideoJob.id);
+      pollVideoJob(currentVideoJob.id, requestToken);
     } catch (error) {
-      byId("analyze-video").disabled = false;
+      if (requestToken !== videoJobContextToken) return;
+      setAnalyzeVideoDisabled(false);
       setEditProgress(0, `启动失败：${error.message}`);
     }
   }
@@ -627,50 +2012,85 @@
     const labels = {
       uploaded: "视频已上传", analyzing: "正在分析画面、音轨和停顿", transcribing: "正在本地逐字转录（首次可能下载模型）",
       planning: "AI正在根据逐字稿生成剪辑决策", rendering: "正在生成完整剪辑预览与分段上下文小样",
-      awaiting_asset_review: "素材候选已准备，可自动采用本地素材生成完整预览", revising: "正在按你的意见生成新版本", awaiting_review: "完整预览与分段小样已完成，请从头到尾检查", approved: "已审核通过", error: "自动处理失败"
+      researching_style: "正在搜索同题视频并提炼可复用包装规则",
+      breaking_down_content: "正在转录、保守删错句并拆解信息段",
+      generating_keyframes: "正在用真人原片生成3—5张关键帧",
+      awaiting_keyframe_review: "关键帧已完成，请逐张检查后批准",
+      keyframe_review_rejected: "这版关键帧已拒绝，任务已暂停",
+      rendering_sample: "正在渲染15—25秒HyperFrames动态样片",
+      awaiting_sample_review: "动态样片已完成，请观看后批准",
+      motion_sample_rejected: "这版动态样片已拒绝，任务已暂停",
+      rendering_final: "正在把批准的设计扩展到2K完整视频并执行QA",
+      awaiting_asset_review: "素材候选已准备，可逐条审核", revising: "正在按你的意见生成新版本", awaiting_review: "完整成片已生成，可以预览和返修", approved: "已审核通过", error: "自动处理失败",
+      effect_proof_approved: "效果方向已确认，但这不是标准成片任务",
+      published_by_user: "历史视频已由用户发布，但这不是标准成片任务"
     };
-    return labels[job.status] || job.status || "处理中";
+    return labels[job.status] || (editExperienceMode === "demo" ? "任务状态待确认" : job.status) || "处理中";
   }
 
-  function renderAutomationRail(status) {
-    const stageByStatus = { uploaded: "upload", analyzing: "upload", transcribing: "transcribe", planning: "plan", awaiting_asset_review: "assets", rendering: "render", revising: "render", awaiting_review: "review", approved: "review", error: "render" };
-    const order = ["upload", "transcribe", "plan", "assets", "render", "review"];
-    const current = stageByStatus[status] || status || "upload";
-    const currentIndex = Math.max(0, order.indexOf(current));
+  function renderAutomationRail(input) {
+    const job = typeof input === "object" ? input : null;
+    const status = job?.status || input;
+    if (visualWorkflowJob(job)) {
+      const current = job.workflow?.currentStage || "style_research";
+      $$(".automation-rail [data-stage]").forEach(node => {
+        const stageId = node.dataset.stage;
+        const stage = job.workflow?.stages?.[stageId] || {};
+        const done = job.status === "approved" || ["completed", "approved"].includes(stage.status) || (stageId === "keyframes" && job.workflow?.stages?.keyframe_review?.status === "awaiting_review");
+        node.classList.toggle("is-active", stageId === current && job.status !== "approved");
+        node.classList.toggle("is-done", done && !(stageId === current && ["awaiting_review", "running"].includes(stage.status)));
+        node.classList.toggle("is-error", job.status === "error" && (job.errorStage || current) === stageId);
+      });
+      return;
+    }
+    const legacyStageByStatus = { uploaded: "style_research", analyzing: "content_breakdown", transcribing: "content_breakdown", planning: "content_breakdown", awaiting_asset_review: "keyframe_review", rendering: "full_render", revising: "full_render", awaiting_review: "full_render", approved: "full_render", error: "full_render" };
+    const current = legacyStageByStatus[status] || "style_research";
+    const currentIndex = Math.max(0, directorStageOrder.indexOf(current));
     $$(".automation-rail [data-stage]").forEach((node, index) => {
-      node.classList.toggle("is-active", index === currentIndex);
+      node.classList.toggle("is-active", index === currentIndex && status !== "approved");
       node.classList.toggle("is-done", index < currentIndex || status === "approved");
       node.classList.toggle("is-error", status === "error" && index === currentIndex);
     });
   }
 
-  async function pollVideoJob(id) {
+  async function pollVideoJob(id, contextToken = videoJobContextToken) {
     clearTimeout(videoPollTimer);
     try {
       const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(id)}`, { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "任务读取失败");
+      if (contextToken !== videoJobContextToken || currentVideoJob?.id !== id) return;
       currentVideoJob = payload.job;
+      upsertAvailableVideoJob(currentVideoJob);
+      renderVideoJobPicker();
       renderVideoJob(currentVideoJob);
-      if (["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising"].includes(currentVideoJob.status)) {
-        videoPollTimer = setTimeout(() => pollVideoJob(id), 1400);
+      if (videoRunningStatuses.includes(currentVideoJob.status)) {
+        videoPollTimer = setTimeout(() => pollVideoJob(id, contextToken), 1400);
       }
     } catch (error) {
+      if (contextToken !== videoJobContextToken || currentVideoJob?.id !== id) return;
       setEditProgress(currentVideoJob?.progress || 0, `读取任务失败：${error.message}，正在重试……`);
-      videoPollTimer = setTimeout(() => pollVideoJob(id), 2600);
+      videoPollTimer = setTimeout(() => pollVideoJob(id, contextToken), 2600);
     }
   }
 
   function renderVideoJob(job) {
-    renderAutomationRail(job.status);
+    renderAutomationRail(job);
     const detail = job.revisionError ? `；最近一次返修失败：${job.revisionError}` : "";
     setEditProgress(job.progress || 0, `${statusLabel(job)}${detail}`);
     if (job.analysis) renderEditAnalysis(job);
     byId("retry-video").classList.toggle("is-hidden", job.status !== "error");
-    byId("replan-video").classList.toggle("is-hidden", !(job.transcript && !["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising"].includes(job.status)));
+    renderReplanAvailability(job);
+    renderDirectorWorkflow(job);
     renderMediaAssets(job);
+    renderMultiAgentStatus();
     if (job.output) renderEditResult(job);
-    if (job.status === "error") byId("analyze-video").disabled = false;
+    else byId("edit-results").classList.add("is-hidden");
+    renderDemoPreview(job);
+    upsertAvailableVideoJob(job);
+    renderVideoJobPicker();
+    if (currentView === "publish") renderPublish();
+    if (job.status === "error") setAnalyzeVideoDisabled(!(videoServiceOnline && selectedVideoFile));
   }
 
   function renderEditAnalysis(job) {
@@ -687,25 +2107,47 @@
   }
 
   function versionOutput(job, version) {
-    return (job.versions || []).find(item => Number(item.version) === Number(version)) || job.output;
+    const requested = Number(version);
+    const historical = (job.versions || []).find(item => Number(item.version) === requested);
+    if (historical) return historical;
+    return Number(job.output?.version) === requested ? job.output : null;
+  }
+
+  function renderFinalReviewAvailability(job, output) {
+    const approved = job.status === "approved";
+    const latest = Number(job.output?.version) === Number(output?.version);
+    const running = videoRunningStatuses.includes(job.status);
+    byId("video-review-feedback").disabled = approved || !latest || running;
+    byId("revise-video").disabled = approved || !latest || running;
+    byId("approve-video").disabled = approved || !latest || running || output?.qaPass !== true;
+    byId("approve-video").textContent = approved ? "已审核通过" : latest ? "审核通过" : "历史版本不可审核";
   }
 
   function showVideoVersion(version) {
     if (!currentVideoJob) return;
     const output = versionOutput(currentVideoJob, version);
     if (!output) return;
+    selectedVideoOutputVersion = Number(output.version);
+    const isLatest = Number(currentVideoJob.output?.version) === selectedVideoOutputVersion;
     const finalUrl = `${videoApiBase}${output.url}?t=${Date.now()}`;
     const reviewBundle = output.reviewBundle;
     const previewMetadata = reviewBundle?.preview?.metadata || output.metadata || {};
     const landscapePreview = Number(previewMetadata.width || 0) > Number(previewMetadata.height || 0);
     const previewUrl = reviewBundle?.preview?.url ? `${videoApiBase}${reviewBundle.preview.url}?t=${Date.now()}` : finalUrl;
     byId("final-video").src = previewUrl;
-    byId("download-final").href = finalUrl;
-    byId("download-final").download = `${currentItem.day || "koubo"}-AI剪辑-v${output.version}.mp4`;
-    byId("result-version").textContent = `版本 ${output.version}`;
-    byId("review-preview-note").textContent = reviewBundle?.preview
-      ? `当前播放${previewMetadata.width || ""}×${previewMetadata.height || ""}完整审核预览；共 ${reviewBundle.segments?.length || 0} 个上下文小样。高清母版已保留，但不会自动发布。`
-      : "当前版本生成于旧流程，直接播放完整成片；下一次渲染会同时生成分段小样。";
+    const download = byId("download-final");
+    download.href = finalUrl;
+    download.download = `${currentItem.day || "koubo"}-AI剪辑-v${output.version}.mp4`;
+    download.textContent = isLatest ? "下载当前成片" : `下载旧版 v${output.version}`;
+    byId("result-version").textContent = isLatest ? `当前版本 v${output.version}` : `历史版本 v${output.version}`;
+    byId("version-history-title").textContent = editExperienceMode === "demo" ? "每次返修都保留一版" : "历史版本";
+    byId("review-preview-note").textContent = !isLatest
+      ? `你正在查看历史版本 v${output.version}；可以预览和下载，但返修与最终批准只对当前最新版 v${currentVideoJob.output?.version} 开放。`
+      : editExperienceMode === "demo"
+      ? "这是该任务真实生成的完整效果预览。页面不会用样片或占位画面冒充最终成片，也不会自动发布。"
+      : reviewBundle?.preview
+        ? `当前播放${previewMetadata.width || ""}×${previewMetadata.height || ""}完整审核预览；共 ${reviewBundle.segments?.length || 0} 个上下文小样。高清母版已保留，但不会自动发布。`
+        : "当前版本生成于旧流程，直接播放完整成片；下一次渲染会同时生成分段小样。";
     byId("review-segments").innerHTML = (reviewBundle?.segments || []).map((segment, index) => `
       <article class="review-segment-card ${landscapePreview ? "is-landscape" : ""}">
         <video controls playsinline preload="metadata" poster="${videoApiBase}${htmlEscape(segment.thumbnailUrl || "")}" src="${videoApiBase}${htmlEscape(segment.url)}"></video>
@@ -743,20 +2185,29 @@
       byId("cover-downloads").innerHTML = "";
     }
     const variantLabels = { vertical: "9:16 竖屏", square: "1:1 方形", original: "原比例" };
-    const artifactLabels = { editPlan: "剪辑计划", timeline: "时间线 JSON", edl: "CMX 3600 EDL", captions: "字幕 ASS", captionStoryboard: "动态字幕分镜", filter: "FFmpeg 脚本", qa: "QA 报告", mediaManifest: "素材清单", coverDesign: "封面设计 JSON", coverVertical: "封面 9:16", coverGrid: "封面 3:4", coverWide16x9: "封面 16:9", coverLandscape4x3: "封面 4:3" };
+    const artifactLabels = { editPlan: "剪辑计划", timeline: "时间线 JSON", edl: "CMX 3600 EDL", captions: "字幕 ASS", captionStoryboard: "动态字幕分镜", filter: "FFmpeg 脚本", qa: "QA 报告", mediaManifest: "素材清单", finalReview: "最终审核记录", publishPackage: "发布素材 JSON", publishCopy: "发布文案 Markdown", publishBundle: "发布素材 ZIP", coverDesign: "封面设计 JSON", coverVertical: "封面 9:16", coverGrid: "封面 3:4", coverWide16x9: "封面 16:9", coverLandscape4x3: "封面 4:3", styleReport: "视觉风格分析", contentBreakdown: "内容拆解", keyframeDirection: "关键帧导演方案", motionSample: "动态样片", fullDirection: "全片导演方案", hyperframesProject: "HyperFrames 工程", hyperframesManifest: "HyperFrames 清单" };
     byId("variant-downloads").innerHTML = Object.entries(output.variants || {}).map(([name, item]) => item.available === false
       ? `<span class="variant-unavailable" title="${htmlEscape(item.reason || "当前母版无法生成")}">${variantLabels[name] || name}不可用</span>`
       : `<a href="${videoApiBase}${htmlEscape(item.url)}" download>下载 ${variantLabels[name] || name}</a>`).join("");
     byId("version-artifacts").innerHTML = Object.entries(output.artifacts || {}).map(([name, href]) => `<a href="${videoApiBase}${htmlEscape(href)}" target="_blank" rel="noreferrer">${artifactLabels[name] || name}</a>`).join("");
     $$("[data-video-version]", byId("version-list")).forEach(button => button.classList.toggle("is-active", Number(button.dataset.videoVersion) === Number(output.version)));
+    renderFinalReviewAvailability(currentVideoJob, output);
   }
 
   function renderEditResult(job) {
     const output = job.output;
     const degraded = (job.degraded || []).map(item => `<li>${htmlEscape(item)}</li>`).join("");
     byId("edit-summary").innerHTML = `<strong>AI剪辑说明：</strong> ${htmlEscape(job.currentPlan?.editSummary || "自动剪辑完成")}${degraded ? `<ul class="degraded-list">${degraded}</ul>` : ""}`;
-    const versions = [...(job.versions || [])].sort((x, y) => Number(x.version) - Number(y.version));
-    byId("version-list").innerHTML = versions.map(item => `<button class="version-chip ${item.version === output.version ? "is-active" : ""}" data-video-version="${item.version}">版本 ${item.version}</button>`).join("");
+    const versionMap = new Map();
+    for (const item of [...(job.versions || []), output].filter(Boolean)) versionMap.set(Number(item.version), item);
+    const versions = [...versionMap.values()].sort((x, y) => Number(x.version) - Number(y.version));
+    byId("version-history-help").textContent = versions.length > 1
+      ? "点旧版可以直接对比和下载；只有当前最新版可以继续返修或审核。"
+      : "当前只有这一版；以后每次返修都会把旧版留在这里。";
+    byId("version-list").innerHTML = versions.map(item => {
+      const latest = Number(item.version) === Number(output.version);
+      return `<button class="version-chip ${latest ? "is-active" : ""}" data-video-version="${item.version}">${latest ? "当前" : "旧版"} v${item.version}</button>`;
+    }).join("");
     byId("review-history").innerHTML = (job.reviews || []).length
       ? `<strong>返修记录</strong>${job.reviews.map(item => `<p>版本 ${htmlEscape(item.version)}：${htmlEscape(item.feedback)}</p>`).join("")}`
       : "";
@@ -797,13 +2248,15 @@
 
   async function submitVideoRevision() {
     if (!currentVideoJob?.id) return;
+    const expectedVersion = Number(selectedVideoOutputVersion || 0);
+    if (!Number.isInteger(expectedVersion) || expectedVersion !== Number(currentVideoJob.output?.version)) return toast("你正在查看历史版本；请切回最新版后再返修");
     const feedback = byId("video-review-feedback").value.trim();
     if (!feedback) return toast("请先写明哪里需要修改");
     byId("revise-video").disabled = true;
     byId("approve-video").disabled = true;
     try {
       const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/revise`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback })
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback, expectedVersion })
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "返修启动失败");
@@ -818,13 +2271,16 @@
 
   async function approveVideo() {
     if (!currentVideoJob?.id) return;
+    const expectedVersion = Number(selectedVideoOutputVersion || 0);
+    if (!Number.isInteger(expectedVersion) || expectedVersion !== Number(currentVideoJob.output?.version)) return toast("你正在查看历史版本；请切回最新版后再审核");
     try {
-      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/approve`, { method: "POST" });
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ expectedVersion }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "审核提交失败");
       currentVideoJob = payload.job;
       renderVideoJob(currentVideoJob);
-      toast("已审核通过，工作流不会自动发布");
+      switchView("publish");
+      toast("已审核通过，发布素材包已在本地生成");
     } catch (error) { toast(`审核失败：${error.message}`); }
   }
 
@@ -836,16 +2292,88 @@
     pollVideoJob(currentVideoJob.id);
   }
 
-  async function restoreLatestVideoJob() {
+  function clearSelectedVideoFilePreview() {
+    selectedVideoFile = null;
+    const input = byId("video-file");
+    if (input) input.value = "";
+    const preview = byId("video-preview");
+    if (preview.dataset.objectUrl) URL.revokeObjectURL(preview.dataset.objectUrl);
+    preview.dataset.objectUrl = "";
+    preview.removeAttribute("src");
+    preview.classList.add("is-hidden");
+    byId("selected-video-info").textContent = "当前正在查看已有任务；重新选择视频会创建新任务。";
+    setAnalyzeVideoDisabled(true);
+  }
+
+  async function loadVideoJob(id, { announce = true } = {}) {
+    if (!id) {
+      handleVideoSelection(null);
+      return null;
+    }
+    const requestToken = ++videoJobContextToken;
+    clearTimeout(videoPollTimer);
+    byId("video-job-picker").disabled = true;
+    byId("refresh-video-jobs").disabled = true;
+    setEditProgress(currentVideoJob?.progress || 0, "正在打开已有任务……");
+    try {
+      const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(id)}`, { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok || !payload.job) throw new Error(payload.error || "任务读取失败");
+      if (requestToken !== videoJobContextToken) return null;
+      currentVideoJob = payload.job;
+      selectedVideoOutputVersion = null;
+      clearSelectedVideoFilePreview();
+      proposalBundle = null;
+      blindReviewBundle = null;
+      multiAgentReviews = null;
+      directorRenderSignature = "";
+      persisted.selectedVideoJobId = currentVideoJob.id;
+      saveState();
+      upsertAvailableVideoJob(currentVideoJob);
+      renderVideoJob(currentVideoJob);
+      renderMultiAgentProposals();
+      renderMultiAgentReview();
+      if (videoRunningStatuses.includes(currentVideoJob.status)) pollVideoJob(currentVideoJob.id, requestToken);
+      if (announce) toast(jobHasStandardOutput(currentVideoJob) ? "已打开可预览任务" : "已打开任务；结果边界已显示");
+      return currentVideoJob;
+    } catch (error) {
+      if (requestToken !== videoJobContextToken) return null;
+      setEditProgress(currentVideoJob?.progress || 0, `任务打开失败：${error.message}`);
+      toast(`任务打开失败：${error.message}`);
+      return null;
+    } finally {
+      renderVideoJobPicker();
+    }
+  }
+
+  async function refreshVideoJobs({ selectId = null, loadSelected = true } = {}) {
+    if (!videoServiceOnline || videoJobsLoading) return;
+    videoJobsLoading = true;
+    renderVideoJobPicker();
     try {
       const response = await fetch(`${videoApiBase}/api/jobs`, { cache: "no-store" });
       const payload = await response.json();
-      const job = payload.jobs?.[0];
-      if (!response.ok || !job) return;
-      currentVideoJob = job;
-      renderVideoJob(job);
-      if (["uploaded", "analyzing", "transcribing", "planning", "rendering", "revising"].includes(job.status)) pollVideoJob(job.id);
-    } catch (_) {}
+      if (!response.ok) throw new Error(payload.error || "任务列表读取失败");
+      availableVideoJobs = Array.isArray(payload.jobs) ? payload.jobs.filter(job => job?.id) : [];
+      const preferred = selectId && availableVideoJobs.some(job => job.id === selectId)
+        ? selectId
+        : currentVideoJob?.id && availableVideoJobs.some(job => job.id === currentVideoJob.id)
+          ? currentVideoJob.id
+          : persisted.selectedVideoJobId && availableVideoJobs.some(job => job.id === persisted.selectedVideoJobId)
+            ? persisted.selectedVideoJobId
+            : availableVideoJobs[0]?.id || "";
+      if (loadSelected && preferred) await loadVideoJob(preferred, { announce: false });
+      else if (!preferred) renderDemoPreview(null);
+    } catch (error) {
+      toast(`任务列表读取失败：${error.message}`);
+    } finally {
+      videoJobsLoading = false;
+      renderVideoJobPicker();
+    }
+  }
+
+  async function restoreLatestVideoJob() {
+    await refreshVideoJobs({ selectId: persisted.selectedVideoJobId || null });
   }
 
   async function replanVideoJob() {
@@ -982,6 +2510,7 @@
     const id = row.dataset.assetId;
     const value = selector => row.querySelector(selector)?.value?.trim() || "";
     const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      expectedAssetDecisionVersion: Number(currentVideoJob.assetDecisionVersion || 0),
       approved: decision === "approved", reviewStatus: decision, ownership: "user-confirmed",
       creatorName: value("[data-creator-name]"), workTitle: value("[data-work-title]"), sourceUrl: value("[data-source-url]"),
       usagePurpose: value("[data-usage-purpose]"), licenseBasis: value("[data-license-basis]"), attributionText: value("[data-attribution-text]"),
@@ -991,13 +2520,13 @@
       placement: Number.isFinite(start) && Number.isFinite(end) ? { start, end, mode: value("[data-media-mode]") || "broll" } : null
     }) });
     const payload = await response.json(); if (!response.ok) return toast(payload.error || "素材批准失败");
-    currentVideoJob = payload.job; renderVideoJob(currentVideoJob); toast(decision === "approved" ? "素材已批准并通过合规检查" : "素材已拒绝，不会进入成片");
+    currentVideoJob = payload.job; renderVideoJob(currentVideoJob); toast(payload.replayed ? "素材决定没有变化，已保留当前样片审核" : decision === "approved" ? "素材已批准并通过合规检查" : "素材已拒绝，不会进入成片");
   }
 
   async function replaceMediaAsset(row, file) {
     if (!file || !currentVideoJob?.id) return;
     const id = row.dataset.assetId;
-    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/file`, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) }, body: file });
+    const response = await fetch(`${videoApiBase}/api/jobs/${encodeURIComponent(currentVideoJob.id)}/assets/${encodeURIComponent(id)}/file`, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-Expected-Asset-Decision-Version": String(Number(currentVideoJob.assetDecisionVersion || 0)) }, body: file });
     const payload = await response.json();
     if (!response.ok) return toast(payload.error || "替换素材失败");
     currentVideoJob = payload.job;
@@ -1079,8 +2608,8 @@
 
   // Script actions
   $$(".segment").forEach(button => button.addEventListener("click", () => setScriptMode(button.dataset.scriptMode)));
-  byId("copy-short-hero").addEventListener("click", () => copyText(fullPlainText(), "2—3分钟完整版已复制"));
-  byId("copy-home-script").addEventListener("click", () => copyText(fullPlainText(), "2—3分钟完整版已复制"));
+  byId("copy-short-hero").addEventListener("click", () => copyText(fullPlainText(), "当前正式稿已复制"));
+  byId("copy-home-script").addEventListener("click", () => copyText(fullPlainText(), "当前正式稿已复制"));
   byId("copy-source-path").addEventListener("click", () => copyText(sourcePackagePath(), "文件位置已复制"));
   byId("copy-short-script").addEventListener("click", () => copyText(shortText(), "精简稿已复制"));
   byId("copy-current-script").addEventListener("click", () => copyText(currentScriptText(), "当前口播稿已复制"));
@@ -1125,9 +2654,20 @@
   });
 
   // One-click content generation and automatic video workflow
+  byId("analyze-content-direction").addEventListener("click", analyzeContentDirection);
+  byId("content-direction").addEventListener("input", () => resetContentStrategyAnalysis());
+  byId("content-evidence-summary").addEventListener("input", () => resetContentStrategyAnalysis());
+  byId("confirm-content-strategy").addEventListener("change", updateContentStrategyControls);
   byId("generate-content").addEventListener("click", generateNewContent);
   byId("video-file").addEventListener("change", event => handleVideoSelection(event.target.files?.[0]));
   byId("analyze-video").addEventListener("click", analyzeSelectedVideo);
+  byId("demo-analyze-video").addEventListener("click", analyzeSelectedVideo);
+  for (const id of ["demo-stage-revise", "demo-stage-reject", "demo-stage-approve"]) {
+    byId(id).addEventListener("click", event => handleDemoStageAction(event.currentTarget));
+  }
+  $$("[data-edit-mode]").forEach(button => button.addEventListener("click", () => setEditExperienceMode(button.dataset.editMode)));
+  byId("video-job-picker").addEventListener("change", event => loadVideoJob(event.target.value));
+  byId("refresh-video-jobs").addEventListener("click", () => refreshVideoJobs({ selectId: currentVideoJob?.id || persisted.selectedVideoJobId || null }));
   byId("retry-video").addEventListener("click", retryVideoJob);
   byId("replan-video").addEventListener("click", replanVideoJob);
   byId("revise-video").addEventListener("click", submitVideoRevision);
@@ -1138,6 +2678,24 @@
   byId("rediscover-media").addEventListener("click", rediscoverMediaAssets);
   byId("auto-review-preview").addEventListener("click", autoReviewAndPreview);
   byId("render-with-assets").addEventListener("click", renderWithApprovedAssets);
+  byId("multi-agent-refresh").addEventListener("click", refreshMultiAgentStatus);
+  byId("multi-agent-generate").addEventListener("click", generateMultiAgentProposals);
+  byId("multi-agent-build-ab").addEventListener("click", buildMultiAgentAb);
+  byId("multi-agent-run-review").addEventListener("click", runMultiAgentReview);
+  byId("tutorial-ingest").addEventListener("click", ingestTutorial);
+  for (const id of ["tutorial-input-path", "tutorial-author", "tutorial-license"]) {
+    byId(id).addEventListener("input", renderMultiAgentStatus);
+  }
+  byId("memory-refresh").addEventListener("click", refreshMemoryRecords);
+  byId("memory-records").addEventListener("click", event => {
+    const button = event.target.closest("[data-memory-action]");
+    const card = button?.closest("[data-memory-kind][data-memory-id]");
+    if (button && card) transitionMemory(card, button.dataset.memoryAction);
+  });
+  byId("director-stage-cards").addEventListener("click", event => {
+    const button = event.target.closest("[data-director-save],[data-director-run],[data-director-approve],[data-director-reject]");
+    if (button) handleDirectorAction(button);
+  });
   byId("media-assets").addEventListener("click", event => {
     const approve = event.target.closest("[data-approve-media]");
     const reject = event.target.closest("[data-reject-media]");
@@ -1155,7 +2713,13 @@
 
   // Publish
   $$(".platform-tab").forEach(button => button.addEventListener("click", () => setPlatform(button.dataset.platform)));
-  byId("copy-publish").addEventListener("click", () => copyText(byId("publish-text").value, "发布文案已复制"));
+  byId("copy-publish").addEventListener("click", copyCurrentPublishCopy);
+  byId("save-publish-package").addEventListener("click", () => updatePublishPackage("save"));
+  byId("regenerate-publish-package").addEventListener("click", () => updatePublishPackage("regenerate"));
+  byId("publish-title-options").addEventListener("click", event => {
+    const button = event.target.closest("[data-publish-title]");
+    if (button) selectPublishTitle(button.dataset.publishTitle);
+  });
 
   // Roadmap and library
   byId("library-search").addEventListener("input", renderLibrary);
@@ -1189,6 +2753,13 @@
 
   // Initialize remembered mode and render
   renderAll();
+  renderMultiAgentStatus();
+  renderMultiAgentProposals();
+  renderMultiAgentReview();
+  renderTutorialCheckpoint();
+  renderMemoryRecords();
+  renderVideoJobPicker();
   setScriptMode(persisted.scriptMode || "full");
+  setEditExperienceMode(editExperienceMode, false);
   checkVideoService();
 })();

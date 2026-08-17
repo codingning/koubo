@@ -1,0 +1,23 @@
+{
+  "id": "koubo-multi-agent-rubric-v1",
+  "schemaVersion": 1,
+  "brandBoundary": {
+    "core": "真实跑通后再分享",
+    "aiPromise": "把Codex、Agent和Skill变成开发者能复用、能验收的工作流与资产",
+    "creatorRole": "Windows本地实测型AI Builder，公开来源、版本、失败、修复、结果和边界"
+  },
+  "dimensions": [
+    { "id": "technical", "weight": 0.2, "minimum": 1, "description": "解码、同步、响度、安全区、颜色空间和无黑帧冻结" },
+    { "id": "content", "weight": 0.2, "minimum": 0.8, "description": "保持口播原意、事实和信息层级" },
+    { "id": "diversity", "weight": 0.15, "minimum": 0.6, "description": "布局、节奏、动效或声音结构存在有意义差异" },
+    { "id": "brand", "weight": 0.15, "minimum": 0.8, "description": "保持开发者实测、可复用资产、结果证据和边界" },
+    { "id": "humanEffort", "weight": 0.1, "minimum": 0.5, "description": "返修轮数和审核耗时不高于基线" },
+    { "id": "explainability", "weight": 0.1, "minimum": 0.8, "description": "决定可追溯到时间码、Agent、记忆、资产和配方" },
+    { "id": "reproducibility", "weight": 0.1, "minimum": 0.8, "description": "固定版本后可产生等价结构并回滚" }
+  ],
+  "blindReview": {
+    "hideAuthors": true,
+    "hideRationales": true,
+    "requireTimestampedFindings": true
+  }
+}

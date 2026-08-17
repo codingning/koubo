@@ -66,6 +66,20 @@ function relevance(item, plan, creator = null) {
   return score;
 }
 
+function requiredReferenceSourceIds(plan) {
+  return [...new Set(array(plan.requiredReferenceSourceIds).map(item => clean(item, 120)).filter(Boolean))];
+}
+
+function isFullyVerifiedLibraryItem(library, item) {
+  return library?.evidenceLevel === "full-video-local-transcript"
+    && item
+    && Array.isArray(item.structure)
+    && item.structure.length > 0
+    && Array.isArray(item.knowledge)
+    && item.knowledge.length > 0
+    && Boolean(clean(item.copyBoundary, 1000));
+}
+
 async function detectProfile() {
   if (process.env.OPENCLI_PROFILE?.trim()) return process.env.OPENCLI_PROFILE.trim();
   const result = await run(opencliCommand, [...opencliPrefix, "profile", "list"], { cwd: root, timeoutMs: 30000 });
@@ -157,6 +171,17 @@ async function main() {
   const warnings = [];
   const feeds = [];
   const discoveries = [];
+  const requiredIds = requiredReferenceSourceIds(plan);
+  const libraryItems = array(library.items);
+  const invalidRequiredIds = requiredIds.filter(
+    sourceId => !isFullyVerifiedLibraryItem(
+      library,
+      libraryItems.find(item => item.sourceId === sourceId)
+    )
+  );
+  if (invalidRequiredIds.length) {
+    throw new Error(`用户指定的参考来源未在本地全文核验库中找到或证据不完整：${invalidRequiredIds.join(", ")}`);
+  }
   let profile = "";
   try {
     if (String(process.env.KOUBO_LIVE_REFERENCE_RESEARCH || "1") !== "0") {
@@ -178,7 +203,12 @@ async function main() {
     warnings.push(`实时抖音研究不可用：${error.message}`);
   }
 
-  const fullContentSources = [];
+  const fullContentSources = requiredIds.map(sourceId => {
+    const item = libraryItems.find(candidate => candidate.sourceId === sourceId);
+    const score = relevance({ title: `${item.topic} ${item.relevanceKeywords?.join(" ") || ""}` }, plan);
+    return librarySource(item, score, "user-required-curated-full-transcript");
+  });
+  const includedSourceIds = new Set(fullContentSources.map(item => item.sourceId));
   const selected = [];
   for (const creator of config.creators || []) {
     const ranked = feeds.filter(item => item._creator?.id === creator.id && item.play_url && Number(item.duration || 0) <= Number(config.policy.maximumReferenceDurationSeconds || 900)).sort((a, b) => b._score - a._score);
@@ -188,17 +218,28 @@ async function main() {
   }
   for (const candidate of selected.sort((a, b) => b._score - a._score).slice(0, Number(config.policy.fullVideoAnalysisCount || 2))) {
     const sourceId = `douyin-${candidate.aweme_id}`;
-    const cached = array(library.items).find(item => item.sourceId === sourceId);
-    if (cached) fullContentSources.push(librarySource(cached, candidate._score, "live-metadata+curated-full-transcript"));
+    if (includedSourceIds.has(sourceId)) continue;
+    const cached = libraryItems.find(item => item.sourceId === sourceId);
+    if (cached) {
+      fullContentSources.push(librarySource(cached, candidate._score, "live-metadata+curated-full-transcript"));
+      includedSourceIds.add(sourceId);
+    }
     else {
-      try { fullContentSources.push(await analyzeCandidate(candidate, plan, tempDir)); }
+      try {
+        const analyzed = await analyzeCandidate(candidate, plan, tempDir);
+        fullContentSources.push(analyzed);
+        includedSourceIds.add(analyzed.sourceId);
+      }
       catch (error) { warnings.push(`完整视频 ${candidate.aweme_id} 分析失败：${error.message}`); }
     }
   }
 
   if (!fullContentSources.length) {
-    for (const item of array(library.items).map(item => ({ item, score: relevance({ title: `${item.topic} ${item.relevanceKeywords?.join(" ") || ""}` }, plan) })).sort((a, b) => b.score - a.score).slice(0, 2)) {
-      if (item.score > 0) fullContentSources.push(librarySource(item.item, item.score));
+    for (const item of libraryItems.map(item => ({ item, score: relevance({ title: `${item.topic} ${item.relevanceKeywords?.join(" ") || ""}` }, plan) })).sort((a, b) => b.score - a.score).slice(0, 2)) {
+      if (item.score > 0 && !includedSourceIds.has(item.item.sourceId)) {
+        fullContentSources.push(librarySource(item.item, item.score));
+        includedSourceIds.add(item.item.sourceId);
+      }
     }
   }
 
@@ -225,6 +266,7 @@ async function main() {
       liveTopicSearch: discoveries.length > 0,
       localFullVideoTranscription: fullContentSources.some(item => /live-full-video/.test(item.evidenceLevel)),
       curatedFullTranscriptFallback: fullContentSources.some(item => /curated-full-transcript/.test(item.evidenceLevel)),
+      requiredCuratedSourceIds: requiredIds,
       opencliProfile: profile || null
     },
     fullContentSources,

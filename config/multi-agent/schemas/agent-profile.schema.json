@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "koubo://schemas/agent-profile/v1",
+  "title": "Koubo Agent Profile v1",
+  "type": "object",
+  "x-koubo-common-record": true,
+  "required": [
+    "id", "schemaVersion", "createdAt", "createdBy", "status", "source", "evidence",
+    "applicability", "prohibitions", "versions", "contentHash",
+    "agentId", "role", "responsibilities", "memoryNamespaces", "maxProposals"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "status": { "type": "string", "enum": ["active", "disabled"] },
+    "agentId": { "type": "string" },
+    "role": { "type": "string" },
+    "responsibilities": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "prohibitions": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "memoryNamespaces": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "maxProposals": { "type": "integer", "minimum": 1, "maximum": 3 }
+  },
+  "additionalProperties": true
+}

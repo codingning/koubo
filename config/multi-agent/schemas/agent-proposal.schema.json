@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "koubo://schemas/agent-proposal/v1",
+  "title": "Koubo Agent Proposal v1",
+  "type": "object",
+  "x-koubo-common-record": true,
+  "required": [
+    "id", "schemaVersion", "createdAt", "createdBy", "status", "source", "evidence",
+    "applicability", "prohibitions", "versions", "contentHash",
+    "agentId", "jobId", "proposalKind", "candidate", "citations", "uncertainties"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "status": { "type": "string", "enum": ["proposed", "selected", "rejected", "superseded"] },
+    "agentId": { "type": "string" },
+    "jobId": { "type": "string" },
+    "proposalKind": { "type": "string", "enum": ["caption", "motion", "sound", "director"] },
+    "candidate": { "type": "object" },
+    "citations": { "type": "array", "items": { "type": "object" } },
+    "uncertainties": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

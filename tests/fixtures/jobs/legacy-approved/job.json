@@ -1,0 +1,25 @@
+{
+  "id": "legacy-approved",
+  "pipeline": "ffmpeg-v3",
+  "status": "approved",
+  "fileName": "method-tutorial.mp4",
+  "script": "这是一个普通方法教学口播。",
+  "transcript": {
+    "segments": [
+      {
+        "start": 0,
+        "end": 8,
+        "text": "这是一个普通方法教学口播。"
+      }
+    ]
+  },
+  "versions": [
+    {
+      "version": 3,
+      "qa": "qa-report-v3.json"
+    }
+  ],
+  "options": {
+    "captions": true
+  }
+}

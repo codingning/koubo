@@ -5,10 +5,39 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import {
+  VISUAL_WORKFLOW_VERSION,
+  VISUAL_STAGE_ORDER,
+  loadVisualWorkflowDefaults,
+  normalizeVisualWorkflowConfig,
+  createVisualWorkflowState,
+  ensureVisualWorkflowState,
+  invalidateVisualStages,
+  assertVisualGateVersion,
+  rejectVisualGateState,
+  visualStageProgress,
+  normalizeVisualStyleReport,
+  normalizeContentBreakdown,
+  normalizeKeyframeDirection,
+  normalizeMotionDirection,
+  normalizeFullDirection,
+  findLockedVisualIntentConflict,
+  buildHyperframesDirectorProject,
+} from "./visual_director.mjs";
+import { createMultiAgentApi } from "./multi-agent/api.mjs";
+import { buildBlindReviewBundle } from "./multi-agent/evaluation.mjs";
+import { canonicalJson, contentHash, loadAgentProfiles, validateLibrary } from "./multi-agent/contracts.mjs";
+import { canEnterScriptStage } from "./multi-agent/content-strategy.mjs";
+import { createOrdinaryViewerCritic } from "./multi-agent/ordinary-viewer-critic.mjs";
+import { auditRenderedJobOrdinaryViewer } from "./multi-agent/rendered-ordinary-viewer-audit.mjs";
+import { createMemoryService } from "./multi-agent/memory.mjs";
+import { createOrchestrator } from "./multi-agent/orchestrator.mjs";
+import { openDomainStore } from "./multi-agent/store.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const envFile = path.join(root, ".env");
+const requestedPort = process.env.KOUBO_PORT;
 if (typeof process.loadEnvFile === "function" && fs.existsSync(envFile)) process.loadEnvFile(envFile);
 const webRoot = path.join(root, "web");
 const jobsRoot = path.join(root, "video-jobs");
@@ -19,17 +48,21 @@ const aiBridge = path.join(here, "ai_bridge.py");
 const referenceCollector = path.join(root, "scripts", "collect_douyin_references.mjs");
 const referenceLibraryFile = path.join(root, "config", "reference_video_library.json");
 const referenceCreatorsFile = path.join(root, "config", "reference_creators.json");
+const visualWorkflowDefaults = await loadVisualWorkflowDefaults(root);
 const host = "127.0.0.1";
-const port = Number(process.env.KOUBO_PORT || 8787);
+const port = Number(requestedPort || process.env.KOUBO_PORT || 8787);
 if (fs.existsSync(runtimeFfmpeg)) process.env.PATH = `${runtimeFfmpeg}${path.delimiter}${process.env.PATH || ""}`;
 const running = new Map();
+const jobMutations = new Set();
+const workflowDrafts = new Map();
 const mime = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8",
   ".md": "text/plain; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg", ".mp4": "video/mp4", ".webm": "video/webm",
   ".srt": "application/x-subrip; charset=utf-8", ".ass": "text/plain; charset=utf-8",
-  ".csv": "text/csv; charset=utf-8", ".edl": "text/plain; charset=utf-8"
+  ".csv": "text/csv; charset=utf-8", ".edl": "text/plain; charset=utf-8",
+  ".zip": "application/zip"
 };
 
 await Promise.all([fsp.mkdir(jobsRoot, { recursive: true }), fsp.mkdir(contentRoot, { recursive: true })]);
@@ -37,8 +70,8 @@ await Promise.all([fsp.mkdir(jobsRoot, { recursive: true }), fsp.mkdir(contentRo
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,X-File-Name,X-Content-Id,X-Options");
-  res.setHeader("Access-Control-Expose-Headers", "Content-Length");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Idempotency-Key,X-File-Name,X-Content-Id,X-Options,X-Workflow-Draft");
+  res.setHeader("Access-Control-Expose-Headers", "Content-Length,Idempotency-Replayed");
 }
 function json(res, status, value) {
   cors(res);
@@ -56,6 +89,8 @@ function confined(base, target) {
 }
 function redact(text) {
   return String(text || "")
+    .replace(/(?:file:\/{2,3})?[A-Za-z]:[\\/][^\r\n"'<>,;)\]]+/gi, "<local-path>")
+    .replace(/\\\\[^\\/\s]+[\\/][^\r\n"'<>,;)\]]+/g, "<local-path>")
     .replace(/(api[_-]?key|token|password|authorization)\s*[:=]\s*[^\s,;]+/gi, "$1=<redacted>")
     .replace(/(?:sk|gsk|ghp|github_pat)_[A-Za-z0-9_-]{12,}/g, "<redacted>")
     .slice(0, 40000);
@@ -65,8 +100,302 @@ async function writeJson(file, data) {
   await fsp.writeFile(temp, JSON.stringify(data, null, 2), "utf8");
   await fsp.rename(temp, file);
 }
+async function sha256File(file) {
+  const hash = crypto.createHash("sha256");
+  await new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(file);
+    stream.on("data", chunk => hash.update(chunk));
+    stream.on("end", resolve);
+    stream.on("error", reject);
+  });
+  return hash.digest("hex");
+}
+function normalizedAssetEvidencePlacement(value) {
+  const placement = normalizePlacement(value);
+  if (!placement) return null;
+  return {
+    start: Number(placement.start.toFixed(6)),
+    end: Number(placement.end.toFixed(6)),
+    mode: placement.mode,
+  };
+}
+function optionalAssetEvidenceNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Number(number.toFixed(6)) : null;
+}
+function assetDecisionStateHashInput(value = {}) {
+  return {
+    assetId: String(value.assetId || ""),
+    reviewStatus: String(value.reviewStatus || "pending"),
+    mediaKind: String(value.mediaKind || "unknown"),
+    sourceType: String(value.sourceType || ""),
+    fileSha256: value.fileSha256 ? String(value.fileSha256).toLowerCase() : null,
+    placement: normalizedAssetEvidencePlacement(value.placement),
+    clipStart: optionalAssetEvidenceNumber(value.clipStart) ?? 0,
+    clipEnd: optionalAssetEvidenceNumber(value.clipEnd),
+    clipDuration: optionalAssetEvidenceNumber(value.clipDuration),
+  };
+}
+function assetDecisionStateHash(value = {}) {
+  return contentHash(assetDecisionStateHashInput(value));
+}
+function assetDecisionVersion(job) {
+  const declared = Number(job?.assetDecisionVersion) || 0;
+  const audited = Math.max(0, ...(job?.assetDecisions || []).map(item => Number(item?.decisionVersion) || 0));
+  return Math.max(declared, audited);
+}
+function expectedAssetDecisionVersionValue(expectedVersion) {
+  if (expectedVersion === undefined || expectedVersion === null || String(expectedVersion).trim() === "") {
+    throw Object.assign(new Error("缺少有效的素材决策版本，请刷新任务后重试"), { statusCode: 409 });
+  }
+  const requested = Number(expectedVersion);
+  if (!Number.isInteger(requested) || requested < 0) {
+    throw Object.assign(new Error("缺少有效的素材决策版本，请刷新任务后重试"), { statusCode: 409 });
+  }
+  return requested;
+}
+function assertExpectedAssetDecisionVersion(job, expectedVersion) {
+  const requested = expectedAssetDecisionVersionValue(expectedVersion);
+  const current = assetDecisionVersion(job);
+  if (requested !== current) {
+    throw Object.assign(new Error(`页面素材决策版本为 v${requested}，当前为 v${current}，请刷新后重试`), { statusCode: 409 });
+  }
+  return current;
+}
+function assetReviewDecisionFingerprint(rawAsset = {}) {
+  const asset = normalizeAssetRecord(rawAsset);
+  return contentHash({
+    reviewStatus: asset.reviewStatus,
+    approved: asset.approved === true,
+    ownership: String(asset.ownership || "user-provided"),
+    sourceType: asset.sourceType,
+    mediaKind: asset.mediaKind,
+    creatorName: asset.creatorName,
+    workTitle: asset.workTitle,
+    sourceUrl: asset.sourceUrl,
+    usagePurpose: asset.usagePurpose,
+    licenseBasis: asset.licenseBasis,
+    attributionText: asset.attributionText,
+    clipStart: optionalAssetEvidenceNumber(asset.clipStart) ?? 0,
+    clipEnd: optionalAssetEvidenceNumber(asset.clipEnd),
+    clipDuration: optionalAssetEvidenceNumber(asset.clipDuration),
+    paymentConfirmed: asset.paymentConfirmed === true,
+    placement: normalizedAssetEvidencePlacement(asset.placement),
+  });
+}
+function emptyAssetCatalogAuditEntry() {
+  const state = assetDecisionStateHashInput({
+    assetId: "__asset_catalog__",
+    reviewStatus: "approved",
+    mediaKind: "none",
+    sourceType: "none",
+    fileSha256: null,
+    placement: null,
+    clipStart: 0,
+    clipEnd: null,
+    clipDuration: null,
+  });
+  return {
+    ...state,
+    stateHash: contentHash(state),
+    eventType: "asset-catalog-empty",
+    reason: "本次样片明确不采用补充图片或视频素材，仅使用原始媒体与程序化图形",
+    auditBackfill: true,
+    licenseBasis: "not-applicable",
+    usagePurpose: "empty-approved-set",
+  };
+}
+async function currentAssetDecisionState(rawAsset) {
+  const asset = normalizeAssetRecord(rawAsset);
+  const fileSha256 = asset.path && fs.existsSync(asset.path) ? await sha256File(asset.path) : null;
+  const state = assetDecisionStateHashInput({
+    assetId: asset.id,
+    reviewStatus: asset.reviewStatus,
+    mediaKind: asset.mediaKind,
+    sourceType: asset.sourceType,
+    fileSha256,
+    placement: asset.placement,
+    clipStart: asset.clipStart,
+    clipEnd: asset.clipEnd,
+    clipDuration: asset.clipDuration,
+  });
+  return { ...state, stateHash: contentHash(state) };
+}
+async function assetDecisionAuditEntry(rawAsset, details = {}) {
+  const state = await currentAssetDecisionState(rawAsset);
+  return {
+    ...state,
+    eventType: String(details.eventType || "asset-review-decided"),
+    reason: String(details.reason || "").slice(0, 1000),
+    auditBackfill: details.auditBackfill === true,
+    licenseBasis: String(rawAsset?.licenseBasis || ""),
+    usagePurpose: String(rawAsset?.usagePurpose || ""),
+  };
+}
+function appendAssetDecisionAudit(job, records, options = {}) {
+  const entries = Array.isArray(records) ? records.filter(Boolean) : [];
+  if (!entries.length) return { decisionVersion: assetDecisionVersion(job), entries: [], invalidatedStages: [] };
+  const at = String(options.at || new Date().toISOString());
+  const decisionVersion = assetDecisionVersion(job) + 1;
+  const appended = entries.map(record => ({ ...record, decisionVersion, decidedAt: record.decidedAt || at }));
+  job.assetDecisionVersion = decisionVersion;
+  job.assetDecisions = [...(job.assetDecisions || []), ...appended];
+  let invalidatedStages = [];
+  if (options.invalidateSampleReview !== false && job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+    const reason = String(options.reason || "素材状态发生变化，动态样片必须重新生成");
+    invalidatedStages = invalidateVisualStages(job.workflow, "keyframe_review", reason);
+    job.workflow.currentStage = "motion_sample";
+  }
+  if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+    job.workflow.audit ||= [];
+    job.workflow.audit.push({
+      type: "asset-decision-version-created",
+      decisionVersion,
+      eventTypes: [...new Set(appended.map(item => item.eventType))],
+      assetIds: [...new Set(appended.map(item => item.assetId).filter(Boolean))],
+      invalidatedStages,
+      at,
+    });
+    job.workflow.updatedAt = at;
+  }
+  return { decisionVersion, entries: appended, invalidatedStages };
+}
+function assetDecisionAuditFile(job) {
+  return path.join(confined(jobsRoot, job.id), "asset-decisions.json");
+}
+async function persistAssetDecisionAudit(job) {
+  await writeJson(assetDecisionAuditFile(job), job.assetDecisions || []);
+}
+function assetSnapshotHashInput(snapshot = {}) {
+  const { snapshotHash: _snapshotHash, createdAt: _createdAt, ...evidence } = snapshot;
+  return evidence;
+}
+async function readVerifiedAssetDecisionAudit(job) {
+  const auditFile = assetDecisionAuditFile(job);
+  if (!fs.existsSync(auditFile)) throw Object.assign(new Error("缺少 asset-decisions.json 素材审计记录，拒绝使用现有样片"), { statusCode: 409 });
+  const audit = await readJsonFile(auditFile);
+  if (!Array.isArray(audit)) throw Object.assign(new Error("asset-decisions.json 格式无效，拒绝使用现有样片"), { statusCode: 409 });
+  if (contentHash(audit) !== contentHash(job.assetDecisions || [])) throw Object.assign(new Error("asset-decisions.json 与任务内素材审计记录不一致，拒绝使用现有样片"), { statusCode: 409 });
+  const corrupt = audit.find(record => record?.stateHash && assetDecisionStateHash(record) !== record.stateHash);
+  if (corrupt) throw Object.assign(new Error(`素材 ${corrupt.assetId || "unknown"} 的审计状态哈希已损坏`), { statusCode: 409 });
+  const declaredVersion = Number(job.assetDecisionVersion) || 0;
+  const auditedVersion = Math.max(0, ...audit.map(item => Number(item?.decisionVersion) || 0));
+  if (!declaredVersion || declaredVersion !== auditedVersion) throw Object.assign(new Error("素材决策版本与 asset-decisions.json 不一致，拒绝使用现有样片"), { statusCode: 409 });
+  const states = await Promise.all((job.assets || []).map(currentAssetDecisionState));
+  const missing = states.filter(state => state.reviewStatus !== "pending" && !audit.some(record => record?.assetId === state.assetId && record?.stateHash === state.stateHash));
+  if (missing.length) throw Object.assign(new Error(`素材缺少当前状态的 asset-decisions 审计记录（文件哈希、批准状态或时间段可能已变化）：${missing.map(item => item.assetId).join("、")}`), { statusCode: 409 });
+  return {
+    audit,
+    auditFile,
+    decisionVersion: declaredVersion,
+    states,
+    sha256: await sha256File(auditFile),
+    contentHash: contentHash(audit),
+  };
+}
+async function buildAssetDecisionSnapshot(job) {
+  const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+  const review = assetReviewSummary(job, duration);
+  if (!review.reviewComplete || !review.renderReady) throw Object.assign(new Error("素材审核未完成，不能冻结动态样片素材快照"), { statusCode: 409 });
+  const audit = await readVerifiedAssetDecisionAudit(job);
+  const approved = audit.states.filter(state => state.reviewStatus === "approved").sort((left, right) => left.assetId.localeCompare(right.assetId));
+  const evidence = {
+    schemaVersion: 1,
+    decisionVersion: audit.decisionVersion,
+    decisionAuditSha256: audit.sha256,
+    decisionAuditContentHash: audit.contentHash,
+    approvedAssetIds: approved.map(item => item.assetId),
+    assets: approved,
+  };
+  return { ...evidence, snapshotHash: contentHash(evidence), createdAt: new Date().toISOString() };
+}
+async function writeMotionSampleAssetSnapshot(job, version, snapshot) {
+  const fileName = `motion-sample-asset-snapshot-v${version}.json`;
+  const file = path.join(confined(jobsRoot, job.id), fileName);
+  await writeJson(file, snapshot);
+  return {
+    snapshot,
+    fileName,
+    path: file,
+    url: `/video-jobs/${job.id}/${fileName}`,
+    sha256: await sha256File(file),
+  };
+}
+async function assertMotionSampleAssetSnapshotCurrent(job) {
+  const stage = job.workflow?.stages?.motion_sample;
+  const artifacts = stage?.artifacts;
+  if (!artifacts?.assetSnapshot || !artifacts?.assetSnapshotFile || !artifacts?.assetSnapshotSha256) {
+    throw Object.assign(new Error("动态样片缺少冻结的素材快照，请重新生成样片"), { statusCode: 409 });
+  }
+  const expectedFileName = `motion-sample-asset-snapshot-v${Number(stage.currentVersion || 0)}.json`;
+  if (artifacts.assetSnapshotFile !== expectedFileName) throw Object.assign(new Error("动态样片素材快照版本与样片版本不一致"), { statusCode: 409 });
+  const file = path.join(confined(jobsRoot, job.id), expectedFileName);
+  if (!fs.existsSync(file)) throw Object.assign(new Error("动态样片素材快照文件缺失，请重新生成样片"), { statusCode: 409 });
+  if ((await sha256File(file)).toLowerCase() !== String(artifacts.assetSnapshotSha256).toLowerCase()) throw Object.assign(new Error("动态样片素材快照文件哈希已变化"), { statusCode: 409 });
+  const stored = await readJsonFile(file);
+  if (contentHash(stored) !== contentHash(artifacts.assetSnapshot)) throw Object.assign(new Error("动态样片产物内的素材快照与冻结文件不一致"), { statusCode: 409 });
+  if (!stored.snapshotHash || contentHash(assetSnapshotHashInput(stored)) !== stored.snapshotHash) throw Object.assign(new Error("动态样片素材快照证据哈希已损坏"), { statusCode: 409 });
+  const current = await buildAssetDecisionSnapshot(job);
+  if (current.snapshotHash !== stored.snapshotHash) throw Object.assign(new Error("动态样片关联素材的决策版本、批准素材、文件哈希或时间段已变化，请重新生成样片"), { statusCode: 409 });
+  return stored;
+}
+function finalReviewEvidenceHash(review) {
+  const { approvedAt: _approvedAt, evidenceHash: _evidenceHash, recordHash: _recordHash, ...evidence } = review || {};
+  return contentHash(evidence);
+}
+function finalReviewRecordHash(review) {
+  const { recordHash: _recordHash, ...record } = review || {};
+  return contentHash(record);
+}
+async function createOrReadVersionedFinalReview(file, review) {
+  const candidateWithEvidence = { ...review, evidenceHash: finalReviewEvidenceHash(review) };
+  const candidate = { ...candidateWithEvidence, recordHash: finalReviewRecordHash(candidateWithEvidence) };
+  try {
+    await fsp.writeFile(file, JSON.stringify(candidate, null, 2), { encoding: "utf8", flag: "wx" });
+    return { review: candidate, replayed: false };
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    const existing = await readJsonFile(file);
+    const recomputedExistingHash = finalReviewEvidenceHash(existing);
+    if (!existing.evidenceHash || existing.evidenceHash !== recomputedExistingHash) throw Object.assign(new Error("该版本最终审核记录的证据哈希已损坏，拒绝继续"), { statusCode: 409 });
+    const recomputedRecordHash = finalReviewRecordHash(existing);
+    if (!existing.recordHash || existing.recordHash !== recomputedRecordHash) throw Object.assign(new Error("该版本最终审核记录的完整记录哈希已损坏，拒绝继续"), { statusCode: 409 });
+    if (recomputedExistingHash !== candidate.evidenceHash) throw Object.assign(new Error("该版本已有不同证据的最终审核记录，拒绝覆盖"), { statusCode: 409 });
+    return { review: existing, replayed: true };
+  }
+}
+async function withJobMutation(jobId, action) {
+  const id = String(jobId || "");
+  if (running.has(id) || jobMutations.has(id)) throw Object.assign(new Error("任务仍在处理中"), { statusCode: 409 });
+  jobMutations.add(id);
+  try {
+    return await action();
+  } finally {
+    jobMutations.delete(id);
+  }
+}
+async function writePendingFinalReviewAlias(job, outputVersion, previousFinalReview = null) {
+  await writeJson(path.join(confined(jobsRoot, job.id), "final-review.json"), {
+    status: "pending",
+    version: Number(outputVersion),
+    previousApprovedReview: previousFinalReview?.url || null,
+    previousApprovedVersion: Number(previousFinalReview?.version) || null,
+    autoPublish: false,
+    updatedAt: new Date().toISOString(),
+  });
+}
 async function readJsonFile(file) { return JSON.parse((await fsp.readFile(file, "utf8")).replace(/^\uFEFF/, "")); }
 async function readJob(id) { return readJsonFile(path.join(confined(jobsRoot, id), "job.json")); }
+async function readContent(id) {
+  const safeId = safeName(id);
+  try {
+    return await readJsonFile(path.join(confined(contentRoot, safeId), "content.json"));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
 async function saveJob(job) { job.updatedAt = new Date().toISOString(); await writeJson(path.join(confined(jobsRoot, job.id), "job.json"), job); }
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -140,6 +469,15 @@ async function contentDirectionFor(contentId) {
     const content = await readJsonFile(path.join(confined(contentRoot, id), "content.json"));
     return {
       id,
+      lockedDirection: String(content.lockedDirection || ""),
+      lockedDirectionHash: String(content.lockedDirectionHash || content.generation?.lockedDirectionHash || ""),
+      directionSource: String(content.directionSource || ""),
+      strategyConfirmationArtifactId: String(content.generation?.strategyConfirmationArtifactId || ""),
+      strategyAnalysisArtifactId: String(content.generation?.strategyAnalysisArtifactId || ""),
+      approvedDirection: content.approvedDirection || null,
+      audience: String(content.audience || ""),
+      viewerBenefit: String(content.viewerBenefit || content.audienceBenefit || ""),
+      coreQuestion: String(content.coreQuestion || content.structureDesign?.coreQuestion || ""),
       mainTopic: String(content.mainTopic || ""),
       hook: String(content.hook || ""),
       audienceBenefit: String(content.audienceBenefit || ""),
@@ -171,12 +509,21 @@ async function referenceCatalog() {
 }
 async function collectEvidence() {
   const runRoot = path.join(root, "runs");
-  let latestProgress = "";
+  let latestEvidence = "";
   try {
     const dates = (await fsp.readdir(runRoot, { withFileTypes: true })).filter(x => x.isDirectory()).map(x => x.name).sort().reverse();
     for (const date of dates) {
-      const candidate = path.join(runRoot, date, "growth", "00_daily_progress.md");
-      if (fs.existsSync(candidate)) { latestProgress = await readTextIf(candidate, 16000); break; }
+      const contentRootForDate = path.join(runRoot, date, "content");
+      if (fs.existsSync(contentRootForDate)) {
+        const slugs = (await fsp.readdir(contentRootForDate, { withFileTypes: true })).filter(x => x.isDirectory()).map(x => x.name).sort().reverse();
+        for (const slug of slugs) {
+          const candidate = path.join(contentRootForDate, slug, "00_evidence.md");
+          if (fs.existsSync(candidate)) { latestEvidence = await readTextIf(candidate, 16000); break; }
+        }
+      }
+      if (latestEvidence) break;
+      const historicalCandidate = path.join(runRoot, date, "growth", "00_daily_progress.md");
+      if (fs.existsSync(historicalCandidate)) { latestEvidence = await readTextIf(historicalCandidate, 16000); break; }
     }
   } catch {}
   let gitLog = "", gitStatus = "", gitDiff = "";
@@ -199,18 +546,18 @@ async function collectEvidence() {
   await walk(root);
   return {
     creator_profile: await readTextIf(path.join(root, "docs", "CREATOR_PROFILE.md"), 12000),
-    roadmap: await readTextIf(path.join(root, "docs", "30_DAY_AI_GROWTH_ROADMAP.md"), 12000),
-    latest_progress: latestProgress,
+    content_contract: await readTextIf(path.join(root, "docs", "WORKFLOW.md"), 12000),
+    latest_evidence: latestEvidence,
     git: { log: redact(gitLog), status: redact(gitStatus), diff_stat: redact(gitDiff) },
     recently_modified_files: recent.sort((a, b) => b.modified.localeCompare(a.modified)).slice(0, 60),
     generated_at: new Date().toISOString()
   };
 }
-function normalizeContent(raw, dayNumber, id, meta) {
+function normalizeContent(raw, sequenceNumber, id, meta) {
   const value = raw && typeof raw === "object" ? raw : {};
   const defaultSegments = [{ time: "0—3秒", label: "直接给结果", tone: "自然", text: value.hook || value.mainTopic || "今天没有足够证据生成口播。" }];
   const design = value.structureDesign && typeof value.structureDesign === "object" ? value.structureDesign : {};
-  const validArchetypes = new Set(["evidence-story", "saveable-map", "short-resonance"]);
+  const validArchetypes = new Set(["quick-proof", "evidence-story", "saveable-map", "deep-audit", "short-resonance"]);
   const structureDesign = {
     archetype: validArchetypes.has(design.archetype) ? design.archetype : "",
     selectionReason: String(design.selectionReason || ""),
@@ -233,16 +580,16 @@ function normalizeContent(raw, dayNumber, id, meta) {
     originalityNote: String(research.originalityNote || "")
   };
   return {
-    id, kind: "growth", date: shanghaiDate(), day: `Day ${dayNumber}`, column: value.column || `普通人学AI第${dayNumber}天`,
-    status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "约2—3分钟", durationShort: value.durationShort || "约60—90秒衍生版",
-    mainTopic: String(value.mainTopic || "今天没有足够证据生成主选题"), shortTopic: String(value.shortTopic || value.mainTopic || "待确认").slice(0, 20),
+    id, kind: "developer", date: shanghaiDate(), day: `作品 ${sequenceNumber}`, column: value.column || "Codex / Agent / Skill 实测",
+    status: "待审核", badge: "AI自动生成", durationFull: value.durationFull || "按证据密度决定", durationShort: value.durationShort || "可选精简版",
+    mainTopic: String(value.mainTopic || "当前证据不足，暂不生成主选题"), shortTopic: String(value.shortTopic || value.mainTopic || "待确认").slice(0, 24),
     hook: String(value.hook || ""), audienceBenefit: String(value.audienceBenefit || ""),
     resultFirstProof: value.resultFirstProof && typeof value.resultFirstProof === "object" ? value.resultFirstProof : {},
     engagement: {
       audienceMirror: String(value.engagement?.audienceMirror || value.audienceMirror || value.audienceBenefit || ""),
       commentPrompt: String(value.engagement?.commentPrompt || value.commentPrompt || ""),
-      followPromise: String(value.engagement?.followPromise || value.followPromise || value.tomorrowChallenge || value.storyPosition?.tomorrow || ""),
-      viewerTask: String(value.engagement?.viewerTask || value.actionExperiment?.viewerTask || ""),
+      followPromise: String(value.engagement?.followPromise || value.followPromise || value.nextVerification || value.storyPosition?.nextVerification || value.storyPosition?.tomorrow || ""),
+      viewerTask: String(value.engagement?.viewerTask || value.developerExperiment?.viewerTask || value.actionExperiment?.viewerTask || ""),
       primaryClose: String(value.engagement?.primaryClose || "")
     },
     structureDesign, referenceResearch,
@@ -250,13 +597,13 @@ function normalizeContent(raw, dayNumber, id, meta) {
       humorBeat: String(value.creativeTone?.humorBeat || ""),
       trendMeme: value.creativeTone?.trendMeme && typeof value.creativeTone.trendMeme === "object" ? value.creativeTone.trendMeme : { id: "", adaptedLine: "", placement: "", sourceUrl: "" }
     },
-    actionExperiment: value.actionExperiment && typeof value.actionExperiment === "object" ? value.actionExperiment : {},
-    storyPosition: value.storyPosition || { yesterday: "自动读取最近记录", today: "等待确认", tomorrow: value.tomorrowChallenge || "继续真实验证" },
+    actionExperiment: value.developerExperiment && typeof value.developerExperiment === "object" ? value.developerExperiment : (value.actionExperiment && typeof value.actionExperiment === "object" ? value.actionExperiment : {}),
+    storyPosition: value.storyPosition || { problem: "读取当前开发者问题", current: "等待确认实测证据", nextVerification: value.nextVerification || "继续验证一个明确分支" },
     progress: Array.isArray(value.progress) ? value.progress : [], candidates: Array.isArray(value.candidates) ? value.candidates : [],
     fullSegments: Array.isArray(value.fullSegments) && value.fullSegments.length ? value.fullSegments : defaultSegments,
     shortScript: String(value.shortScript || ""), titles: Array.isArray(value.titles) ? value.titles.slice(0, 5) : [],
     covers: Array.isArray(value.covers) ? value.covers.slice(0, 5) : [], shooting: value.shooting || { broll: [], highlights: [], guide: {} },
-    platformCopy: value.platformCopy || { douyin: "", xiaohongshu: "", weibo: "" }, evidence: Array.isArray(value.evidence) ? value.evidence : [],
+    platformCopy: value.platformCopy || { douyin: "", xiaohongshu: "", wechat: "" }, evidence: Array.isArray(value.evidence) ? value.evidence : [],
     risks: Array.isArray(value.risks) ? value.risks : [{ text: "发布前人工确认所有事实和隐私边界", done: false }],
     sourceFiles: [
       { label: "AI生成内容JSON", path: `/content-items/${id}/content.json` },
@@ -270,7 +617,487 @@ function normalizeContent(raw, dayNumber, id, meta) {
     generation: { model: meta.model, usage: meta.usage || {}, mode: "openai-compatible", automatic: true, qualityRevision: meta.quality_revision || { repaired: false, initial_issues: [] } }
   };
 }
-async function generateContent(options = {}) {
+
+function contentStrategyError(code, message, statusCode = 422) {
+  const error = new Error(`${code}: ${message}`);
+  error.code = code;
+  error.statusCode = statusCode;
+  return error;
+}
+
+function requiredLockedDirection(value, label = "lockedDirection") {
+  const direction = String(value ?? "").trim();
+  if (!direction) throw contentStrategyError(
+    "CONTENT_DIRECTION_REQUIRED",
+    `${label} is required. 默认生成不再自动选题；请先提交用户锁定方向和服务端 strategyConfirmationArtifactId，或显式设置 allowAgentTopicSearch=true。`
+  );
+  return direction;
+}
+
+export function hashLockedDirection(direction) {
+  return contentHash({ lockedDirection: requiredLockedDirection(direction) });
+}
+
+function serverArtifactContentHash(artifact) {
+  const core = structuredClone(artifact);
+  delete core.contentHash;
+  return contentHash(core);
+}
+
+function assertServerArtifactContentHash(artifact, label) {
+  const declared = String(artifact?.contentHash || "").trim();
+  if (!/^[a-f0-9]{64}$/u.test(declared) || declared !== serverArtifactContentHash(artifact)) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_ARTIFACT_HASH_INVALID",
+      `${label} content hash is missing or invalid`,
+      409
+    );
+  }
+  return declared;
+}
+
+function strategyNotReadyMessage(input, analysis) {
+  if (input.userConfirmation?.analysisApproved !== true
+    || input.userConfirmation?.confirmedDirection !== input.lockedDirection) {
+    return "strategy artifact must be user-confirmed and ready for script（策略分析尚未由用户确认进入写稿）";
+  }
+  if (!Array.isArray(input.evidence) || input.evidence.length === 0
+    || !Array.isArray(analysis.evidence?.available) || analysis.evidence.available.length === 0
+    || !Array.isArray(analysis.evidence?.missing) || analysis.evidence.missing.length > 0) {
+    return "strategy artifact evidence is incomplete（真实证据缺失或仍有未解决证据项）";
+  }
+  return "strategy artifact is not confirmed and ready for script（状态、方向或证据未通过写稿门禁）";
+}
+
+function expectedApprovedDirection(input, analysis) {
+  return {
+    audience: analysis.audience,
+    viewerBenefit: analysis.viewerBenefit,
+    coreQuestion: analysis.testableQuestion,
+    constraints: input.constraints || [],
+  };
+}
+
+async function requiredStrategyArtifact(readArtifactFn, kind, id, label) {
+  const artifact = await readArtifactFn(kind, id);
+  if (!artifact) throw contentStrategyError("CONTENT_STRATEGY_ARTIFACT_NOT_FOUND", `${label} artifact not found`, 404);
+  if (!artifact || typeof artifact !== "object" || Array.isArray(artifact)) {
+    throw contentStrategyError("CONTENT_STRATEGY_ARTIFACT_INVALID", `${label} artifact is invalid`, 409);
+  }
+  return artifact;
+}
+
+export async function validateContentGenerationStrategy(options = {}, dependencies = {}) {
+  if (options.allowAgentTopicSearch === true) {
+    if (String(options.lockedDirection || "").trim()
+      || options.strategyArtifact
+      || String(options.strategyConfirmationArtifactId || "").trim()) {
+      throw contentStrategyError(
+        "CONTENT_TOPIC_AUTHORITY_CONFLICT",
+        "allowAgentTopicSearch=true cannot be combined with a user-locked direction or strategy confirmation; choose one authority path."
+      );
+    }
+    return {
+      mode: "agent_topic_search_explicit",
+      directionSource: "agent_topic_search_explicitly_allowed",
+      lockedDirection: null,
+      lockedDirectionHash: null,
+      strategyArtifact: null,
+      strategyArtifactHash: null,
+    };
+  }
+
+  if (options.strategyArtifact !== undefined) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_INLINE_FORBIDDEN",
+      "client-provided strategyArtifact is not authoritative; submit strategyConfirmationArtifactId from the server confirmation route"
+    );
+  }
+
+  const lockedDirection = requiredLockedDirection(options.lockedDirection);
+  const expectedDirectionHash = hashLockedDirection(lockedDirection);
+  const declaredDirectionHash = String(options.lockedDirectionHash || "").trim();
+  if (declaredDirectionHash !== expectedDirectionHash) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_HASH_MISMATCH",
+      "locked direction hash does not match lockedDirection"
+    );
+  }
+
+  const confirmationArtifactId = String(options.strategyConfirmationArtifactId || "").trim();
+  if (!confirmationArtifactId) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_CONFIRMATION_REQUIRED",
+      "strategyConfirmationArtifactId is required. Use the server-side human confirmation artifact; embedded strategy objects are rejected."
+    );
+  }
+  const readArtifactFn = dependencies.readArtifactFn || readMultiAgentArtifact;
+  if (typeof readArtifactFn !== "function") {
+    throw contentStrategyError("CONTENT_STRATEGY_READER_UNAVAILABLE", "server strategy artifact reader is unavailable", 503);
+  }
+  const confirmation = await requiredStrategyArtifact(
+    readArtifactFn,
+    "content-strategy-confirmations",
+    confirmationArtifactId,
+    "content strategy confirmation"
+  );
+  if (confirmation.schemaVersion !== 1 || confirmation.kind !== "content_strategy_human_confirmation") {
+    throw contentStrategyError("CONTENT_STRATEGY_CONFIRMATION_INVALID", "confirmation artifact has an invalid contract", 409);
+  }
+  assertServerArtifactContentHash(confirmation, "content strategy confirmation");
+  if (confirmation.decision !== "approved" || confirmation.scriptHandoffAllowed !== true) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_NOT_APPROVED",
+      "confirmation artifact is not approved for Script Agent handoff",
+      409
+    );
+  }
+  if (confirmation.actor?.type !== "human" || !String(confirmation.actor?.id || "").trim()) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_CONFIRMATION_ACTOR_INVALID",
+      "confirmation artifact requires a human actor",
+      409
+    );
+  }
+  if (String(confirmation.lockedDirection || "").trim() !== lockedDirection) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_DIRECTION_MISMATCH",
+      "confirmation artifact direction does not match the request lockedDirection",
+      409
+    );
+  }
+  const analysisArtifactId = String(confirmation.analysisArtifactId || "").trim();
+  if (!analysisArtifactId) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_ANALYSIS_BINDING_MISSING",
+      "confirmation artifact does not identify its analysis artifact",
+      409
+    );
+  }
+  const analysisArtifact = await requiredStrategyArtifact(
+    readArtifactFn,
+    "content-strategy-analyses",
+    analysisArtifactId,
+    "content strategy analysis"
+  );
+  if (analysisArtifact.schemaVersion !== 1 || analysisArtifact.kind !== "content_strategy_analysis") {
+    throw contentStrategyError("CONTENT_STRATEGY_ANALYSIS_INVALID", "analysis artifact has an invalid contract", 409);
+  }
+  const analysisContentHash = assertServerArtifactContentHash(
+    analysisArtifact,
+    "content strategy analysis"
+  );
+  if (String(confirmation.analysisContentHash || "").trim() !== analysisContentHash) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_ANALYSIS_HASH_MISMATCH",
+      "confirmation artifact is bound to a different analysis content hash",
+      409
+    );
+  }
+  if (!analysisArtifact.input || !analysisArtifact.analysis) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_ANALYSIS_INCOMPLETE",
+      "analysis artifact is missing its original input or analysis",
+      409
+    );
+  }
+  if (analysisArtifact.input.lockedDirection !== lockedDirection
+    || analysisArtifact.analysis.lockedDirection !== lockedDirection) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_DIRECTION_MISMATCH",
+      "confirmation is bound to an analysis with a different locked direction",
+      409
+    );
+  }
+  const approvedDirection = expectedApprovedDirection(analysisArtifact.input, analysisArtifact.analysis);
+  if (canonicalJson(confirmation.approvedDirection) !== canonicalJson(approvedDirection)) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_APPROVED_DIRECTION_MISMATCH",
+      "confirmation approvedDirection does not match the bound analysis",
+      409
+    );
+  }
+  const confirmedInput = structuredClone(analysisArtifact.input);
+  confirmedInput.userConfirmation = {
+    analysisApproved: true,
+    confirmedDirection: lockedDirection,
+  };
+  if (!canEnterScriptStage(confirmedInput, analysisArtifact.analysis)) {
+    throw contentStrategyError(
+      "CONTENT_STRATEGY_NOT_READY",
+      strategyNotReadyMessage(confirmedInput, analysisArtifact.analysis),
+      409
+    );
+  }
+
+  const authoritativeStrategy = {
+    confirmationArtifactId,
+    analysisArtifactId,
+    confirmation: structuredClone(confirmation),
+    input: confirmedInput,
+    analysis: structuredClone(analysisArtifact.analysis),
+  };
+  const authoritativeStrategyHash = contentHash(authoritativeStrategy);
+
+  return {
+    mode: "user_locked_strategy",
+    directionSource: "explicit_user_direction",
+    lockedDirection,
+    lockedDirectionHash: expectedDirectionHash,
+    strategyConfirmationArtifactId: confirmationArtifactId,
+    strategyAnalysisArtifactId: analysisArtifactId,
+    strategyArtifact: authoritativeStrategy,
+    strategyArtifactHash: authoritativeStrategyHash,
+  };
+}
+
+function returnedDirection(value) {
+  for (const candidate of [
+    value?.lockedDirection,
+    value?.topic,
+    value?.mainTopic,
+    value?.selectedTopic,
+    value?.direction,
+  ]) {
+    const direction = String(candidate ?? "").trim();
+    if (direction) return direction;
+  }
+  return "";
+}
+
+function returnedTopicField(value, stage) {
+  const candidates = stage === "plan_topic"
+    ? [value?.topic, value?.mainTopic, value?.selectedTopic, value?.direction]
+    : [value?.mainTopic, value?.topic, value?.selectedTopic, value?.direction];
+  for (const candidate of candidates) {
+    const direction = String(candidate ?? "").trim();
+    if (direction) return direction;
+  }
+  return "";
+}
+
+export function preserveLockedDirection(value, generationContext, stage = "content") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw contentStrategyError("CONTENT_DIRECTION_OUTPUT_INVALID", `${stage} must return an object`, 502);
+  }
+  const output = structuredClone(value);
+  let lockedDirection = generationContext?.lockedDirection;
+  let lockedDirectionHash = generationContext?.lockedDirectionHash;
+  let directionSource = generationContext?.directionSource;
+
+  if (!lockedDirection) {
+    lockedDirection = requiredLockedDirection(returnedDirection(output), `${stage}.lockedDirection`);
+    lockedDirectionHash = hashLockedDirection(lockedDirection);
+    directionSource = "agent_topic_search_explicitly_allowed";
+  }
+
+  if (String(output.lockedDirection || "").trim()
+    && String(output.lockedDirection).trim() !== lockedDirection) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_CHANGED",
+      `${stage} changed the locked direction`,
+      409
+    );
+  }
+  if (String(output.lockedDirectionHash || "").trim()
+    && String(output.lockedDirectionHash).trim() !== lockedDirectionHash) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_HASH_CHANGED",
+      `${stage} changed the locked direction hash`,
+      409
+    );
+  }
+  if (String(output.directionSource || "").trim()
+    && String(output.directionSource).trim() !== directionSource) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_SOURCE_CHANGED",
+      `${stage} changed the direction authority`,
+      409
+    );
+  }
+
+  const returnedTopic = returnedTopicField(output, stage);
+  if (generationContext?.lockedDirection && returnedTopic !== lockedDirection) {
+    throw contentStrategyError(
+      "CONTENT_DIRECTION_CHANGED",
+      `${stage} changed the user-locked topic field`,
+      409
+    );
+  }
+
+  output.lockedDirection = lockedDirection;
+  output.lockedDirectionHash = lockedDirectionHash;
+  output.directionSource = directionSource;
+  return output;
+}
+
+function generationLockPayload(generationContext) {
+  const payload = {
+    direction_source: generationContext.directionSource,
+    allow_agent_topic_search: generationContext.mode === "agent_topic_search_explicit",
+  };
+  if (generationContext.lockedDirection) {
+    payload.locked_direction = generationContext.lockedDirection;
+    payload.locked_direction_hash = generationContext.lockedDirectionHash;
+  }
+  if (generationContext.strategyArtifact) {
+    payload.strategy_artifact = generationContext.strategyArtifact;
+    payload.strategy_artifact_hash = generationContext.strategyArtifactHash;
+  }
+  return payload;
+}
+
+function generationContextFromPlan(generationContext, topicPlan) {
+  if (generationContext.lockedDirection) return generationContext;
+  return {
+    ...generationContext,
+    lockedDirection: topicPlan.lockedDirection,
+    lockedDirectionHash: topicPlan.lockedDirectionHash,
+    directionSource: topicPlan.directionSource,
+  };
+}
+
+function generatedScriptText(content) {
+  const segments = Array.isArray(content?.fullSegments)
+    ? content.fullSegments.map(item => String(item?.text || "").trim()).filter(Boolean)
+    : [];
+  return segments.join("\n") || String(content?.shortScript || content?.hook || content?.mainTopic || "").trim();
+}
+
+function redactAuditLocalPaths(value) {
+  let text = String(value ?? "");
+  text = text.replace(/file:\/\/\/?[^\s"'<>]+/giu, "<local-path>");
+  text = text.replace(/(?:\\\\\?\\)?[A-Za-z]:[\\/][^\s"'<>|]*/gu, "<local-path>");
+  text = text.replace(/\\\\[^\\/\s]+[\\/][^\s"'<>|]*/gu, "<local-path>");
+  text = text.replace(
+    /(^|[\s"'([{=])\/(?:Users|home|tmp|var|etc|mnt|opt|srv|Volumes|private|root)(?:\/[^\s"'<>]*)?/giu,
+    (_, prefix) => `${prefix}<local-path>`
+  );
+  return text.trim();
+}
+
+function opaqueAuditSourceId(value, fallback) {
+  const text = String(value ?? "").trim();
+  if (/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(text)) return text;
+  const digest = crypto.createHash("sha256").update(text || fallback).digest("hex").slice(0, 16);
+  return `${fallback}-${digest}`;
+}
+
+function generatedAuditFacts(content, generationContext) {
+  const strategyEvidence = generationContext.strategyArtifact?.input?.evidence;
+  if (Array.isArray(strategyEvidence) && strategyEvidence.length) {
+    return strategyEvidence.map((item, index) => ({
+      sourceId: opaqueAuditSourceId(item.sourceId || item.id, `strategy-evidence-${index + 1}`),
+      provenance: opaqueAuditSourceId(item.provenance || "user_provided", "provenance"),
+      claim: redactAuditLocalPaths(item.summary || item.kind || item.id || "真实证据"),
+      kind: opaqueAuditSourceId(item.kind || "evidence", "evidence-kind"),
+      status: opaqueAuditSourceId(item.provenance || "user_provided", "evidence-status"),
+      ...(Number.isFinite(item.start) && Number.isFinite(item.end) ? { start: item.start, end: item.end } : {}),
+    }));
+  }
+  return (Array.isArray(content?.evidence) ? content.evidence : []).slice(0, 12).map((item, index) => {
+    if (typeof item === "string") return {
+      sourceId: `generated-content-evidence-${index + 1}`,
+      provenance: "generated_content_claim",
+      claim: redactAuditLocalPaths(item),
+    };
+    return {
+      sourceId: opaqueAuditSourceId(item?.sourceId || item?.id, `generated-content-evidence-${index + 1}`),
+      provenance: opaqueAuditSourceId(item?.provenance || "generated_content_claim", "provenance"),
+      claim: redactAuditLocalPaths(item?.summary || item?.claim || item?.text || item?.kind || "生成内容证据"),
+      kind: opaqueAuditSourceId(item?.kind || "evidence", "evidence-kind"),
+      status: opaqueAuditSourceId(item?.status || "generated_content_claim", "evidence-status"),
+    };
+  });
+}
+
+export function buildGeneratedContentScriptAuditInput(content, generationContext, topicPlan = {}) {
+  const analysis = generationContext.strategyArtifact?.analysis || {};
+  const audience = String(analysis.audience || topicPlan.viewerUseCase || content.audienceBenefit || "时间有限、需要具体AI行动的普通观众").trim();
+  const viewerBenefit = String(analysis.viewerBenefit || topicPlan.methodPromise || content.audienceBenefit || "看完能完成一个可验证的AI动作").trim();
+  const coreQuestion = String(analysis.testableQuestion || topicPlan.coreQuestion || content.structureDesign?.coreQuestion || "这条内容是否给出真实、可复用的观众价值").trim();
+  return {
+    stage: "script",
+    approvedDirection: {
+      audience,
+      viewerBenefit,
+      coreQuestion,
+      constraints: [
+        `lockedDirection: ${generationContext.lockedDirection}`,
+        "不得换题、整篇重写或批准发布",
+      ],
+    },
+    script: generatedScriptText(content),
+    facts: generatedAuditFacts(content, generationContext),
+  };
+}
+
+export async function auditGeneratedContentScript({
+  content,
+  generationContext,
+  topicPlan,
+  outputDirectory,
+  critic,
+  writeJsonFn = writeJson,
+} = {}) {
+  if (!critic || typeof critic.review !== "function") throw new Error("ordinary viewer critic is required");
+  const originalStatus = content.status;
+  const reviewFile = path.join(outputDirectory, "ordinary-viewer-review.json");
+  const base = {
+    schemaVersion: 1,
+    stage: "script",
+    lockedDirection: generationContext.lockedDirection,
+    lockedDirectionHash: generationContext.lockedDirectionHash,
+    strategyArtifactHash: generationContext.strategyArtifactHash || null,
+    generatedAt: new Date().toISOString(),
+    authority: {
+      mayApproveProduction: false,
+      mayApprovePublish: false,
+      mayChangeDirection: false,
+    },
+  };
+  let artifact;
+  try {
+    const review = await critic.review(buildGeneratedContentScriptAuditInput(content, generationContext, topicPlan));
+    artifact = { ...base, status: "complete", review };
+    content.ordinaryViewerAudit = {
+      status: "complete",
+      stage: "script",
+      artifactHref: `/content-items/${content.id}/ordinary-viewer-review.json`,
+      viewerDecision: review.viewerDecision,
+      sharpConclusion: review.sharpConclusion,
+      blockers: review.blockers.length,
+    };
+  } catch (error) {
+    artifact = { ...base, status: "failed", error: redact(error.message) };
+    content.ordinaryViewerAudit = {
+      status: "failed",
+      stage: "script",
+      artifactHref: `/content-items/${content.id}/ordinary-viewer-review.json`,
+      error: artifact.error,
+    };
+  }
+  content.status = originalStatus;
+  content.sourceFiles = [
+    ...(Array.isArray(content.sourceFiles) ? content.sourceFiles : []),
+    { label: "普通观众稿件审查", path: `/content-items/${content.id}/ordinary-viewer-review.json` },
+  ];
+  await writeJsonFn(reviewFile, artifact);
+  return artifact;
+}
+
+export function normalizeRequiredReferenceSourceIds(editorialBrief = {}) {
+  return [...new Set([
+    ...(Array.isArray(editorialBrief.requiredReferenceSourceIds) ? editorialBrief.requiredReferenceSourceIds : []),
+    ...(editorialBrief.requiredReference ? [editorialBrief.requiredReference] : []),
+  ].map(value => String(value || "").trim()).filter(Boolean))];
+}
+
+export async function generateContent(options = {}, dependencies = {}) {
+  let generationContext = await validateContentGenerationStrategy(options, {
+    readArtifactFn: dependencies.readArtifactFn,
+  });
+  const runAiFn = dependencies.runAiFn || runAi;
   const lockKey = "__content_generation__";
   if (running.has(lockKey)) { const error = new Error("已有口播正在生成，请稍候"); error.statusCode = 409; throw error; }
   running.set(lockKey, true);
@@ -281,11 +1108,11 @@ async function generateContent(options = {}) {
       const base = await fsp.readFile(path.join(webRoot, "data", "content-data.js"), "utf8");
       for (const match of base.matchAll(/mainTopic:\s*"([^"]+)"/g)) baseTopics.push(match[1]);
     } catch {}
-    const requestedDay = Number(options.dayNumber || 0);
-    const dayNumber = Number.isInteger(requestedDay) && requestedDay >= 1 && requestedDay <= 365
-      ? requestedDay
-      : Math.max(1, ...existing.map(x => Number(String(x.day || "").replace(/\D/g, "")) || 0), 1) + 1;
-    const id = `growth-day-${dayNumber}${options.replacesContentId ? "-revision" : ""}-${timestampId()}`;
+    const requestedSequence = Number(options.sequenceNumber || options.dayNumber || 0);
+    const sequenceNumber = Number.isInteger(requestedSequence) && requestedSequence >= 1
+      ? requestedSequence
+      : existing.length + 1;
+    const id = `content${options.replacesContentId ? "-revision" : ""}-${timestampId()}`;
     const dir = confined(contentRoot, id);
     await fsp.mkdir(dir, { recursive: false });
     const evidence = await collectEvidence();
@@ -294,8 +1121,30 @@ async function generateContent(options = {}) {
     let contentStyle = {};
     try { contentStyle = await readJsonFile(path.join(root, "config", "content_style.json")); } catch {}
     const editorialBrief = options.editorialBrief && typeof options.editorialBrief === "object" ? options.editorialBrief : {};
-    const topicResult = await runAi({ operation: "plan_topic", date: shanghaiDate(), day_number: dayNumber, evidence, content_style: contentStyle, editorial_brief: editorialBrief, existing_topics: existingTopics }, dir, "topic-plan");
-    const topicPlan = topicResult.data;
+    const requiredReferenceSourceIds = normalizeRequiredReferenceSourceIds(editorialBrief);
+    const planLock = generationLockPayload(generationContext);
+    const topicResult = await runAiFn({
+      operation: "plan_topic",
+      date: shanghaiDate(),
+      sequence_number: sequenceNumber,
+      evidence,
+      content_style: contentStyle,
+      editorial_brief: {
+        ...editorialBrief,
+        ...(generationContext.lockedDirection ? {
+          topic: generationContext.lockedDirection,
+          lockedDirection: generationContext.lockedDirection,
+          lockedDirectionHash: generationContext.lockedDirectionHash,
+        } : {}),
+      },
+      existing_topics: existingTopics,
+      ...planLock,
+    }, dir, "topic-plan");
+    const topicPlan = {
+      ...preserveLockedDirection(topicResult.data, generationContext, "plan_topic"),
+      requiredReferenceSourceIds,
+    };
+    generationContext = generationContextFromPlan(generationContext, topicPlan);
     await writeJson(path.join(dir, "topic-plan.json"), topicPlan);
     const referenceFile = path.join(dir, "reference-research.json");
     try {
@@ -307,9 +1156,50 @@ async function generateContent(options = {}) {
     }
     const referenceResearch = await readJsonFile(referenceFile);
     if (!Array.isArray(referenceResearch.fullContentSources) || !referenceResearch.fullContentSources.length) throw new Error("同题视频研究没有完成至少一条全文核验来源");
-    const result = await runAi({ operation: "generate_content", date: shanghaiDate(), day_number: dayNumber, evidence, topic_plan: topicPlan, reference_research: referenceResearch, existing_topics: existingTopics }, dir, "generate-content");
-    const content = normalizeContent(result.data, dayNumber, id, result);
+    const result = await runAiFn({
+      operation: "generate_content",
+      date: shanghaiDate(),
+      sequence_number: sequenceNumber,
+      evidence,
+      topic_plan: topicPlan,
+      reference_research: referenceResearch,
+      existing_topics: existingTopics,
+      ...generationLockPayload(generationContext),
+    }, dir, "generate-content");
+    const lockedResult = preserveLockedDirection(result.data, generationContext, "generate_content");
+    const content = preserveLockedDirection(normalizeContent(lockedResult, sequenceNumber, id, result), generationContext, "content");
+    const strategyAnalysis = generationContext.strategyArtifact?.analysis || {};
+    content.audience = String(strategyAnalysis.audience || topicPlan.viewerUseCase || content.engagement?.audienceMirror || "").trim();
+    content.viewerBenefit = String(strategyAnalysis.viewerBenefit || topicPlan.methodPromise || content.audienceBenefit || "").trim();
+    content.coreQuestion = String(strategyAnalysis.testableQuestion || topicPlan.coreQuestion || content.structureDesign?.coreQuestion || "").trim();
+    if (generationContext.mode === "user_locked_strategy") {
+      content.approvedDirection = {
+        audience: content.audience,
+        viewerBenefit: content.viewerBenefit,
+        coreQuestion: content.coreQuestion,
+        constraints: Array.isArray(generationContext.strategyArtifact?.input?.constraints)
+          ? generationContext.strategyArtifact.input.constraints.map(String)
+          : [],
+      };
+    }
+    content.generation = {
+      ...content.generation,
+      topicMode: generationContext.mode,
+      allowAgentTopicSearch: generationContext.mode === "agent_topic_search_explicit",
+      strategyArtifactHash: generationContext.strategyArtifactHash || null,
+      strategyConfirmationArtifactId: generationContext.strategyConfirmationArtifactId || null,
+      strategyAnalysisArtifactId: generationContext.strategyAnalysisArtifactId || null,
+      lockedDirectionHash: generationContext.lockedDirectionHash,
+      ordinaryViewerAuditRequired: true,
+    };
     if (options.replacesContentId) content.replacesContentId = safeName(options.replacesContentId);
+    await auditGeneratedContentScript({
+      content,
+      generationContext,
+      topicPlan,
+      outputDirectory: dir,
+      critic: dependencies.ordinaryViewerCritic || multiAgentOrdinaryViewerCritic,
+    });
     await writeJson(path.join(dir, "content.json"), content);
     return content;
   } finally {
@@ -462,6 +1352,7 @@ function captionText(text, script = "") {
   if (String(script).includes("口播工作台")) result = result.replace(/口婆(?=工作台)/g, "口播");
   if (String(script).includes("我是三金")) result = result.replace(/我是三斤/g, "我是三金");
   if (String(script).includes("管他三七二十一")) result = result.replace(/管它(?=三七二十一)/g, "管他");
+  if (String(script).includes("迈出第一步")) result = result.replace(/卖出第一步/g, "迈出第一步");
   return result;
 }
 const captionSegmenter = new Intl.Segmenter("zh-CN", { granularity: "word" });
@@ -703,38 +1594,29 @@ function coverLineAss(line, highlights) {
 }
 function coverFontSize(line) {
   const weight = [...String(line || "")].reduce((sum, char) => sum + (/^[\x00-\x7F]$/.test(char) ? 0.56 : 1), 0);
-  return weight > 10 ? 72 : weight > 8 ? 82 : 96;
+  return weight > 10 ? 112 : weight > 8 ? 126 : 142;
 }
 async function writeCoverAss(coverDir, design) {
   const lines = [
     "[Script Info]", "ScriptType: v4.00+", "PlayResX: 1080", "PlayResY: 1920", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
     "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    "Style: Main,Microsoft YaHei,96,&H00FFFFFF,&H000000FF,&H0005080A,&H50000000,-1,0,0,0,100,100,0,0,1,5,3,7,0,0,0,1",
-    "Style: Eyebrow,Microsoft YaHei,34,&H00101820,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
-    "Style: Feature,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H0005080A,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,7,0,0,0,1", "",
-    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
-    `Dialogue: 2,0:00:00.00,0:00:10.00,Eyebrow,,0,0,0,,{\\an7\\pos(88,282)}${coverAssEscape(design.eyebrow)}`
+    "Style: Main,Microsoft YaHei,142,&H00FFFFFF,&H000000FF,&H0010181C,&H50000000,-1,0,0,0,100,100,-2,0,1,7,2,7,0,0,0,1", "",
+    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
   ];
-  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(65,${370 + index * 125})\\fs${coverFontSize(line)}}${coverLineAss(line, design.highlights)}`));
-  if (design.features.length) lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Feature,,0,0,0,,{\\an7\\pos(90,1598)}${coverAssEscape(design.features.join("  ·  "))}`);
+  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(64,${130 + index * 158})\\fs${coverFontSize(line)}}${coverLineAss(line, design.highlights)}`));
   const file = path.join(coverDir, "cover.ass");
   await fsp.writeFile(file, lines.join("\r\n"), "utf8");
   return file;
 }
 async function writeHorizontalCoverAss(coverDir, design, width, suffix) {
-  const x = width >= 1900 ? 120 : 70;
-  const labelX = x + 25;
+  const x = width >= 1900 ? 78 : 58;
   const lines = [
     "[Script Info]", "ScriptType: v4.00+", `PlayResX: ${width}`, "PlayResY: 1080", "WrapStyle: 2", "ScaledBorderAndShadow: yes", "",
     "[V4+ Styles]", "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
-    "Style: Main,Microsoft YaHei,88,&H00FFFFFF,&H000000FF,&H0005080A,&H50000000,-1,0,0,0,100,100,0,0,1,5,3,7,0,0,0,1",
-    "Style: Eyebrow,Microsoft YaHei,32,&H00101820,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
-    "Style: Feature,Microsoft YaHei,36,&H00FFFFFF,&H000000FF,&H0005080A,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,7,0,0,0,1", "",
-    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
-    `Dialogue: 2,0:00:00.00,0:00:10.00,Eyebrow,,0,0,0,,{\\an7\\pos(${labelX},190)}${coverAssEscape(design.eyebrow)}`
+    "Style: Main,Microsoft YaHei,126,&H00FFFFFF,&H000000FF,&H0010181C,&H50000000,-1,0,0,0,100,100,-2,0,1,7,2,7,0,0,0,1", "",
+    "[Events]", "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text"
   ];
-  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(${x + 5},${300 + index * 125})\\fs${Math.min(88, coverFontSize(line))}}${coverLineAss(line, design.highlights)}`));
-  if (design.features.length) lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Feature,,0,0,0,,{\\an7\\pos(${x + 30},865)}${coverAssEscape(design.features.join("  ·  "))}`);
+  design.lines.forEach((line, index) => lines.push(`Dialogue: 2,0:00:00.00,0:00:10.00,Main,,0,0,0,,{\\an7\\pos(${x},${112 + index * 145})\\fs${Math.min(126, coverFontSize(line))}}${coverLineAss(line, design.highlights)}`));
   const file = path.join(coverDir, `cover-${suffix}.ass`);
   await fsp.writeFile(file, lines.join("\r\n"), "utf8");
   return file;
@@ -746,29 +1628,19 @@ async function renderCover(job, version) {
   await fsp.mkdir(coverDir, { recursive: true });
   const design = coverDesignForJob(job);
   await writeCoverAss(coverDir, design);
-  const labelWidth = Math.min(620, Math.max(360, 82 + [...design.eyebrow].length * 39));
-  const featureFilters = design.features.length
-    ? ",drawbox=x=65:y=1585:w=500:h=72:color=0x06131D@0.82:t=fill"
-    : "";
   const color = videoColorPipeline(job.source);
-  const filter = `[0:v]${color.filter}[color];[color]split=2[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:8[bg2];[fg]scale=1080:1920:force_original_aspect_ratio=decrease[fg2];[bg2][fg2]overlay=(W-w)/2:(H-h)/2,eq=brightness=-0.035:saturation=0.84:contrast=1.04,drawbox=x=38:y=245:w=720:h=515:color=0x06131D@0.58:t=fill,drawbox=x=38:y=245:w=9:h=515:color=0x2ED6C4@1:t=fill,drawbox=x=65:y=270:w=${labelWidth}:h=62:color=0xFFAA3C@1:t=fill${featureFilters},ass=filename='cover.ass',format=rgb24[cover]`;
+  const filter = `[0:v]${color.filter},scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,eq=brightness=-0.025:saturation=0.92:contrast=1.05,drawbox=x=0:y=0:w=iw:h=640:color=0x02070A@0.40:t=fill,ass=filename='cover.ass',format=rgb24[cover]`;
   const png9x16 = path.join(coverDir, `cover-v${version}-9x16.png`);
   const jpg9x16 = path.join(coverDir, `cover-v${version}-9x16.jpg`);
   const png3x4 = path.join(coverDir, `cover-v${version}-3x4.png`);
   const jpg3x4 = path.join(coverDir, `cover-v${version}-3x4.jpg`);
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(design.sourceTime), "-i", job.sourcePath, "-filter_complex", filter, "-map", "[cover]", "-frames:v", "1", "-update", "1", png9x16], { cwd: coverDir });
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png9x16, "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1", "-update", "1", jpg9x16]);
-  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png9x16, "-vf", "crop=1080:1440:0:240", "-frames:v", "1", "-update", "1", png3x4]);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png9x16, "-vf", "crop=1080:1440:0:0", "-frames:v", "1", "-update", "1", png3x4]);
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", png3x4, "-q:v", "2", "-pix_fmt", "yuvj420p", "-frames:v", "1", "-update", "1", jpg3x4]);
   const renderHorizontal = async (width, suffix) => {
     await writeHorizontalCoverAss(coverDir, design, width, suffix);
-    const panelX = width >= 1900 ? 90 : 40;
-    const panelWidth = width >= 1900 ? 890 : 750;
-    const labelX = panelX + 55;
-    const labelWidthHorizontal = Math.min(panelWidth - 90, Math.max(350, 76 + [...design.eyebrow].length * 36));
-    const featureHorizontal = design.features.length ? `,drawbox=x=${labelX}:y=850:w=470:h=68:color=0x06131D@0.82:t=fill` : "";
-    const foregroundWidth = Math.round(width * 0.52);
-    const horizontalFilter = `[0:v]${color.filter}[color];[color]split=2[bg][fg];[bg]scale=${width}:1080:force_original_aspect_ratio=increase,crop=${width}:1080,boxblur=24:8[bg2];[fg]scale=${foregroundWidth}:1080:force_original_aspect_ratio=decrease[fg2];[bg2][fg2]overlay=x=W-w-45:y=(H-h)/2,eq=brightness=-0.045:saturation=0.84:contrast=1.05,drawbox=x=${panelX}:y=150:w=${panelWidth}:h=650:color=0x06131D@0.62:t=fill,drawbox=x=${panelX}:y=150:w=9:h=650:color=0x2ED6C4@1:t=fill,drawbox=x=${labelX}:y=178:w=${labelWidthHorizontal}:h=58:color=0xFFAA3C@1:t=fill${featureHorizontal},ass=filename='cover-${suffix}.ass',format=rgb24[cover]`;
+    const horizontalFilter = `[0:v]${color.filter},scale=${width}:1080:force_original_aspect_ratio=increase,crop=${width}:1080,eq=brightness=-0.035:saturation=0.92:contrast=1.05,drawbox=x=0:y=0:w=${Math.round(width * 0.66)}:h=650:color=0x02070A@0.42:t=fill,ass=filename='cover-${suffix}.ass',format=rgb24[cover]`;
     const png = path.join(coverDir, `cover-v${version}-${suffix}.png`);
     const jpg = path.join(coverDir, `cover-v${version}-${suffix}.jpg`);
     await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(design.sourceTime), "-i", job.sourcePath, "-filter_complex", horizontalFilter, "-map", "[cover]", "-frames:v", "1", "-update", "1", png], { cwd: coverDir });
@@ -778,12 +1650,13 @@ async function renderCover(job, version) {
   const wide16x9 = await renderHorizontal(1920, "16x9");
   const landscape4x3 = await renderHorizontal(1440, "4x3");
   const metadata9x16 = await probe(jpg9x16), metadata3x4 = await probe(jpg3x4);
-  const artifact = { version, design, engine: "local-ffmpeg-ass", privacy: "local-frame-only", generatedAt: new Date().toISOString() };
+  const artifact = { version, design, style: "portrait-big-text-v1", engine: "local-ffmpeg-ass", privacy: "local-frame-only", generatedAt: new Date().toISOString() };
   await writeJson(path.join(jobDir, `cover-design-v${version}.json`), artifact);
   return {
     requested: true,
     available: true,
     engine: "local-ffmpeg-ass",
+    style: "portrait-big-text-v1",
     design,
     privacy: "local-frame-only",
     vertical: { path: jpg9x16, url: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-9x16.jpg`, pngUrl: `/video-jobs/${job.id}/covers/v${version}/cover-v${version}-9x16.png`, metadata: metadata9x16 },
@@ -791,6 +1664,183 @@ async function renderCover(job, version) {
     wide16x9,
     landscape4x3
   };
+}
+function cleanPublishText(value, limit = 1800) {
+  return String(value || "").replace(/\r\n/g, "\n").replace(/[\t ]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, limit);
+}
+function publishTitleText(value) {
+  if (typeof value === "string") return cleanPublishText(value, 42);
+  if (!value || typeof value !== "object") return "";
+  return cleanPublishText(value.title || value.text || value.name, 42);
+}
+function uniquePublishTexts(values, limit) {
+  const seen = new Set();
+  const result = [];
+  for (const raw of values) {
+    const value = cleanPublishText(raw, 42);
+    const key = value.replace(/[\s，。！？、；：,.!?;:—-]/g, "").toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+    if (result.length >= limit) break;
+  }
+  return result;
+}
+function publishScriptExcerpt(job) {
+  const script = cleanPublishText(job.script || job.transcript?.text, 5000);
+  const sentences = script.split(/(?<=[。！？!?])|\n+/)
+    .map(item => cleanPublishText(item, 120))
+    .filter(item => item && !/^大家好[，,]?我是/.test(item));
+  return cleanPublishText(sentences.slice(0, 2).join(""), 220) || "这条视频记录了从原片到最终成片的真实过程。";
+}
+function publishTitleCandidates(job, content) {
+  const script = String(job.script || job.transcript?.text || "");
+  const design = coverDesignForJob(job);
+  const coverTitle = cleanPublishText(design.lines.join(""), 42);
+  const contentTitles = (Array.isArray(content?.titles) ? content.titles : []).map(publishTitleText);
+  const topic = publishTitleText(content?.mainTopic || job.options?.contentTitle);
+  const firstSentence = publishScriptExcerpt(job).split(/[。！？!?]/)[0];
+  const special = /AI|Codex|HyperFrames|工作台/i.test(script) && /剪辑|重剪|剪过/.test(script)
+    ? ["我把口播交给 AI 重剪了一遍", "不会剪辑，也能做出口播成片？", "AI 工作台真的能替我剪口播吗？"]
+    : [];
+  const candidates = uniquePublishTexts([
+    coverTitle,
+    ...contentTitles,
+    topic,
+    ...special,
+    firstSentence,
+    topic ? `${topic}，我实际做了一遍` : "这次，我把口播真正做成了成片",
+    "从原片到成片，我完整走了一遍",
+  ], 3);
+  const fallbacks = ["这次，我把口播真正做成了成片", "从原片到成片，我完整走了一遍", "AI 能不能真的帮我完成口播剪辑？"];
+  for (const fallback of fallbacks) {
+    if (candidates.length >= 3) break;
+    if (!candidates.includes(fallback)) candidates.push(fallback);
+  }
+  const angles = ["结果直给", "问题钩子", "过程复盘"];
+  return candidates.map((title, index) => ({ id: `title-${index + 1}`, title, angle: angles[index] }));
+}
+function normalizePublishHashtags(values) {
+  const source = Array.isArray(values) ? values : String(values || "").split(/[\s,，、]+/);
+  const result = [];
+  const seen = new Set();
+  for (const raw of source) {
+    const text = cleanPublishText(raw, 24).replace(/^#+/, "").replace(/\s+/g, "");
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(`#${text}`);
+    if (result.length >= 10) break;
+  }
+  return result;
+}
+function publishHashtagsForJob(job, content) {
+  const text = `${job.script || ""}\n${content?.mainTopic || ""}\n${job.options?.contentTitle || ""}`;
+  const rules = [
+    [/AI/i, "AI"], [/Codex/i, "Codex"], [/HyperFrames/i, "HyperFrames"], [/Remotion/i, "Remotion"], [/FFmpeg/i, "FFmpeg"],
+    [/口播/, "口播短视频"], [/剪辑|重剪/, "AI剪辑"], [/工作台/, "AI工作台"], [/程序员/, "程序员"], [/自媒体/, "自媒体创作"],
+  ];
+  const matched = rules.filter(([pattern]) => pattern.test(text)).map(([, topic]) => topic);
+  return normalizePublishHashtags([...matched, "AI实战", "口播短视频", "内容创作", "效率工具", "视频制作", "创作复盘"]).slice(0, 10);
+}
+function publishPlatformDefaults(job, content, title, hashtags) {
+  const excerpt = publishScriptExcerpt(job);
+  const existing = content?.platformCopy || content?.publish || {};
+  const fallback = {
+    douyin: `${title}\n\n${excerpt}\n\n这条视频记录了从原片、剪辑、返修到人工审核成片的真实过程。封面和发布素材都在本地生成，是否发布仍由我最后确认。\n\n你最想让 AI 帮你解决口播剪辑里的哪一步？`,
+    xiaohongshu: `${title}\n\n这次完整走了一遍：\n1. 原片进入本地工作台\n2. 根据真实反馈继续返修\n3. 人工审核后再准备发布\n\n${excerpt}\n\n没有自动发布，最后仍然由我自己确认结果。`,
+    wechat: `${title}\n\n${excerpt}\n\n这是一次从原片到人工审核成片的真实记录。视频、封面和发布文案准备完成后，再由我手动决定是否发布。`,
+  };
+  const labels = { douyin: "抖音", xiaohongshu: "小红书", wechat: "视频号" };
+  return Object.fromEntries(Object.keys(labels).map(key => {
+    const body = cleanPublishText(existing[key] || (key === "wechat" ? existing.weibo : "") || fallback[key], 1800);
+    return [key, { label: labels[key], body, hashtags, combined: cleanPublishText(`${body}\n\n${hashtags.join(" ")}`, 2200) }];
+  }));
+}
+function publishPackageMarkdown(value) {
+  const titleLines = (value.titleCandidates || []).map((item, index) => `${index + 1}. ${item.title}（${item.angle}）`).join("\n");
+  const platformLines = Object.values(value.platforms || {}).map(item => `## ${item.label}\n\n${item.body}\n\n关联话题：${(item.hashtags || []).join(" ")}`).join("\n\n");
+  const covers = [
+    value.covers?.vertical?.url ? `- 9:16 手机封面：${value.covers.vertical.url}` : "- 9:16 手机封面：未生成",
+    value.covers?.wide16x9?.url ? `- 16:9 横版封面：${value.covers.wide16x9.url}` : "- 16:9 横版封面：未生成",
+  ].join("\n");
+  return `# 发布素材包 v${value.outputVersion}\n\n生成时间：${value.generatedAt}\n\n最终标题：${value.selectedTitle}\n\n## 标题候选\n\n${titleLines}\n\n${platformLines}\n\n## 封面\n\n${covers}\n\n> 本素材包只用于人工审核、复制和下载，不会连接平台账号或自动发布。\n`;
+}
+function powershellLiteral(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+async function compressPublishPackage(files, output) {
+  const existing = files.filter(file => file && fs.existsSync(file));
+  if (!existing.length) throw new Error("发布素材包没有可压缩文件");
+  const script = `$items=@(${existing.map(powershellLiteral).join(",")}); Compress-Archive -LiteralPath $items -DestinationPath ${powershellLiteral(output)} -Force`;
+  await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { cwd: path.dirname(output), timeoutMs: 120000 });
+}
+async function buildPublishPackage(job, outputVersion, options = {}) {
+  const version = Number(outputVersion);
+  if (!Number.isInteger(version) || version < 1 || Number(job.output?.version) !== version) throw new Error("发布素材包必须绑定当前成片版本");
+  const content = await readContent(job.contentId);
+  const previous = options.mode === "save" && Number(job.publishPackage?.outputVersion) === version ? job.publishPackage : null;
+  const generatedTitles = publishTitleCandidates(job, content);
+  const titleCandidates = previous?.titleCandidates?.length ? previous.titleCandidates : generatedTitles;
+  const selectedTitle = cleanPublishText(options.selectedTitle || previous?.selectedTitle || titleCandidates[0]?.title, 42);
+  const hashtags = normalizePublishHashtags(options.hashtags || previous?.hashtags || publishHashtagsForJob(job, content));
+  const defaultPlatforms = publishPlatformDefaults(job, content, selectedTitle, hashtags);
+  const platforms = Object.fromEntries(Object.entries(defaultPlatforms).map(([key, fallback]) => {
+    const supplied = options.platforms?.[key] || previous?.platforms?.[key] || {};
+    const body = cleanPublishText(supplied.body || fallback.body, 1800);
+    const platformHashtags = normalizePublishHashtags(supplied.hashtags || hashtags);
+    return [key, { ...fallback, body, hashtags: platformHashtags, combined: cleanPublishText(`${body}\n\n${platformHashtags.join(" ")}`, 2200) }];
+  }));
+  const jobDir = confined(jobsRoot, job.id);
+  const jsonName = `publish-package-v${version}.json`;
+  const markdownName = `publish-copy-v${version}.md`;
+  const zipName = `publish-package-v${version}.zip`;
+  const packageValue = {
+    schemaVersion: 1,
+    status: "ready",
+    outputVersion: version,
+    mediaSha256: job.output?.mediaSha256 || null,
+    generatedAt: new Date().toISOString(),
+    generation: { engine: "local-content-derived", automatic: options.automatic === true },
+    titleCandidates,
+    selectedTitle,
+    hashtags,
+    platforms,
+    covers: {
+      vertical: job.output?.cover?.vertical ? { url: job.output.cover.vertical.url, pngUrl: job.output.cover.vertical.pngUrl } : null,
+      wide16x9: job.output?.cover?.wide16x9 ? { url: job.output.cover.wide16x9.url, pngUrl: job.output.cover.wide16x9.pngUrl } : null,
+    },
+    artifacts: {
+      json: `/video-jobs/${job.id}/${jsonName}`,
+      markdown: `/video-jobs/${job.id}/${markdownName}`,
+      zip: `/video-jobs/${job.id}/${zipName}`,
+    },
+    archive: { available: true, error: null },
+    autoPublish: false,
+  };
+  const jsonPath = path.join(jobDir, jsonName);
+  const markdownPath = path.join(jobDir, markdownName);
+  const zipPath = path.join(jobDir, zipName);
+  await writeJson(jsonPath, packageValue);
+  await fsp.writeFile(markdownPath, publishPackageMarkdown(packageValue), "utf8");
+  try {
+    await compressPublishPackage([jsonPath, markdownPath, job.output?.cover?.vertical?.path, job.output?.cover?.wide16x9?.path], zipPath);
+  } catch (error) {
+    packageValue.archive = { available: false, error: error.message };
+    packageValue.artifacts.zip = null;
+    await writeJson(jsonPath, packageValue);
+    await fsp.writeFile(markdownPath, publishPackageMarkdown(packageValue), "utf8");
+  }
+  job.publishPackage = packageValue;
+  const publishArtifacts = {
+    publishPackage: packageValue.artifacts.json,
+    publishCopy: packageValue.artifacts.markdown,
+    ...(packageValue.artifacts.zip ? { publishBundle: packageValue.artifacts.zip } : {}),
+  };
+  job.output = { ...job.output, artifacts: { ...(job.output.artifacts || {}), ...publishArtifacts } };
+  job.versions = (job.versions || []).map(item => Number(item.version) === version ? job.output : item);
+  return packageValue;
 }
 function outputToSource(time, keeps) {
   let cursor = 0;
@@ -963,13 +2013,18 @@ function assetReviewSummary(job, outputDuration = null) {
   const approved = assets.filter(asset => asset.reviewStatus === "approved");
   const rejected = assets.filter(asset => asset.reviewStatus === "rejected");
   const complianceIssues = approved.flatMap(asset => assetComplianceIssues(asset, job, outputDuration).map(issue => ({ assetId: asset.id, issue })));
+  const currentDecisionVersion = assetDecisionVersion(job);
+  const emptyCatalogReviewed = assets.length === 0 && currentDecisionVersion > 0 && (job.assetDecisions || []).some(record =>
+    record?.eventType === "asset-catalog-empty" && Number(record?.decisionVersion || 0) === currentDecisionVersion,
+  );
+  const catalogReviewed = assets.length > 0 || emptyCatalogReviewed;
   return {
     total: assets.length,
     pending: pending.length,
     approved: approved.length,
     rejected: rejected.length,
-    reviewComplete: assets.length > 0 && pending.length === 0,
-    renderReady: assets.length > 0 && pending.length === 0 && complianceIssues.length === 0,
+    reviewComplete: catalogReviewed && pending.length === 0,
+    renderReady: catalogReviewed && pending.length === 0 && complianceIssues.length === 0,
     complianceIssues
   };
 }
@@ -1264,6 +2319,7 @@ async function discoverLocalProjectAssets(job) {
 }
 async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) {
   if (job.assetDiscovery?.preparedAt && !force) return job.assetDiscovery;
+  const previousAutomaticAssetIds = force ? (job.assets || []).filter(asset => asset.discoveredAutomatically === true).map(asset => asset.id) : [];
   if (force) {
     job.assetHistory = [...(job.assetHistory || []), {
       archivedAt: new Date().toISOString(),
@@ -1362,7 +2418,22 @@ async function prepareAssetCandidates(job, { force = false, reason = "" } = {}) 
     rightsReviewMode: job.options?.rightsReviewMode || "strict",
     note: "已切换为富媒体优先：候选以真人原片衍生画面、前后对比、动态流程和真实项目证据为主，文字卡片只作补充；参考视频仅在必要时使用2—5秒并保留来源。"
   };
+  const discoveredAuditEntries = await Promise.all(assets.map(asset => assetDecisionAuditEntry(asset, {
+    eventType: force ? "asset-candidate-rediscovered" : "asset-candidate-discovered",
+    reason: reason || (force ? "重新发现素材候选" : "首次发现素材候选"),
+  })));
+  discoveredAuditEntries.push({
+    eventType: force ? "asset-candidates-replaced" : "asset-candidates-prepared",
+    reason: reason || (force ? "重新发现素材候选" : "首次发现素材候选"),
+    removedAssetIds: previousAutomaticAssetIds,
+    currentAutomaticAssetIds: assets.map(asset => asset.id),
+  });
+  appendAssetDecisionAudit(job, discoveredAuditEntries, {
+    invalidateSampleReview: force,
+    reason: reason || "素材候选已重新发现，动态样片必须重新生成",
+  });
   job.assetReview = assetReviewSummary(job, duration);
+  await persistAssetDecisionAudit(job);
   await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
   await saveJob(job);
   return job.assetDiscovery;
@@ -1557,17 +2628,36 @@ function parseQaDetection(stderr) {
     }
   }
   const loudness = [...String(stderr).matchAll(/I:\s*(-?[0-9.]+)\s+LUFS/g)].at(-1);
-  return { blackFrames: black, freezeFrames: freezes, integratedLufs: loudness ? Number(loudness[1]) : null };
+  const truePeak = [...String(stderr).matchAll(/Peak:\s*(-?[0-9.]+)\s+dBFS/g)].at(-1);
+  return {
+    blackFrames: black,
+    freezeFrames: freezes,
+    integratedLufs: loudness ? Number(loudness[1]) : null,
+    truePeakDbfs: truePeak ? Number(truePeak[1]) : null,
+  };
 }
-async function runQa(job, version, outputPath, expectedDuration, timeline, variants, packaging, captionPackaging, coverPackaging, mediaManifest, colorManagement) {
+async function runQa(job, version, outputPath, expectedDuration, timeline, variants, packaging, captionPackaging, coverPackaging, mediaManifest, colorManagement, audioTargetOverride = null) {
   const metadata = await probe(outputPath);
   await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
-  const scan = await run("ffmpeg", ["-hide_banner", "-i", outputPath, "-vf", "blackdetect=d=0.4:pix_th=0.02,freezedetect=n=-55dB:d=2", "-af", "ebur128=peak=true", "-f", "null", "-"]);
+  const scan = await run("ffmpeg", ["-hide_banner", "-i", outputPath, "-vf", "blackdetect=d=0.4:pix_th=0.02,freezedetect=n=-55dB:d=2", ...(metadata.hasAudio ? ["-af", "ebur128=peak=true"] : []), "-f", "null", "-"]);
   const detection = parseQaDetection(scan.stderr);
+  const audioTargets = hyperframesMasterAudioTargets(audioTargetOverride || job.workflow?.config?.rendering?.final || {});
+  const audioExpected = job.source?.hasAudio !== false;
+  const audioPresent = audioExpected ? metadata.hasAudio === true : true;
+  const aacAudio = metadata.hasAudio === true ? metadata.audioCodec === "aac" : !audioExpected;
+  const integratedLoudnessTarget = !audioExpected || metadata.hasAudio !== true || (
+    Number.isFinite(detection.integratedLufs)
+    && Math.abs(detection.integratedLufs - audioTargets.loudnessLufs) <= 0.6
+  );
+  const truePeakTarget = !audioExpected || metadata.hasAudio !== true || (
+    Number.isFinite(detection.truePeakDbfs)
+    && detection.truePeakDbfs <= audioTargets.truePeakDbtp + 0.1
+  );
   const minimumSegment = Math.min(...timeline.clips.map(clip => clip.duration));
   const sdrBt709 = metadata.colorPrimaries === "bt709" && metadata.colorTransfer === "bt709" && metadata.colorSpace === "bt709";
   const captionSafeArea = job.options.captions === false
     || ["ass-static", "ass-fallback"].includes(captionPackaging.engine)
+    || (captionPackaging.engine === "hyperframes" && captionPackaging.integrated === true && captionPackaging.safeArea === true)
     || (captionPackaging.engine === "hyperframes" && captionPackaging.metadata?.width === 1080 && captionPackaging.metadata?.height === 1920 && captionPackaging.metadata?.alpha === true);
   const variantDimensions = Object.fromEntries(Object.entries(variants).map(([name, item]) => [name, item.available === false ? { available: false, reason: item.reason } : {
     available: true,
@@ -1595,17 +2685,20 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
   const mediaPass = Object.values(mediaCompliance).every(Boolean);
   const report = {
     version,
-    pass: metadata.videoCodec === "h264" && metadata.audioCodec === "aac" && metadata.pixelFormat === "yuv420p" && Math.abs(metadata.duration - expectedDuration) < 1.6 && sdrBt709 && captionSafeArea && coverDimensions && mediaPass,
+    pass: metadata.videoCodec === "h264" && aacAudio && audioPresent && metadata.pixelFormat === "yuv420p" && Math.abs(metadata.duration - expectedDuration) < 1.6 && sdrBt709 && integratedLoudnessTarget && truePeakTarget && captionSafeArea && coverDimensions && mediaPass,
     checks: {
       decodes: true,
       h264: metadata.videoCodec === "h264",
-      aac: metadata.audioCodec === "aac",
+      aac: aacAudio,
+      audioPresent,
       yuv420p: metadata.pixelFormat === "yuv420p",
       sdrBt709,
       durationMatches: Math.abs(metadata.duration - expectedDuration) < 1.6,
       expectedDimensions: metadata.width > 0 && metadata.height > 0,
       noLongBlackFrames: detection.blackFrames.length === 0,
       noLongFreezeFrames: detection.freezeFrames.length === 0,
+      integratedLoudnessTarget,
+      truePeakTarget,
       captionSafeArea,
       dynamicCaptionTrack: captionPackaging.engine === "hyperframes",
       cardSafeArea: timeline.cards.every(card => card.text.length <= 24),
@@ -1621,7 +2714,7 @@ async function runQa(job, version, outputPath, expectedDuration, timeline, varia
       externalAttributionRendered: mediaCompliance.externalAttributionRendered,
       externalScriptDisclosure: mediaCompliance.externalScriptDisclosure
     },
-    metrics: { expectedDuration, actualDuration: metadata.duration, minimumSegmentDuration: minimumSegment, integratedLufs: detection.integratedLufs, blackFrames: detection.blackFrames, freezeFrames: detection.freezeFrames, colorMetadata: { range: metadata.colorRange, space: metadata.colorSpace, transfer: metadata.colorTransfer, primaries: metadata.colorPrimaries } },
+    metrics: { expectedDuration, actualDuration: metadata.duration, minimumSegmentDuration: minimumSegment, integratedLufs: detection.integratedLufs, truePeakDbfs: detection.truePeakDbfs, audioExpected, audioTargets, blackFrames: detection.blackFrames, freezeFrames: detection.freezeFrames, colorMetadata: { range: metadata.colorRange, space: metadata.colorSpace, transfer: metadata.colorTransfer, primaries: metadata.colorPrimaries } },
     colorManagement,
     packaging,
     captionPackaging,
@@ -1667,7 +2760,10 @@ async function createReviewBundle(job, version, outputPath, outputDuration) {
   const previewName = `review-preview-v${version}.mp4`;
   const previewPath = path.join(jobDir, previewName);
   const outputMetadata = await probe(outputPath);
-  const previewSize = outputMetadata.width > outputMetadata.height ? "960:540" : "720:1280";
+  const finalSettings = job.workflow?.version === VISUAL_WORKFLOW_VERSION ? job.workflow?.config?.stages?.full_render?.settings || {} : {};
+  const previewSize = job.workflow?.version === VISUAL_WORKFLOW_VERSION && outputMetadata.width > outputMetadata.height
+    ? `${Number(finalSettings.reviewWidth || 1920)}:${Number(finalSettings.reviewHeight || 1080)}`
+    : outputMetadata.width > outputMetadata.height ? "960:540" : "720:1280";
   await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", outputPath,
     "-vf", `scale=${previewSize}:force_original_aspect_ratio=decrease,pad=${previewSize}:(ow-iw)/2:(oh-ih)/2:color=0x07131D,fps=30,format=yuv420p`,
     "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
@@ -1699,6 +2795,1311 @@ async function createReviewBundle(job, version, outputPath, outputDuration) {
   await writeJson(path.join(jobDir, `review-bundle-v${version}.json`), bundle);
   return bundle;
 }
+
+function workflowUrl(job, relative) {
+  return `/video-jobs/${job.id}/${String(relative).replaceAll("\\", "/").split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function visualStageConfig(job, stageId) {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  return workflow.config.stages[stageId];
+}
+
+async function saveVisualWorkflowConfig(job) {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  workflow.updatedAt = new Date().toISOString();
+  const name = `workflow-config-v${workflow.configVersion || 1}.json`;
+  await writeJson(path.join(confined(jobsRoot, job.id), name), workflow.config);
+  workflow.configArtifact = workflowUrl(job, name);
+  return name;
+}
+
+function visualTopicForJob(job, settings = {}) {
+  const topic = String(job.contentDirection?.mainTopic || job.options?.contentTitle || job.script || "AI口播剪辑").trim();
+  const configured = Array.isArray(settings.searchQueries) ? settings.searchQueries.map(value => String(value || "").trim()).filter(Boolean) : [];
+  const searchQueries = configured.length ? configured.slice(0, 3) : [topic, `${topic} AI实操`, `${topic} 前后对比`].slice(0, 3);
+  const keywords = [...new Set(`${topic} ${job.contentDirection?.audienceBenefit || ""}`.split(/[\s，。！？、：；/]+/).map(value => value.trim()).filter(value => value.length >= 2))].slice(0, 12);
+  return {
+    topic,
+    shortTopic: topic.slice(0, 20),
+    aiAngle: String(job.contentDirection?.audienceBenefit || "用AI得到可见结果"),
+    viewerUseCase: "观众如何复用这套AI方法得到具体结果",
+    searchQueries,
+    keywords,
+    requiredReferenceSourceIds: (settings.manualReferenceUrls || []).map(url => String(url).match(/\d{12,}/)?.[0]).filter(Boolean).map(id => `douyin-${id}`),
+  };
+}
+
+async function collectVisualReferences(job, stageVersion, stageConfig) {
+  const jobDir = confined(jobsRoot, job.id);
+  const topicPlan = visualTopicForJob(job, stageConfig.settings || {});
+  const planName = `visual-topic-plan-v${stageVersion}.json`;
+  const researchName = `visual-reference-research-v${stageVersion}.json`;
+  const planPath = path.join(jobDir, planName);
+  const researchPath = path.join(jobDir, researchName);
+  await writeJson(planPath, topicPlan);
+  let liveResearch = { status: "skipped", fullContentSources: [], metadataOnlySources: [], warnings: [] };
+  if (stageConfig.settings?.autoSearchDouyin !== false) {
+    try {
+      await run(process.execPath, [referenceCollector, "--plan", planPath, "--output", researchPath], {
+        cwd: root,
+        env: process.env,
+        timeoutMs: Math.max(60, Number(stageConfig.settings?.liveResearchTimeoutSeconds || 240)) * 1000,
+      });
+      liveResearch = await readJsonFile(researchPath);
+    } catch (error) {
+      try { liveResearch = await readJsonFile(researchPath); }
+      catch { liveResearch = { status: "fallback", fullContentSources: [], metadataOnlySources: [], warnings: [`实时抖音搜索失败：${error.message}`] }; }
+    }
+  }
+  const catalog = await referenceCatalog();
+  const manual = (stageConfig.settings?.manualReferenceUrls || []).map((url, index) => ({
+    sourceId: `manual-${String(url).match(/\d{12,}/)?.[0] || index + 1}`,
+    platform: "douyin",
+    sourceUrl: String(url),
+    url: String(url),
+    title: "用户手动指定的参考视频",
+    evidenceLevel: "manual-url-pending-live-verification",
+  }));
+  const live = [...(liveResearch.fullContentSources || []), ...(liveResearch.metadataOnlySources || [])];
+  const references = [...manual, ...live, ...catalog].filter((item, index, items) => {
+    const key = item.sourceId || item.sourceUrl || item.url;
+    return key && items.findIndex(other => (other.sourceId || other.sourceUrl || other.url) === key) === index;
+  }).slice(0, Math.max(3, Number(stageConfig.settings?.maxReferences || 5) + 3));
+  const researchBundle = {
+    ...liveResearch,
+    topicPlan,
+    manualReferences: manual,
+    curatedFallbackCount: catalog.length,
+    references,
+    generatedAt: new Date().toISOString(),
+  };
+  await writeJson(researchPath, researchBundle);
+  return { topicPlan, researchBundle, planName, researchName };
+}
+
+function fallbackBreakdownSegments(job, timeline, count = 6) {
+  const outputDuration = Math.max(1, Number(timeline.outputDuration || 1));
+  const transcriptSegments = Array.isArray(job.transcript?.segments) ? job.transcript.segments : [];
+  return Array.from({ length: count }, (_, index) => {
+    const editedStart = outputDuration * index / count;
+    const editedEnd = outputDuration * (index + 1) / count;
+    const sourceStart = outputToSource(editedStart, job.currentPlan.keepSegments);
+    const sourceEnd = outputToSource(Math.max(editedStart + 0.35, editedEnd - 0.01), job.currentPlan.keepSegments);
+    const spoken = transcriptSegments.filter(item => Number(item.end) > sourceStart && Number(item.start) < sourceEnd).map(item => String(item.text || "").trim()).join("");
+    const gist = spoken || `第${index + 1}段口播信息`;
+    return {
+      id: `S${String(index + 1).padStart(2, "0")}`,
+      sourceTime: { start: sourceStart, end: sourceEnd },
+      editedTime: { start: editedStart, end: editedEnd },
+      gist,
+      upperLeftTitle: [...gist].slice(0, 16).join("") || `信息段${index + 1}`,
+      subtitleOrKeyLine: [...gist].slice(0, 24).join(""),
+      oneSentenceSummary: [...gist].slice(0, 70).join(""),
+      factCards: [
+        { label: "主题", value: [...gist].slice(0, 16).join("") },
+        { label: "方法", value: "按口播语义组织" },
+        { label: "证据", value: "使用真人原片" },
+      ],
+      rightVisual: { type: "二维信息动效", description: "把本段核心信息转成可视化层级", data: [], motionOrder: [] },
+      referencePackaging: { pattern: "标题→摘要→事实卡→证据", reason: "本地降级拆解" },
+    };
+  });
+}
+
+function alignBreakdownToTimeline(breakdown, job, timeline) {
+  const duration = timeline.outputDuration;
+  const segments = breakdown.segments.sort((a, b) => a.sourceTime.start - b.sourceTime.start);
+  let previousEnd = 0;
+  for (const [index, segment] of segments.entries()) {
+    const mappedStart = sourceToOutput(segment.sourceTime.start, job.currentPlan.keepSegments);
+    const mappedEnd = sourceToOutput(Math.max(segment.sourceTime.start, segment.sourceTime.end - 0.01), job.currentPlan.keepSegments);
+    const fallbackStart = duration * index / segments.length;
+    const fallbackEnd = duration * (index + 1) / segments.length;
+    const start = Math.max(previousEnd, Number.isFinite(mappedStart) ? mappedStart : fallbackStart);
+    const end = Math.max(start + 0.35, Math.min(duration, Number.isFinite(mappedEnd) ? mappedEnd + 0.01 : fallbackEnd));
+    segment.editedTime = { start: Number(start.toFixed(3)), end: Number(end.toFixed(3)) };
+    previousEnd = segment.editedTime.end;
+  }
+  if (segments.length) segments.at(-1).editedTime.end = Number(duration.toFixed(3));
+  return breakdown;
+}
+
+async function ensureWorkflowCleanSource(job) {
+  const jobDir = confined(jobsRoot, job.id);
+  const mediaDir = path.join(jobDir, "workflow", "media");
+  await fsp.mkdir(mediaDir, { recursive: true });
+  const editVersion = Number(job.currentPlan?.version || 1);
+  const videoPath = path.join(mediaDir, `clean-source-v${editVersion}.mp4`);
+  const audioPath = path.join(mediaDir, `clean-source-v${editVersion}.m4a`);
+  if (fs.existsSync(videoPath) && fs.existsSync(audioPath)) {
+    try {
+      const metadata = await probe(videoPath);
+      if (metadata.videoCodec && metadata.duration > 0.5) return { videoPath, audioPath, metadata };
+    } catch {}
+  }
+  const segments = job.currentPlan?.keepSegments || [];
+  if (!segments.length) throw new Error("缺少可生成干净口播源的保留片段");
+  const filters = [];
+  const hasAudio = job.source?.hasAudio !== false;
+  for (const [index, segment] of segments.entries()) {
+    const segmentDuration = Number(segment.end) - Number(segment.start);
+    filters.push(`[0:v]trim=start=${Number(segment.start).toFixed(3)}:end=${Number(segment.end).toFixed(3)},setpts=PTS-STARTPTS[v${index}]`);
+    if (hasAudio) filters.push(`[0:a]atrim=start=${Number(segment.start).toFixed(3)}:end=${Number(segment.end).toFixed(3)},asetpts=PTS-STARTPTS,afade=t=in:st=0:d=${Math.min(0.03, segmentDuration / 3).toFixed(3)},afade=t=out:st=${Math.max(0, segmentDuration - 0.03).toFixed(3)}:d=${Math.min(0.03, segmentDuration / 3).toFixed(3)}[a${index}]`);
+  }
+  if (hasAudio) filters.push(`${segments.map((_, index) => `[v${index}][a${index}]`).join("")}concat=n=${segments.length}:v=1:a=1[vcat][acat]`);
+  else filters.push(`${segments.map((_, index) => `[v${index}]`).join("")}concat=n=${segments.length}:v=1:a=0[vcat]`);
+  const color = videoColorPipeline(job.source);
+  filters.push(`[vcat]${color.filter},fps=30,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709[vout]`);
+  if (hasAudio) filters.push("[acat]highpass=f=80,lowpass=f=15000,loudnorm=I=-16:TP=-1.5:LRA=11[aout]");
+  const filterPath = path.join(mediaDir, `clean-source-v${editVersion}.ffscript`);
+  await fsp.writeFile(filterPath, filters.join(";\r\n") + ";\r\n", "utf8");
+  const args = ["-y", "-hide_banner", "-loglevel", "error", "-i", job.sourcePath, "-/filter_complex", filterPath, "-map", "[vout]", ...(hasAudio ? ["-map", "[aout]"] : []), "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-g", "30", "-keyint_min", "30", "-sc_threshold", "0", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", ...(hasAudio ? ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"] : []), "-movflags", "+faststart", videoPath];
+  await run("ffmpeg", args, { cwd: mediaDir, timeoutMs: 30 * 60 * 1000 });
+  const metadata = await probe(videoPath);
+  if (hasAudio) await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", videoPath, "-vn", "-c:a", "copy", audioPath]);
+  else await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", metadata.duration.toFixed(3), "-c:a", "aac", "-b:a", "192k", audioPath]);
+  await writeJson(path.join(mediaDir, `clean-source-v${editVersion}.json`), { videoPath, audioPath, metadata, timelineVersion: editVersion, generatedAt: new Date().toISOString() });
+  return { videoPath, audioPath, metadata };
+}
+
+async function runHyperframes(args, cwd, timeoutMs = 30 * 60 * 1000) {
+  return run("npx", ["--yes", "hyperframes@0.7.71", ...args], { cwd, shell: true, timeoutMs, env: process.env });
+}
+
+async function inspectHyperframesProject(projectDir, timestamps = []) {
+  const qaDir = path.join(projectDir, "qa");
+  await fsp.mkdir(qaDir, { recursive: true });
+  let check;
+  try {
+    check = await runHyperframes(["check", "."], projectDir, 10 * 60 * 1000);
+  } catch (error) {
+    await fsp.writeFile(
+      path.join(qaDir, "check.txt"),
+      `${error.message}\n${error.stdout || ""}\n${error.stderr || ""}`,
+      "utf8",
+    );
+    throw error;
+  }
+  await fsp.writeFile(path.join(qaDir, "check.txt"), `${check.stdout}\n${check.stderr}`, "utf8");
+  try {
+    const args = ["inspect", ".", "--json"];
+    if (timestamps.length) args.push("--at", timestamps.slice(0, 10).join(","));
+    const inspect = await runHyperframes(args, projectDir, 10 * 60 * 1000);
+    await fsp.writeFile(path.join(qaDir, "inspect.json"), inspect.stdout || "{}", "utf8");
+  } catch (error) {
+    await fsp.writeFile(path.join(qaDir, "inspect-error.txt"), `${error.message}\n${error.stdout || ""}\n${error.stderr || ""}`, "utf8");
+  }
+}
+
+async function runStyleResearchStage(job, version, stageConfig) {
+  const jobDir = confined(jobsRoot, job.id);
+  const research = await collectVisualReferences(job, version, stageConfig);
+  let modelResult = null;
+  try {
+    modelResult = await runAi({
+      operation: "analyze_visual_style",
+      topic: { ...research.topicPlan, contentDirection: job.contentDirection || {}, script: job.script },
+      references: research.researchBundle.references,
+      visual_defaults: job.workflow.config.visualDefaults,
+      custom_prompt: stageConfig.prompt,
+    }, jobDir, `visual-style-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `视觉风格模型分析失败，已使用可审查默认规则：${error.message}`];
+  }
+  const report = normalizeVisualStyleReport(modelResult?.data || {}, research.researchBundle.references, job.workflow.config);
+  report.model = modelResult?.model || null;
+  report.researchWarnings = research.researchBundle.warnings || [];
+  const reportName = `visual-style-report-v${version}.json`;
+  await writeJson(path.join(jobDir, reportName), report);
+  job.visualStyleReport = report;
+  return {
+    report,
+    reportUrl: workflowUrl(job, reportName),
+    researchUrl: workflowUrl(job, research.researchName),
+    topicPlanUrl: workflowUrl(job, research.planName),
+    referenceCount: report.selectedReferences.length,
+    model: modelResult?.model || null,
+  };
+}
+
+async function runContentBreakdownStage(job, version, stageConfig) {
+  const jobDir = confined(jobsRoot, job.id);
+  job.status = "analyzing"; job.progress = 18; await saveJob(job);
+  job.source = await probe(job.sourcePath);
+  let silences = [];
+  if (stageConfig.settings?.removeSilence !== false) {
+    const result = await run("ffmpeg", ["-hide_banner", "-i", job.sourcePath, "-af", `silencedetect=noise=${Number(job.options.silenceDb ?? -36)}dB:d=${Number(stageConfig.settings?.silenceDuration ?? 0.45)}`, "-f", "null", "-"]);
+    silences = parseSilences(result.stderr, job.source.duration);
+  }
+  const fallback = buildKeepSegments(job.source.duration, silences, Number(stageConfig.settings?.pauseKeep ?? 0.12));
+  job.analysis = { silences, baseKeepSegments: fallback, removedDuration: job.source.duration - fallback.reduce((sum, item) => sum + item.end - item.start, 0) };
+  job.status = "transcribing"; job.progress = 22; await saveJob(job);
+  if (!job.transcript || job.transcriptionModel !== `faster-whisper/${stageConfig.settings?.transcriptionModel || "small"}`) {
+    try {
+      const transcription = await runAi({ operation: "transcribe", input_path: job.sourcePath, output_dir: jobDir, model_size: stageConfig.settings?.transcriptionModel || "small", language: stageConfig.settings?.language || "zh" }, jobDir, `transcribe-v${version}`);
+      job.transcript = transcription.data;
+      job.transcriptionModel = transcription.model;
+    } catch (error) {
+      job.degraded = [...(job.degraded || []), `本地转录失败，退回口播稿时间估算：${error.message}`];
+      job.transcript = { text: job.script || "", segments: [{ start: 0, end: job.source.duration, text: job.script || "" }], words: [], model: "script-fallback" };
+      job.transcriptionModel = "script-fallback";
+    }
+  }
+  job.status = "breaking_down_content"; job.progress = 31; await saveJob(job);
+  let planResult = null;
+  try {
+    planResult = await runAi({ operation: "edit_plan", script: job.script, content_direction: job.contentDirection, source: job.source, transcript: job.transcript, base_plan: { silences, keepSegments: fallback }, custom_prompt: stageConfig.prompt }, jobDir, `edit-plan-visual-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `语义剪辑计划失败，使用停顿剪辑：${error.message}`];
+  }
+  const validation = validatePlan(planResult?.data, job.source.duration, fallback, planResult ? "semantic" : "silence-fallback");
+  const editVersion = Number(job.currentPlan?.version || 0) + 1;
+  job.currentPlan = { version: editVersion, ...validation, editSummary: planResult?.data?.editSummary || "本地停顿剪辑", removedReasons: planResult?.data?.removedReasons || [], createdAt: new Date().toISOString() };
+  job.currentVersion = Math.max(1, Number(job.currentVersion || 0));
+  job.planModel = planResult?.model || null;
+  await writeJson(path.join(jobDir, `edit-plan-v${editVersion}.json`), job.currentPlan);
+  const timeline = buildTimeline(job, job.currentPlan, editVersion);
+  await writeTimelineArtifacts(jobDir, timeline, editVersion);
+  let breakdownResult = null;
+  try {
+    breakdownResult = await runAi({
+      operation: "content_breakdown",
+      script: job.script,
+      transcript: job.transcript,
+      timeline,
+      style_report: job.visualStyleReport || {},
+      minimum_segments: stageConfig.settings?.minimumSegments || 5,
+      maximum_segments: stageConfig.settings?.maximumSegments || 12,
+      custom_prompt: stageConfig.prompt,
+    }, jobDir, `content-breakdown-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `内容拆解模型失败，已生成可继续审核的本地分段：${error.message}`];
+  }
+  const fallbackSegments = fallbackBreakdownSegments(job, timeline, Math.max(5, Math.min(8, Number(stageConfig.settings?.minimumSegments || 5))));
+  let breakdown = normalizeContentBreakdown(breakdownResult?.data || {}, {
+    sourceDuration: job.source.duration,
+    outputDuration: timeline.outputDuration,
+    minimumSegments: stageConfig.settings?.minimumSegments || 5,
+    maximumSegments: stageConfig.settings?.maximumSegments || 12,
+    fallbackSegments,
+  });
+  breakdown = alignBreakdownToTimeline(breakdown, job, timeline);
+  breakdown.model = breakdownResult?.model || null;
+  breakdown.editPlanVersion = editVersion;
+  const transcriptName = `transcript-v${version}.json`;
+  const breakdownName = `content-breakdown-v${version}.json`;
+  await writeJson(path.join(jobDir, transcriptName), job.transcript);
+  await writeJson(path.join(jobDir, breakdownName), breakdown);
+  job.contentBreakdown = breakdown;
+  await prepareAssetCandidates(job, { force: version > 1, reason: "视觉导演内容拆解完成，按信息段发现素材" });
+  return {
+    breakdown,
+    breakdownUrl: workflowUrl(job, breakdownName),
+    transcriptUrl: workflowUrl(job, transcriptName),
+    editPlanUrl: workflowUrl(job, `edit-plan-v${editVersion}.json`),
+    timelineUrl: workflowUrl(job, `timeline-v${editVersion}.json`),
+    segmentCount: breakdown.segments.length,
+    outputDuration: timeline.outputDuration,
+    model: breakdownResult?.model || null,
+  };
+}
+
+async function runKeyframeStage(job, version, stageConfig, feedback = "") {
+  const jobDir = confined(jobsRoot, job.id);
+  const previous = job.workflow.stages.keyframes?.artifacts?.direction || {};
+  let result = null;
+  try {
+    result = await runAi({
+      operation: "keyframe_direction",
+      style_report: job.visualStyleReport || {},
+      breakdown: job.contentBreakdown || {},
+      count: stageConfig.settings?.count || 4,
+      previous,
+      feedback,
+      custom_prompt: feedback ? job.workflow.config.stages.keyframe_review.prompt : stageConfig.prompt,
+    }, jobDir, `keyframe-direction-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `关键帧导演方案失败，使用均匀选择：${error.message}`];
+  }
+  const direction = normalizeKeyframeDirection(result?.data || {}, job.contentBreakdown, stageConfig.settings?.count || 4);
+  const directionName = `keyframe-direction-v${version}.json`;
+  await writeJson(path.join(jobDir, directionName), direction);
+  const clean = await ensureWorkflowCleanSource(job);
+  const projectRelative = path.join("workflow", `keyframes-v${version}`);
+  const projectDir = path.join(jobDir, projectRelative);
+  const project = await buildHyperframesDirectorProject({
+    projectDir,
+    sourceVideo: clean.videoPath,
+    sourceAudio: clean.audioPath,
+    breakdown: job.contentBreakdown,
+    styleReport: job.visualStyleReport,
+    mode: "keyframes",
+    keyframeDirection: direction,
+    renderSpec: { ...job.workflow.config.rendering.keyframes, count: direction.frames.length },
+    promptSnapshot: { stage: "keyframes", version, prompt: stageConfig.prompt, feedback, settings: stageConfig.settings, model: result?.model || null },
+  });
+  await inspectHyperframesProject(projectDir, project.snapshotTimes);
+  const snapshotDir = path.join(projectDir, "snapshots");
+  await runHyperframes(["snapshot", ".", "--output", snapshotDir, "--at", project.snapshotTimes.join(","), "--no-end", "--describe", "false"], projectDir, 20 * 60 * 1000);
+  const frameFiles = (await fsp.readdir(snapshotDir)).filter(name => /\.png$/i.test(name)).sort().slice(0, 5);
+  if (frameFiles.length < 3) throw new Error(`HyperFrames只生成了${frameFiles.length}张关键帧，未达到3张门禁`);
+  const frames = frameFiles.map((name, index) => ({
+    id: direction.frames[index]?.id || `KF${index + 1}`,
+    segmentId: direction.frames[index]?.segmentId || null,
+    sourceTime: direction.frames[index]?.sourceTime ?? null,
+    path: path.join(snapshotDir, name),
+    url: workflowUrl(job, path.relative(jobDir, path.join(snapshotDir, name))),
+    purpose: direction.frames[index]?.purpose || "关键帧审核",
+  }));
+  return {
+    direction,
+    directionUrl: workflowUrl(job, directionName),
+    frames,
+    frameCount: frames.length,
+    projectUrl: workflowUrl(job, path.join(projectRelative, "index.html")),
+    manifestUrl: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")),
+    qaUrl: workflowUrl(job, path.join(projectRelative, "qa", "check.txt")),
+    model: result?.model || null,
+  };
+}
+
+async function ensurePreviewAssetDecisions(job) {
+  const decision = await autoReviewLocalAssetsForPreview(job, { invalidateSampleReview: false });
+  return decision.review;
+}
+
+async function runMotionSampleStage(job, version, stageConfig, feedback = "") {
+  const jobDir = confined(jobsRoot, job.id);
+  const keyframes = job.workflow.stages.keyframes?.artifacts;
+  let modelResult = null;
+  try {
+    modelResult = await runAi({
+      operation: "motion_sample_direction",
+      keyframes,
+      breakdown: job.contentBreakdown,
+      style_report: job.visualStyleReport,
+      settings: stageConfig.settings,
+      feedback,
+      custom_prompt: stageConfig.prompt,
+    }, jobDir, `motion-sample-direction-v${version}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `动态样片导演方案失败，使用默认有序动效：${error.message}`];
+  }
+  const outputDuration = job.currentPlan.keepSegments.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0);
+  const direction = normalizeMotionDirection(modelResult?.data || {}, job.contentBreakdown, {
+    ...stageConfig.settings,
+    outputDuration,
+    keyframeDirection: job.workflow.stages.keyframes?.artifacts?.direction,
+  });
+  const directionName = `motion-sample-direction-v${version}.json`;
+  await writeJson(path.join(jobDir, directionName), direction);
+  const previewReview = await ensurePreviewAssetDecisions(job);
+  if (!previewReview.reviewComplete || !previewReview.renderReady) throw new Error("动态样片所需素材未完成自动审核，不能进入用户审核");
+  const assetSnapshot = await buildAssetDecisionSnapshot(job);
+  const clean = await ensureWorkflowCleanSource(job);
+  const captions = transcriptCues(job.transcript, job.currentPlan.keepSegments, job.script);
+  const approvedAssets = (job.assets || []).filter(asset => asset.reviewStatus === "approved" && !assetComplianceIssues(asset, job, outputDuration).length);
+  const projectRelative = path.join("workflow", `sample-v${version}`);
+  const projectDir = path.join(jobDir, projectRelative);
+  const project = await buildHyperframesDirectorProject({
+    projectDir,
+    sourceVideo: clean.videoPath,
+    sourceAudio: clean.audioPath,
+    breakdown: job.contentBreakdown,
+    styleReport: job.visualStyleReport,
+    mode: "sample",
+    keyframeDirection: job.workflow.stages.keyframes?.artifacts?.direction,
+    rangeStart: direction.sampleStart,
+    rangeEnd: direction.sampleEnd,
+    motionDirection: direction,
+    captions,
+    approvedAssets,
+    renderSpec: job.workflow.config.rendering.sample,
+    promptSnapshot: { stage: "motion_sample", version, prompt: stageConfig.prompt, feedback, settings: stageConfig.settings, model: modelResult?.model || null },
+  });
+  await inspectHyperframesProject(projectDir, project.snapshotTimes);
+  const rendersDir = path.join(projectDir, "renders");
+  await fsp.mkdir(rendersDir, { recursive: true });
+  const outputPath = path.join(rendersDir, `motion-sample-v${version}.mp4`);
+  await runHyperframes(["render", ".", "--skill=talking-head-recut", "--output", outputPath, "--fps", String(project.fps), "--quality", "standard", "--workers", "2"], projectDir, 45 * 60 * 1000);
+  await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
+  const metadata = await probe(outputPath);
+  if (metadata.duration < 14.5 || metadata.duration > 25.8) throw new Error(`动态样片时长${metadata.duration.toFixed(1)}秒，不在15—25秒门禁内`);
+  const thumbnailPath = path.join(rendersDir, `motion-sample-v${version}.jpg`);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(3, metadata.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnailPath]);
+  const postRenderSnapshot = await buildAssetDecisionSnapshot(job);
+  if (postRenderSnapshot.snapshotHash !== assetSnapshot.snapshotHash) throw new Error("动态样片渲染期间素材决策或文件发生变化，拒绝生成可审核样片");
+  const frozenAssetSnapshot = await writeMotionSampleAssetSnapshot(job, version, assetSnapshot);
+  return {
+    direction,
+    directionUrl: workflowUrl(job, directionName),
+    path: outputPath,
+    url: workflowUrl(job, path.relative(jobDir, outputPath)),
+    thumbnailUrl: workflowUrl(job, path.relative(jobDir, thumbnailPath)),
+    metadata,
+    projectUrl: workflowUrl(job, path.join(projectRelative, "index.html")),
+    manifestUrl: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")),
+    qaUrl: workflowUrl(job, path.join(projectRelative, "qa", "check.txt")),
+    sampleStart: direction.sampleStart,
+    sampleEnd: direction.sampleEnd,
+    assetSnapshot: frozenAssetSnapshot.snapshot,
+    assetSnapshotFile: frozenAssetSnapshot.fileName,
+    assetSnapshotUrl: frozenAssetSnapshot.url,
+    assetSnapshotSha256: frozenAssetSnapshot.sha256,
+    model: modelResult?.model || null,
+  };
+}
+
+function normalizedAudioTarget(value, fallback, minimum, maximum) {
+  const match = String(value ?? "").match(/-?\d+(?:\.\d+)?/);
+  const parsed = match ? Number(match[0]) : Number(value);
+  return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
+}
+
+function hyperframesMasterAudioTargets(spec = {}) {
+  return {
+    loudnessLufs: normalizedAudioTarget(spec.loudnessTarget, -16, -36, -5),
+    truePeakDbtp: normalizedAudioTarget(spec.truePeakTarget, -1.5, -12, 0),
+  };
+}
+
+export async function normalizeHyperframesMaster(inputPath, outputPath, width, height, fps, audioSpec = {}) {
+  const metadata = await probe(inputPath);
+  const alreadyCompatible = metadata.videoCodec === "h264" && metadata.pixelFormat === "yuv420p" && metadata.width === width && metadata.height === height && Math.abs(Number(metadata.fps || 0) - fps) < 0.01;
+  const audioTargets = hyperframesMasterAudioTargets(audioSpec);
+  const audioArgs = metadata.hasAudio ? [
+    "-map", "0:a:0",
+    "-af", `loudnorm=I=${audioTargets.loudnessLufs}:TP=${audioTargets.truePeakDbtp}:LRA=11,asetpts=N/SR/TB`,
+    "-c:a", "aac",
+    "-b:a", "192k",
+    "-ar", "48000",
+  ] : ["-an"];
+  if (alreadyCompatible) {
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-map", "0:v:0", "-c:v", "copy", ...audioArgs, "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv", "-movflags", "+faststart", outputPath]);
+  } else {
+    await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-i", inputPath, "-map", "0:v:0", "-vf", `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=0x07090F,fps=${fps},format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709`, "-c:v", "libx264", "-preset", "medium", "-crf", "18", ...audioArgs, "-movflags", "+faststart", outputPath], { timeoutMs: 90 * 60 * 1000 });
+  }
+  await run("ffmpeg", ["-v", "error", "-i", outputPath, "-f", "null", "-"]);
+  return probe(outputPath);
+}
+
+export function parseAudioOnlyRevisionFeedback(feedback) {
+  const text = String(feedback || "").normalize("NFKC").replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const loudness = text.match(/(-?\d+(?:\.\d+)?)\s*LUFS/i);
+  const truePeak = text.match(/(-?\d+(?:\.\d+)?)\s*dBTP/i);
+  const clauses = text.split(/[。；;\n]+/).map(item => item.trim()).filter(Boolean);
+  if (clauses.length !== 2) return null;
+  const [audioClause, preserveClause] = clauses;
+  const protectedTerms = ["画面", "字幕", "动效", "时间线", "素材"];
+  const preservesEveryVisualTerm = protectedTerms.every(term => preserveClause.includes(term))
+    && /^(?:其余|其他|除音频外)?[画面字幕动效时间线素材、,和以及与及]*(?:全部|均|都)?(?:保持|维持)(?:完全)?不变$/.test(preserveClause);
+  const strictAudioClause = /^(?:只|仅)(?:把|将)?[^,，、]{0,18}(?:人声|音频)(?:响度|音量)?(?:调整|规范化|标准化|处理)?(?:到|至|为|目标为|控制在)?(?:约)?\s*-?\d+(?:\.\d+)?\s*LUFS(?:,|，|、)?(?:并)?(?:真峰值|TP|true peak)[^,，、]{0,12}(?:不高于|不超过|<=|≤|控制在)\s*-?\d+(?:\.\d+)?\s*dBTP$/i.test(audioClause);
+  const truePeakIsCeiling = /(?:真峰值|TP|true peak)[^。；;\n]{0,18}(?:不高于|不超过|<=|≤|上限|控制在)/i.test(text);
+  const loudnessValue = loudness ? Number(loudness[1]) : NaN;
+  const truePeakValue = truePeak ? Number(truePeak[1]) : NaN;
+  const targetsInRange = Number.isFinite(loudnessValue) && loudnessValue >= -36 && loudnessValue <= -5
+    && Number.isFinite(truePeakValue) && truePeakValue >= -12 && truePeakValue <= 0;
+  if (!loudness || !truePeak || !truePeakIsCeiling || !targetsInRange || !strictAudioClause || !preservesEveryVisualTerm) return null;
+  return {
+    mode: "audio-only",
+    loudnessLufs: loudnessValue,
+    truePeakDbtp: truePeakValue,
+    feedback: text,
+  };
+}
+
+export function hasAudioOnlyRevisionIntent(feedback) {
+  const text = String(feedback || "").normalize("NFKC").replace(/\s+/g, " ").trim();
+  if (!text || !/(?:人声|音频|响度|音量|LUFS|dBTP|真峰值)/i.test(text)) return false;
+  if (/^(?:只|仅)(?:把|将)?(?:画面|字幕|动效|时间线|素材)/.test(text)) return false;
+  const visualMutation = /(?:修改|调整|更换|替换|增加|添加|删除|去掉|移动|提前|延后|重做|重剪|裁剪|缩放|放大|缩小|加粗|变大|改色|调亮|调暗|加快|减慢|改字)[^。；;\n]{0,18}(?:画面|字幕|动效|时间线|素材)|(?:画面|字幕|动效|时间线|素材)[^。；;\n]{0,18}(?:修改|调整|更换|替换|增加|添加|删除|去掉|移动|提前|延后|重做|重剪|裁剪|缩放|放大|缩小|加粗|变大|改色|调亮|调暗|加快|减慢|改字)/.test(text);
+  if (visualMutation) return false;
+  return /(?:只|仅)(?:把|将)?(?:整条|全片|整个|全部)?(?:人声|音频|响度|音量)/.test(text)
+    || /(?:其余|其他|画面|字幕|动效|时间线|素材)[^。；;\n]{0,48}(?:保持不变|不变|不改|别动)/.test(text);
+}
+
+async function ffmpegVideoHash(file, mode) {
+  const args = mode === "decoded-frames"
+    ? ["-v", "error", "-i", file, "-map", "0:v:0", "-an", "-c:v", "rawvideo", "-pix_fmt", "yuv420p", "-f", "hash", "-hash", "sha256", "-"]
+    : ["-v", "error", "-i", file, "-map", "0:v:0", "-c", "copy", "-f", "streamhash", "-hash", "sha256", "-"];
+  const result = await run("ffmpeg", args, { timeoutMs: 30 * 60 * 1000 });
+  const match = `${result.stdout || ""}\n${result.stderr || ""}`.match(/SHA256=([a-f0-9]{64})/i);
+  if (!match) throw new Error(`无法计算视频${mode === "decoded-frames" ? "逐帧" : "码流"}哈希`);
+  return match[1].toLowerCase();
+}
+
+async function videoPacketTimingSha256(file) {
+  const result = await run("ffprobe", [
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "packet=pts_time,dts_time,duration_time,flags",
+    "-of", "csv=p=0",
+    file,
+  ], { timeoutMs: 30 * 60 * 1000 });
+  return crypto.createHash("sha256").update(String(result.stdout || "").replace(/\r\n/g, "\n")).digest("hex");
+}
+
+function timelineRevisionEvidence(timeline = {}) {
+  const value = structuredClone(timeline || {});
+  delete value.version;
+  delete value.generatedAt;
+  if (value.source) delete value.source.path;
+  return value;
+}
+
+async function cleanupAudioOnlyRevisionArtifacts(jobDir, version) {
+  const names = [
+    `final-v${version}.mp4`,
+    `thumbnail-v${version}.jpg`,
+    `timeline-v${version}.json`,
+    `timeline-v${version}.edl`,
+    `media-manifest-v${version}.json`,
+    `qa-report-v${version}.json`,
+    `review-preview-v${version}.mp4`,
+    `review-bundle-v${version}.json`,
+    `audio-only-revision-v${version}.json`,
+  ];
+  let entries = [];
+  try { entries = await fsp.readdir(jobDir); } catch {}
+  names.push(...entries.filter(name => name.startsWith(`review-segment-v${version}-`)));
+  await Promise.all(names.map(name => fsp.rm(confined(jobDir, name), { force: true })));
+  await fsp.rm(confined(jobDir, path.join("variants", `v${version}`)), { recursive: true, force: true });
+}
+
+async function runAudioOnlyFullRevision(job, stageVersion, feedbackSpec, approvedSampleAssetSnapshot, outputDuration) {
+  const jobDir = confined(jobsRoot, job.id);
+  const previousOutput = structuredClone(job.output || {});
+  const previousVersion = Number(previousOutput.version || 0);
+  if (!previousVersion || !previousOutput.path) throw new Error("当前批准成片不存在，不能执行音频专用返修");
+  const previousOutputPath = confined(jobDir, previousOutput.path);
+  const expectedPreviousOutputPath = path.join(jobDir, `final-v${previousVersion}.mp4`);
+  if (previousOutputPath.toLowerCase() !== expectedPreviousOutputPath.toLowerCase() || previousOutput.url !== `/video-jobs/${job.id}/final-v${previousVersion}.mp4`) {
+    throw new Error("当前批准成片路径或 URL 与任务版本不一致，拒绝音频专用返修");
+  }
+  if (!fs.existsSync(previousOutputPath)) throw new Error("当前批准成片不存在，不能执行音频专用返修");
+  if (previousOutput.qaPass !== true || previousOutput.finalReview?.status !== "approved") throw new Error("音频专用返修只能从已通过 QA 且已批准的当前成片创建新版本");
+  const previousMediaSha256 = await sha256File(previousOutputPath);
+  const approvedMediaSha256 = String(previousOutput.finalReview?.mediaSha256 || previousOutput.mediaSha256 || "").toLowerCase();
+  if (!approvedMediaSha256 || previousMediaSha256.toLowerCase() !== approvedMediaSha256) throw new Error("当前批准成片哈希与最终审核记录不一致，拒绝音频专用返修");
+  const approvedReviewPath = path.join(jobDir, `final-review-v${previousVersion}.json`);
+  const previousManifestPath = path.join(jobDir, `media-manifest-v${previousVersion}.json`);
+  const previousBundlePath = path.join(jobDir, `review-bundle-v${previousVersion}.json`);
+  const previousPreviewPath = path.join(jobDir, `review-preview-v${previousVersion}.mp4`);
+  const previousTimelinePath = path.join(jobDir, `timeline-v${previousVersion}.json`);
+  for (const file of [approvedReviewPath, previousManifestPath, previousBundlePath, previousPreviewPath, previousTimelinePath]) {
+    if (!fs.existsSync(file)) throw new Error(`当前批准版本缺少证据文件：${path.basename(file)}`);
+  }
+  const approvedReview = await readJsonFile(approvedReviewPath);
+  if (approvedReview.status !== "approved" || Number(approvedReview.version) !== previousVersion) throw new Error("当前版本的最终审核记录不是已批准状态");
+  if (!approvedReview.evidenceHash || finalReviewEvidenceHash(approvedReview) !== approvedReview.evidenceHash) throw new Error("当前版本最终审核记录的证据哈希已损坏");
+  if (!approvedReview.recordHash || finalReviewRecordHash(approvedReview) !== approvedReview.recordHash) throw new Error("当前版本最终审核记录的完整记录哈希已损坏");
+  if (String(approvedReview.mediaSha256 || "").toLowerCase() !== previousMediaSha256.toLowerCase()) throw new Error("当前版本最终审核记录绑定的媒体哈希不一致");
+  const embeddedFinalReview = previousOutput.finalReview || {};
+  const authoritativeFinalReviewUrl = `/video-jobs/${job.id}/final-review-v${previousVersion}.json`;
+  if (Number(embeddedFinalReview.version) !== previousVersion
+    || embeddedFinalReview.status !== "approved"
+    || embeddedFinalReview.url !== authoritativeFinalReviewUrl
+    || String(embeddedFinalReview.mediaSha256 || "").toLowerCase() !== previousMediaSha256.toLowerCase()
+    || embeddedFinalReview.evidenceHash !== approvedReview.evidenceHash
+    || embeddedFinalReview.recordHash !== approvedReview.recordHash) {
+    throw new Error("job.json 内嵌的最终审核摘要与权威版本化记录不一致");
+  }
+  const authoritativePreviousFinalReview = {
+    status: "approved",
+    version: previousVersion,
+    url: authoritativeFinalReviewUrl,
+    mediaSha256: previousMediaSha256,
+    approvedAt: approvedReview.approvedAt,
+    evidenceHash: approvedReview.evidenceHash,
+    recordHash: approvedReview.recordHash,
+  };
+  if (String(approvedReview.reviewBundle?.sha256 || "").toLowerCase() !== (await sha256File(previousBundlePath)).toLowerCase()) throw new Error("当前版本审核预览包哈希不一致");
+  if (String(approvedReview.reviewBundle?.previewSha256 || "").toLowerCase() !== (await sha256File(previousPreviewPath)).toLowerCase()) throw new Error("当前版本审核预览哈希不一致");
+  if (String(approvedReview.mediaManifest?.sha256 || "").toLowerCase() !== (await sha256File(previousManifestPath)).toLowerCase()) throw new Error("当前版本素材清单哈希不一致");
+  const previousManifest = await readJsonFile(previousManifestPath);
+  const previousTimeline = await readJsonFile(previousTimelinePath);
+  if (Number(previousManifest.version) !== previousVersion || Number(previousTimeline.version) !== previousVersion) throw new Error("当前批准版本的素材清单或时间线版本不一致");
+  const manifestSnapshot = previousManifest.motionSampleAssetSnapshot;
+  const expectedSnapshotSha256 = job.workflow?.stages?.motion_sample?.artifacts?.assetSnapshotSha256 || null;
+  if (!manifestSnapshot
+    || Number(manifestSnapshot.decisionVersion) !== Number(approvedSampleAssetSnapshot.decisionVersion)
+    || manifestSnapshot.snapshotHash !== approvedSampleAssetSnapshot.snapshotHash
+    || manifestSnapshot.artifactSha256 !== expectedSnapshotSha256) {
+    throw new Error("当前批准版本的素材清单与动态样片冻结快照不一致");
+  }
+  const approvedRenderedAssetIds = [...(approvedReview.renderedAssetIds || [])].sort();
+  const manifestRenderedAssetIds = [...(previousManifest.renderedAssetIds || [])].sort();
+  if (JSON.stringify(approvedRenderedAssetIds) !== JSON.stringify(manifestRenderedAssetIds)) throw new Error("当前批准记录与素材清单的已渲染素材不一致");
+  const configuredTargets = hyperframesMasterAudioTargets(job.workflow?.config?.rendering?.final || {});
+  if (Math.abs(feedbackSpec.loudnessLufs - configuredTargets.loudnessLufs) > 0.05 || Math.abs(feedbackSpec.truePeakDbtp - configuredTargets.truePeakDbtp) > 0.05) {
+    throw new Error(`音频专用返修当前只支持工作流目标 ${configuredTargets.loudnessLufs} LUFS / ${configuredTargets.truePeakDbtp} dBTP`);
+  }
+  const previousMetadata = await probe(previousOutputPath);
+  if (!previousMetadata.hasAudio) throw new Error("当前成片没有音轨，不能执行响度返修");
+  const videoVersion = Math.max(0, ...(job.versions || []).map(item => Number(item.version) || 0), Number(job.currentVersion || 0)) + 1;
+  const outputPath = path.join(jobDir, `final-v${videoVersion}.mp4`);
+  const sourceVideoStreamSha256 = await ffmpegVideoHash(previousOutputPath, "stream");
+  const sourceDecodedFramesSha256 = await ffmpegVideoHash(previousOutputPath, "decoded-frames");
+  const sourceVideoPacketTimingSha256 = await videoPacketTimingSha256(previousOutputPath);
+  const metadata = await normalizeHyperframesMaster(
+    previousOutputPath,
+    outputPath,
+    previousMetadata.width,
+    previousMetadata.height,
+    previousMetadata.fps,
+    { loudnessTarget: feedbackSpec.loudnessLufs, truePeakTarget: feedbackSpec.truePeakDbtp },
+  );
+  const outputVideoStreamSha256 = await ffmpegVideoHash(outputPath, "stream");
+  const outputDecodedFramesSha256 = await ffmpegVideoHash(outputPath, "decoded-frames");
+  const outputVideoPacketTimingSha256 = await videoPacketTimingSha256(outputPath);
+  if (sourceVideoStreamSha256 !== outputVideoStreamSha256 || sourceDecodedFramesSha256 !== outputDecodedFramesSha256 || sourceVideoPacketTimingSha256 !== outputVideoPacketTimingSha256) {
+    await fsp.rm(outputPath, { force: true });
+    throw new Error("音频专用返修改变了视频码流、逐帧画面或视频时间戳，已拒绝生成新版本");
+  }
+  const thumbnail = path.join(jobDir, `thumbnail-v${videoVersion}.jpg`);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(1.5, metadata.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnail]);
+  const timeline = structuredClone(previousTimeline);
+  timeline.version = videoVersion;
+  timeline.source = { ...(timeline.source || {}), path: confined(jobDir, job.sourcePath) };
+  timeline.generatedAt = new Date().toISOString();
+  const sourceTimelineEvidenceHash = contentHash(timelineRevisionEvidence(previousTimeline));
+  const outputTimelineEvidenceHash = contentHash(timelineRevisionEvidence(timeline));
+  if (sourceTimelineEvidenceHash !== outputTimelineEvidenceHash) throw new Error("音频专用返修的时间线与已批准版本不一致");
+  await writeTimelineArtifacts(jobDir, timeline, videoVersion);
+  const manifest = structuredClone(previousManifest);
+  manifest.version = videoVersion;
+  const currentAssets = new Map((job.assets || []).map(asset => [asset.id, asset]));
+  for (const asset of manifest.assets || []) {
+    const current = currentAssets.get(asset.id);
+    if (!current) throw new Error(`当前任务缺少已批准版本中的素材：${asset.id}`);
+    asset.path = confined(jobDir, current.path);
+    asset.url = current.url || asset.url;
+    asset.previewUrl = current.previewUrl || asset.previewUrl;
+    asset.fileName = current.fileName || asset.fileName;
+  }
+  manifest.motionSampleAssetSnapshot = structuredClone(previousManifest.motionSampleAssetSnapshot);
+  manifest.revision = { mode: "audio-only", sourceVersion: previousVersion, feedback: feedbackSpec.feedback };
+  manifest.renderCompletedAt = new Date().toISOString();
+  await writeJson(path.join(jobDir, `media-manifest-v${videoVersion}.json`), manifest);
+  const coverPackaging = structuredClone(previousOutput.cover || { requested: false, available: false, engine: "none", fallbackReason: null });
+  const variants = await renderVariants(job, videoVersion, outputPath);
+  const packaging = {
+    ...(previousOutput.packaging || {}),
+    revisionMode: "audio-only",
+    revisionEngine: "ffmpeg-loudnorm",
+    sourceVersion: previousVersion,
+  };
+  const captionPackaging = structuredClone(previousOutput.captionPackaging || { requested: "none", engine: "none", integrated: true, safeArea: true });
+  const colorManagement = structuredClone(previousOutput.colorManagement || videoColorPipeline(job.source));
+  const qaReport = await runQa(
+    job,
+    videoVersion,
+    outputPath,
+    Number(timeline.outputDuration || outputDuration),
+    timeline,
+    variants,
+    packaging,
+    captionPackaging,
+    coverPackaging,
+    manifest,
+    colorManagement,
+    { loudnessTarget: feedbackSpec.loudnessLufs, truePeakTarget: feedbackSpec.truePeakDbtp },
+  );
+  qaReport.checks.videoStreamIdentical = sourceVideoStreamSha256 === outputVideoStreamSha256;
+  qaReport.checks.decodedFramesIdentical = sourceDecodedFramesSha256 === outputDecodedFramesSha256;
+  qaReport.checks.videoPacketTimingIdentical = sourceVideoPacketTimingSha256 === outputVideoPacketTimingSha256;
+  qaReport.metrics.sourceVideoStreamSha256 = sourceVideoStreamSha256;
+  qaReport.metrics.outputVideoStreamSha256 = outputVideoStreamSha256;
+  qaReport.metrics.sourceDecodedFramesSha256 = sourceDecodedFramesSha256;
+  qaReport.metrics.outputDecodedFramesSha256 = outputDecodedFramesSha256;
+  qaReport.metrics.sourceVideoPacketTimingSha256 = sourceVideoPacketTimingSha256;
+  qaReport.metrics.outputVideoPacketTimingSha256 = outputVideoPacketTimingSha256;
+  qaReport.pass = qaReport.pass && qaReport.checks.videoStreamIdentical && qaReport.checks.decodedFramesIdentical && qaReport.checks.videoPacketTimingIdentical;
+  await writeJson(path.join(jobDir, `qa-report-v${videoVersion}.json`), qaReport);
+  if (!qaReport.pass) throw new Error("音频专用返修未通过响度、真峰值或媒体 QA，未切换当前版本");
+  const reviewBundle = await createReviewBundle(job, videoVersion, outputPath, Number(timeline.outputDuration || outputDuration));
+  const outputMediaSha256 = await sha256File(outputPath);
+  const revisionName = `audio-only-revision-v${videoVersion}.json`;
+  const revision = {
+    schemaVersion: 1,
+    mode: "audio-only",
+    sourceVersion: previousVersion,
+    outputVersion: videoVersion,
+    feedback: feedbackSpec.feedback,
+    targets: { loudnessLufs: feedbackSpec.loudnessLufs, truePeakDbtp: feedbackSpec.truePeakDbtp },
+    measured: { integratedLufs: qaReport.metrics.integratedLufs, truePeakDbfs: qaReport.metrics.truePeakDbfs },
+    sourceMediaSha256: previousMediaSha256,
+    outputMediaSha256,
+    sourceVideoStreamSha256,
+    outputVideoStreamSha256,
+    sourceDecodedFramesSha256,
+    outputDecodedFramesSha256,
+    sourceVideoPacketTimingSha256,
+    outputVideoPacketTimingSha256,
+    sourceTimelineSha256: await sha256File(previousTimelinePath),
+    outputTimelineSha256: await sha256File(path.join(jobDir, `timeline-v${videoVersion}.json`)),
+    sourceTimelineEvidenceHash,
+    outputTimelineEvidenceHash,
+    visualTimelineUnchanged: sourceTimelineEvidenceHash === outputTimelineEvidenceHash,
+    subtitlesUnchanged: true,
+    motionUnchanged: true,
+    assetsUnchanged: true,
+    createdAt: new Date().toISOString(),
+  };
+  await writeJson(path.join(jobDir, revisionName), revision);
+  const artifactUrl = name => `/video-jobs/${job.id}/${name}`;
+  const previousArtifacts = previousOutput.artifacts || {};
+  const output = {
+    version: videoVersion,
+    workflowStageVersion: stageVersion,
+    workflowDependencies: structuredClone(previousOutput.workflowDependencies || {}),
+    path: outputPath,
+    url: artifactUrl(`final-v${videoVersion}.mp4`),
+    thumbnailUrl: artifactUrl(`thumbnail-v${videoVersion}.jpg`),
+    metadata,
+    qa: qaReport.checks,
+    qaPass: qaReport.pass,
+    provenance: previousOutput.provenance,
+    planEngine: previousOutput.planEngine,
+    packaging,
+    captionPackaging,
+    cover: coverPackaging,
+    colorManagement,
+    variants,
+    reviewBundle,
+    media: { policy: manifest.policy, approvedAssets: manifest.assets.filter(asset => asset.approved).length },
+    artifacts: {
+      editPlan: previousArtifacts.editPlan || artifactUrl(`edit-plan-v${job.currentPlan.version}.json`),
+      timeline: artifactUrl(`timeline-v${videoVersion}.json`),
+      edl: artifactUrl(`timeline-v${videoVersion}.edl`),
+      qa: artifactUrl(`qa-report-v${videoVersion}.json`),
+      mediaManifest: artifactUrl(`media-manifest-v${videoVersion}.json`),
+      reviewBundle: artifactUrl(`review-bundle-v${videoVersion}.json`),
+      reviewPreview: reviewBundle.preview.url,
+      styleReport: previousArtifacts.styleReport,
+      contentBreakdown: previousArtifacts.contentBreakdown,
+      keyframeDirection: previousArtifacts.keyframeDirection,
+      motionSample: previousArtifacts.motionSample,
+      fullDirection: previousArtifacts.fullDirection,
+      hyperframesProject: previousArtifacts.hyperframesProject,
+      hyperframesManifest: previousArtifacts.hyperframesManifest,
+      audioOnlyRevision: artifactUrl(revisionName),
+    },
+    revision: { mode: "audio-only", sourceVersion: previousVersion, feedback: feedbackSpec.feedback },
+    createdAt: new Date().toISOString(),
+    model: null,
+  };
+  await fsp.copyFile(outputPath, path.join(jobDir, "final.mp4"));
+  await writePendingFinalReviewAlias(job, videoVersion, authoritativePreviousFinalReview);
+  job.currentVersion = videoVersion;
+  job.versions = [...(job.versions || []).filter(item => Number(item.version) !== videoVersion), output];
+  job.output = output;
+  return {
+    output,
+    direction: null,
+    directionUrl: previousArtifacts.fullDirection || null,
+    projectUrl: previousArtifacts.hyperframesProject || null,
+    manifestUrl: previousArtifacts.hyperframesManifest || null,
+    videoVersion,
+    revisionMode: "audio-only",
+    skipAutomaticOrdinaryViewerAudit: true,
+  };
+}
+
+async function runFullRenderStage(job, stageVersion, stageConfig, feedback = "") {
+  const jobDir = confined(jobsRoot, job.id);
+  const outputDuration = job.currentPlan.keepSegments.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0);
+  const approvedSampleAssetSnapshot = await assertMotionSampleAssetSnapshotCurrent(job);
+  const review = assetReviewSummary(job, outputDuration);
+  if (!review.reviewComplete || !review.renderReady) throw new Error("素材审核状态在样片批准后发生变化，请先处理所有素材再生成完整视频");
+  const audioOnlyRevision = parseAudioOnlyRevisionFeedback(feedback);
+  if (audioOnlyRevision) return runAudioOnlyFullRevision(job, stageVersion, audioOnlyRevision, approvedSampleAssetSnapshot, outputDuration);
+  if (hasAudioOnlyRevisionIntent(feedback)) throw new Error("检测到只改音频的意图，但反馈未满足安全旁路格式；请同时写明 LUFS、真峰值上限，以及画面、字幕、动效、时间线和素材全部保持不变");
+  let modelResult = null;
+  try {
+    modelResult = await runAi({
+      operation: "full_video_direction",
+      style_report: job.visualStyleReport,
+      breakdown: job.contentBreakdown,
+      keyframes: job.workflow.stages.keyframes?.artifacts,
+      sample_direction: job.workflow.stages.motion_sample?.artifacts?.direction,
+      settings: stageConfig.settings,
+      feedback,
+      custom_prompt: stageConfig.prompt,
+    }, jobDir, `full-video-direction-v${stageVersion}`);
+  } catch (error) {
+    job.degraded = [...(job.degraded || []), `完整视频导演方案失败，使用批准样片的默认动效语法：${error.message}`];
+  }
+  const direction = normalizeFullDirection(modelResult?.data || {}, job.contentBreakdown);
+  const directionName = `full-video-direction-v${stageVersion}.json`;
+  await writeJson(path.join(jobDir, directionName), direction);
+  const clean = await ensureWorkflowCleanSource(job);
+  const captions = transcriptCues(job.transcript, job.currentPlan.keepSegments, job.script);
+  const approvedAssets = (job.assets || []).filter(asset => asset.reviewStatus === "approved" && !assetComplianceIssues(asset, job, outputDuration).length);
+  const videoVersion = Math.max(0, ...(job.versions || []).map(item => Number(item.version) || 0), Number(job.currentVersion || 0)) + 1;
+  job.currentVersion = videoVersion;
+  const finalSettings = stageConfig.settings;
+  const width = Number(finalSettings.masterWidth || 2560);
+  const height = Number(finalSettings.masterHeight || (width === 2560 ? 1440 : 1080));
+  const fps = Number(finalSettings.fps || 30);
+  const projectRelative = path.join("workflow", `full-v${videoVersion}`);
+  const projectDir = path.join(jobDir, projectRelative);
+  const project = await buildHyperframesDirectorProject({
+    projectDir,
+    sourceVideo: clean.videoPath,
+    sourceAudio: clean.audioPath,
+    breakdown: job.contentBreakdown,
+    styleReport: job.visualStyleReport,
+    mode: "full",
+    keyframeDirection: job.workflow.stages.keyframes?.artifacts?.direction,
+    rangeStart: 0,
+    rangeEnd: outputDuration,
+    fullDirection: direction,
+    captions,
+    approvedAssets,
+    renderSpec: { width, height, fps },
+    promptSnapshot: { stage: "full_render", stageVersion, videoVersion, prompt: stageConfig.prompt, feedback, settings: finalSettings, model: modelResult?.model || null },
+  });
+  await inspectHyperframesProject(projectDir, project.snapshotTimes);
+  const rendersDir = path.join(projectDir, "renders");
+  await fsp.mkdir(rendersDir, { recursive: true });
+  const rawPath = path.join(rendersDir, `full-hyperframes-v${videoVersion}-raw.mp4`);
+  await runHyperframes(["render", ".", "--skill=talking-head-recut", "--output", rawPath, "--fps", String(fps), "--quality", "high", "--workers", "2"], projectDir, 4 * 60 * 60 * 1000);
+  const postRenderAssetSnapshot = await assertMotionSampleAssetSnapshotCurrent(job);
+  if (postRenderAssetSnapshot.snapshotHash !== approvedSampleAssetSnapshot.snapshotHash) throw new Error("完整视频渲染期间动态样片素材快照发生变化，拒绝交付成片");
+  const outputPath = path.join(jobDir, `final-v${videoVersion}.mp4`);
+  const metadata = await normalizeHyperframesMaster(rawPath, outputPath, width, height, fps, {
+    ...(job.workflow?.config?.rendering?.final || {}),
+    ...finalSettings,
+  });
+  await fsp.copyFile(outputPath, path.join(jobDir, "final.mp4"));
+  const thumbnail = path.join(jobDir, `thumbnail-v${videoVersion}.jpg`);
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(Math.min(1.5, metadata.duration / 3)), "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbnail]);
+  const timeline = buildTimeline(job, job.currentPlan, videoVersion);
+  await writeTimelineArtifacts(jobDir, timeline, videoVersion);
+  const manifest = await ensureMediaManifest(job, videoVersion);
+  const composited = new Set(project.compositedAssetIds);
+  for (const asset of manifest.assets) asset.composited = composited.has(asset.id);
+  manifest.renderedAssetIds = [...composited];
+  manifest.attributionTrack = manifest.assets.some(asset => asset.composited && EXTERNAL_SOURCE_TYPES.has(asset.sourceType)) ? "hyperframes-integrated" : null;
+  manifest.motionSampleAssetSnapshot = {
+    decisionVersion: approvedSampleAssetSnapshot.decisionVersion,
+    snapshotHash: approvedSampleAssetSnapshot.snapshotHash,
+    artifactSha256: job.workflow.stages.motion_sample?.artifacts?.assetSnapshotSha256 || null,
+  };
+  manifest.renderCompletedAt = new Date().toISOString();
+  await writeJson(path.join(jobDir, `media-manifest-v${videoVersion}.json`), manifest);
+  let coverPackaging = { requested: job.options?.generateCover !== false, available: false, engine: "none", fallbackReason: null };
+  if (coverPackaging.requested) {
+    try { coverPackaging = await renderCover(job, videoVersion); }
+    catch (error) { coverPackaging = { requested: true, available: false, engine: "failed", fallbackReason: error.message }; }
+  }
+  const variants = await renderVariants(job, videoVersion, outputPath);
+  const packaging = { requested: "hyperframes", engine: "hyperframes", cards: job.contentBreakdown?.segments?.length || 0, panels: job.contentBreakdown?.segments?.length || 0, project: projectRelative };
+  const captionPackaging = { requested: job.options.captions === false ? "none" : "keyword-pop", engine: job.options.captions === false ? "none" : "hyperframes", style: "keyword-pop", cues: captions.length, integrated: true, safeArea: true };
+  const qaReport = await runQa(job, videoVersion, outputPath, outputDuration, timeline, variants, packaging, captionPackaging, coverPackaging, manifest, videoColorPipeline(job.source));
+  const reviewBundle = await createReviewBundle(job, videoVersion, outputPath, outputDuration);
+  const artifactUrl = name => `/video-jobs/${job.id}/${name}`;
+  const output = {
+    version: videoVersion,
+    workflowStageVersion: stageVersion,
+    workflowDependencies: {
+      keyframeVersion: Number(job.workflow?.stages?.keyframe_review?.approvedVersion) || null,
+      motionSampleVersion: Number(job.workflow?.stages?.motion_sample?.approvedVersion) || null,
+      assetDecisionVersion: approvedSampleAssetSnapshot.decisionVersion,
+      motionSampleAssetSnapshotHash: approvedSampleAssetSnapshot.snapshotHash,
+      motionSampleAssetSnapshotSha256: job.workflow.stages.motion_sample?.artifacts?.assetSnapshotSha256 || null,
+    },
+    path: outputPath,
+    url: artifactUrl(`final-v${videoVersion}.mp4`),
+    thumbnailUrl: artifactUrl(`thumbnail-v${videoVersion}.jpg`),
+    metadata,
+    qa: qaReport.checks,
+    qaPass: qaReport.pass,
+    provenance: job.currentPlan.provenance,
+    planEngine: job.currentPlan.engine,
+    packaging,
+    captionPackaging,
+    cover: coverPackaging,
+    colorManagement: videoColorPipeline(job.source),
+    variants,
+    reviewBundle,
+    media: { policy: manifest.policy, approvedAssets: manifest.assets.filter(asset => asset.approved).length },
+    artifacts: {
+      editPlan: artifactUrl(`edit-plan-v${job.currentPlan.version}.json`),
+      timeline: artifactUrl(`timeline-v${videoVersion}.json`),
+      edl: artifactUrl(`timeline-v${videoVersion}.edl`),
+      qa: artifactUrl(`qa-report-v${videoVersion}.json`),
+      mediaManifest: artifactUrl(`media-manifest-v${videoVersion}.json`),
+      reviewBundle: artifactUrl(`review-bundle-v${videoVersion}.json`),
+      reviewPreview: reviewBundle.preview.url,
+      styleReport: job.workflow.stages.style_research?.artifacts?.reportUrl,
+      contentBreakdown: job.workflow.stages.content_breakdown?.artifacts?.breakdownUrl,
+      keyframeDirection: job.workflow.stages.keyframes?.artifacts?.directionUrl,
+      motionSample: job.workflow.stages.motion_sample?.artifacts?.url,
+      fullDirection: artifactUrl(directionName),
+      hyperframesProject: workflowUrl(job, path.join(projectRelative, "index.html")),
+      hyperframesManifest: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")),
+      ...(coverPackaging.available ? { coverDesign: artifactUrl(`cover-design-v${videoVersion}.json`), coverVertical: coverPackaging.vertical.url, coverGrid: coverPackaging.grid.url, coverWide16x9: coverPackaging.wide16x9.url, coverLandscape4x3: coverPackaging.landscape4x3.url } : {}),
+    },
+    createdAt: new Date().toISOString(),
+    model: modelResult?.model || null,
+  };
+  await writePendingFinalReviewAlias(job, videoVersion, job.output?.finalReview || null);
+  job.versions = [...(job.versions || []).filter(item => Number(item.version) !== videoVersion), output];
+  job.output = output;
+  return { output, direction, directionUrl: artifactUrl(directionName), projectUrl: workflowUrl(job, path.join(projectRelative, "index.html")), manifestUrl: workflowUrl(job, path.join(projectRelative, "composition-manifest.json")), videoVersion };
+}
+
+function visualJobStatus(stageId) {
+  return {
+    style_research: "researching_style",
+    content_breakdown: "breaking_down_content",
+    keyframes: "generating_keyframes",
+    motion_sample: "rendering_sample",
+    full_render: "rendering_final",
+  }[stageId] || "planning";
+}
+
+const RENDERED_AUDIT_PROTECTED_FIELDS = [
+  "approvedAt",
+  "autoPublish",
+  "finalReview",
+  "memoryPromotion",
+  "productionApproval",
+  "publish",
+  "publishedAt",
+  "publishStatus",
+];
+
+function renderedAuditProtectedState(job) {
+  return {
+    status: job.status,
+    fields: Object.fromEntries(RENDERED_AUDIT_PROTECTED_FIELDS.map(key => [key, {
+      present: Object.prototype.hasOwnProperty.call(job, key),
+      value: structuredClone(job[key]),
+    }])),
+  };
+}
+
+function restoreRenderedAuditProtectedState(job, snapshot) {
+  job.status = snapshot.status;
+  for (const [key, state] of Object.entries(snapshot.fields)) {
+    if (state.present) job[key] = state.value;
+    else delete job[key];
+  }
+}
+
+export async function auditRenderedJobAfterFinalRender(job, trigger, dependencies = {}) {
+  const protectedState = renderedAuditProtectedState(job);
+  try {
+    const keeps = Array.isArray(job.currentPlan?.keepSegments) ? job.currentPlan.keepSegments : [];
+    const mappedTranscript = keeps.length
+      ? transcriptCues(job.transcript, keeps, job.script)
+      : undefined;
+    const audit = await auditRenderedJobOrdinaryViewer({
+      job,
+      transcript: mappedTranscript,
+      critic: dependencies.critic || multiAgentOrdinaryViewerCritic,
+      writeArtifact: dependencies.writeArtifact || writeMultiAgentArtifact,
+      readArtifact: dependencies.readArtifact || readMultiAgentArtifact,
+      allowedRoots: dependencies.allowedRoots || [jobsRoot],
+      trigger,
+      attemptKey: dependencies.attemptKey || `automatic:${trigger}`,
+      clock: dependencies.clock || (() => new Date().toISOString()),
+    });
+    const artifact = audit.artifact;
+    const summary = {
+      status: artifact.status,
+      stage: "render",
+      trigger,
+      artifactId: audit.artifactId,
+      artifactHref: audit.artifactHref,
+      outputVersion: artifact.outputVersion,
+      mediaSha256: artifact.mediaSha256,
+      transcriptSha256: artifact.transcriptSha256,
+      inspectionMode: artifact.inspectionMode,
+      reviewedAt: artifact.reviewedAt,
+      ...(artifact.review ? {
+        viewerDecision: artifact.review.viewerDecision,
+        sharpConclusion: artifact.review.sharpConclusion,
+        blockers: Array.isArray(artifact.review.blockers) ? artifact.review.blockers.length : 0,
+      } : {}),
+      ...(artifact.error ? { error: artifact.error } : {}),
+    };
+    const outputVersion = Number(job.output?.version);
+    job.output = { ...job.output, ordinaryViewerAudit: summary };
+    job.versions = (job.versions || []).map(item => Number(item.version) === outputVersion
+      ? { ...item, ordinaryViewerAudit: summary }
+      : item);
+    restoreRenderedAuditProtectedState(job, protectedState);
+    await (dependencies.saveJobFn || saveJob)(job);
+    return audit;
+  } catch (error) {
+    restoreRenderedAuditProtectedState(job, protectedState);
+    console.warn(`Ordinary Viewer 成片审查未能落库：${redact(error?.message || error)}`);
+    return null;
+  }
+}
+
+async function executeVisualStage(job, stageId, feedback = "") {
+  const audioOnlyRollback = stageId === "full_render" && hasAudioOnlyRevisionIntent(feedback)
+    ? structuredClone(job)
+    : null;
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  const stage = workflow.stages[stageId];
+  if (!stage || !["style_research", "content_breakdown", "keyframes", "motion_sample", "full_render"].includes(stageId)) throw new Error(`不可执行的视觉阶段：${stageId}`);
+  invalidateVisualStages(workflow, stageId, `阶段 ${stageId} 开始生成新版本`);
+  const version = Number(stage.currentVersion || 0) + 1;
+  const config = workflow.config.stages[stageId];
+  const runRecord = { version, status: "running", feedback: String(feedback || ""), prompt: config.prompt, settings: config.settings, startedAt: new Date().toISOString() };
+  stage.currentVersion = version;
+  stage.status = "running";
+  stage.approvedVersion = null;
+  delete stage.approvedAt;
+  delete stage.approvedOutputVersion;
+  delete stage.rejectedAt;
+  delete stage.rejectedVersion;
+  delete stage.feedback;
+  stage.runs = [...(stage.runs || []), runRecord];
+  stage.updatedAt = new Date().toISOString();
+  workflow.currentStage = stageId;
+  workflow.updatedAt = new Date().toISOString();
+  job.status = visualJobStatus(stageId);
+  job.progress = visualStageProgress(stageId);
+  delete job.approvedAt;
+  delete job.error;
+  delete job.errorDetail;
+  delete job.errorStage;
+  delete job.revisionError;
+  await saveVisualWorkflowConfig(job);
+  await saveJob(job);
+  try {
+    let artifacts;
+    if (stageId === "style_research") artifacts = await runStyleResearchStage(job, version, config);
+    else if (stageId === "content_breakdown") artifacts = await runContentBreakdownStage(job, version, config);
+    else if (stageId === "keyframes") artifacts = await runKeyframeStage(job, version, config, feedback);
+    else if (stageId === "motion_sample") artifacts = await runMotionSampleStage(job, version, config, feedback);
+    else artifacts = await runFullRenderStage(job, version, config, feedback);
+    stage.artifacts = artifacts;
+    stage.status = ["motion_sample", "full_render"].includes(stageId) ? "awaiting_review" : "completed";
+    stage.updatedAt = new Date().toISOString();
+    runRecord.status = "completed";
+    runRecord.completedAt = stage.updatedAt;
+    runRecord.artifacts = artifacts;
+    if (stageId === "keyframes") {
+      const gate = workflow.stages.keyframe_review;
+      gate.status = "awaiting_review";
+      gate.currentVersion = version;
+      gate.artifacts = artifacts;
+      gate.updatedAt = stage.updatedAt;
+      gate.approvedVersion = null;
+      delete gate.approvedAt;
+      delete gate.rejectedAt;
+      delete gate.rejectedVersion;
+      delete gate.feedback;
+      workflow.currentStage = "keyframe_review";
+      job.status = "awaiting_keyframe_review";
+    } else if (stageId === "motion_sample") {
+      workflow.currentStage = "motion_sample";
+      job.status = "awaiting_sample_review";
+    } else if (stageId === "full_render") {
+      workflow.currentStage = "full_render";
+      job.status = "awaiting_review";
+    }
+    job.progress = visualStageProgress(stageId, "complete");
+    workflow.updatedAt = new Date().toISOString();
+    await saveJob(job);
+    if (stageId === "full_render" && artifacts?.skipAutomaticOrdinaryViewerAudit !== true) {
+      await auditRenderedJobAfterFinalRender(job, "visual_director_v4_full_render");
+    }
+    return artifacts;
+  } catch (error) {
+    if (audioOnlyRollback) {
+      for (const key of Object.keys(job)) delete job[key];
+      Object.assign(job, audioOnlyRollback);
+      const failedReview = [...(job.reviews || [])].reverse().find(item => item.feedback === feedback && Number(item.version) === Number(job.output?.version));
+      if (failedReview) {
+        failedReview.failed = true;
+        failedReview.error = error.message;
+      }
+      job.revisionError = error.message;
+      job.errorDetail = String(error.stderr || error.stdout || error.message || "").slice(-8000);
+      const rollbackDir = confined(jobsRoot, job.id);
+      const rollbackFailures = [];
+      const rollbackVersion = Math.max(0, ...(job.versions || []).map(item => Number(item.version) || 0), Number(job.currentVersion || 0)) + 1;
+      try { await cleanupAudioOnlyRevisionArtifacts(rollbackDir, rollbackVersion); }
+      catch (rollbackError) { rollbackFailures.push(`v${rollbackVersion} 临时产物：${rollbackError.message}`); }
+      try {
+        const rollbackOutputPath = assertCurrentOutputPath(job, Number(job.output?.version));
+        if (fs.existsSync(rollbackOutputPath)) await fsp.copyFile(rollbackOutputPath, path.join(rollbackDir, "final.mp4"));
+      } catch (rollbackError) { rollbackFailures.push(`final.mp4：${rollbackError.message}`); }
+      try {
+        const approvedVersion = Number(job.output?.finalReview?.version || job.output?.version || 0);
+        const approvedReview = path.join(rollbackDir, `final-review-v${approvedVersion}.json`);
+        if (approvedVersion && fs.existsSync(approvedReview)) await fsp.copyFile(approvedReview, path.join(rollbackDir, "final-review.json"));
+      } catch (rollbackError) { rollbackFailures.push(`final-review.json：${rollbackError.message}`); }
+      if (rollbackFailures.length) {
+        job.status = "error";
+        job.error = `音频专用返修失败，且别名回滚失败：${rollbackFailures.join("；")}`;
+      } else {
+        error.audioOnlyRollbackComplete = true;
+      }
+      await saveJob(job);
+      throw error;
+    }
+    stage.status = "error";
+    stage.updatedAt = new Date().toISOString();
+    runRecord.status = "error";
+    runRecord.completedAt = stage.updatedAt;
+    runRecord.error = error.message;
+    job.status = "error";
+    job.error = error.message;
+    job.errorDetail = String(error.stderr || error.stdout || error.message || "").slice(-8000);
+    job.errorStage = stageId;
+    await saveJob(job);
+    throw error;
+  }
+}
+
+async function runVisualWorkflowChain(job, startStage = "style_research", feedback = "") {
+  if (running.has(job.id)) return;
+  running.set(job.id, true);
+  try {
+    const startIndex = VISUAL_STAGE_ORDER.indexOf(startStage);
+    if (startIndex < 0) throw new Error(`未知视觉工作流阶段：${startStage}`);
+    if (startStage === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") throw new Error("关键帧尚未批准，不能生成动态样片");
+    if (startStage === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") throw new Error("动态样片尚未批准，不能生成完整视频");
+    if (startIndex <= VISUAL_STAGE_ORDER.indexOf("style_research")) await executeVisualStage(job, "style_research", feedback);
+    if (startIndex <= VISUAL_STAGE_ORDER.indexOf("content_breakdown") && startStage !== "motion_sample" && startStage !== "full_render") await executeVisualStage(job, "content_breakdown", feedback);
+    if (startIndex <= VISUAL_STAGE_ORDER.indexOf("keyframes") && startStage !== "motion_sample" && startStage !== "full_render") await executeVisualStage(job, "keyframes", feedback);
+    if (startStage === "motion_sample") await executeVisualStage(job, "motion_sample", feedback);
+    if (startStage === "full_render") await executeVisualStage(job, "full_render", feedback);
+  } catch (error) {
+    if (error.audioOnlyRollbackComplete === true) return;
+    if (job.status !== "error") {
+      job.status = "error";
+      job.error = error.message;
+      job.errorDetail = String(error.stderr || error.stdout || error.message || "").slice(-8000);
+      await saveJob(job);
+    }
+  } finally {
+    running.delete(job.id);
+  }
+}
+
+async function updateVisualStageConfig(job, stageId, body = {}) {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  if (!VISUAL_STAGE_ORDER.includes(stageId)) throw Object.assign(new Error("未知工作流阶段"), { statusCode: 404 });
+  const current = workflow.config.stages[stageId];
+  const overrides = cloneVisualConfig(workflow.config);
+  overrides.stages[stageId] = {
+    ...overrides.stages[stageId],
+    settings: { ...overrides.stages[stageId].settings, ...(body.settings || {}) },
+    ...(body.prompt === undefined ? {} : { prompt: String(body.prompt || "") }),
+  };
+  workflow.config = normalizeVisualWorkflowConfig(visualWorkflowDefaults, overrides);
+  workflow.configVersion = Number(workflow.configVersion || 1) + 1;
+  workflow.audit ||= [];
+  workflow.audit.push({ type: "stage-config-updated", stageId, configVersion: workflow.configVersion, changedPrompt: body.prompt !== undefined && body.prompt !== current.prompt, at: new Date().toISOString() });
+  await saveVisualWorkflowConfig(job);
+  await saveJob(job);
+  return workflow.config.stages[stageId];
+}
+
+function cloneVisualConfig(value) {
+  return JSON.parse(JSON.stringify(value || {}));
+}
+
+async function approveVisualGate(job, stageId, body = {}) {
+  const workflow = ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  const now = new Date().toISOString();
+  if (stageId === "keyframe_review") {
+    const source = workflow.stages.keyframes;
+    if (!source?.artifacts?.frames?.length || source.status === "error") throw Object.assign(new Error("还没有可批准的关键帧"), { statusCode: 409 });
+    const gate = workflow.stages.keyframe_review;
+    if (gate?.status !== "awaiting_review") throw Object.assign(new Error("当前关键帧不在待审核状态"), { statusCode: 409 });
+    gate.status = "approved";
+    gate.approvedVersion = source.currentVersion;
+    gate.feedback = String(body.feedback || "");
+    gate.approvedAt = now;
+    source.status = "approved";
+    source.approvedVersion = source.currentVersion;
+    workflow.audit.push({ type: "stage-approved", stageId, version: source.currentVersion, at: now });
+    await saveJob(job);
+    runVisualWorkflowChain(job, "motion_sample");
+    return;
+  }
+  if (stageId === "motion_sample") {
+    const stage = workflow.stages.motion_sample;
+    if (!stage?.artifacts?.url || stage.status === "error") throw Object.assign(new Error("还没有可批准的动态样片"), { statusCode: 409 });
+    if (stage.status !== "awaiting_review") throw Object.assign(new Error("当前动态样片不在待审核状态"), { statusCode: 409 });
+    const assetSnapshot = await assertMotionSampleAssetSnapshotCurrent(job);
+    const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+    const review = assetReviewSummary(job, duration);
+    job.assetReview = review;
+    if (!review.reviewComplete || !review.renderReady) {
+      await saveJob(job);
+      throw Object.assign(new Error("样片关联素材状态已变化，请先重做动态样片再生成完整视频"), { statusCode: 409 });
+    }
+    stage.status = "approved";
+    stage.approvedVersion = stage.currentVersion;
+    stage.feedback = String(body.feedback || "");
+    stage.approvedAt = now;
+    workflow.audit.push({ type: "stage-approved", stageId, version: stage.currentVersion, assetDecisionVersion: assetSnapshot.decisionVersion, assetSnapshotHash: assetSnapshot.snapshotHash, assetSnapshotSha256: stage.artifacts.assetSnapshotSha256, at: now });
+    await saveJob(job);
+    runVisualWorkflowChain(job, "full_render");
+    return;
+  }
+  throw Object.assign(new Error("该阶段不使用此批准接口"), { statusCode: 400 });
+}
+
+function assertOutputReviewVersion(job, expectedVersion) {
+  const currentVersion = Number(job.output?.version);
+  if (!Number.isInteger(currentVersion) || currentVersion <= 0) throw Object.assign(new Error("还没有可审核的成片"), { statusCode: 409 });
+  const requestedVersion = Number(expectedVersion);
+  if (!Number.isInteger(requestedVersion) || requestedVersion <= 0) throw Object.assign(new Error("缺少有效的成片审核版本，请刷新任务后重试"), { statusCode: 409 });
+  if (requestedVersion !== currentVersion) throw Object.assign(new Error(`页面为 v${requestedVersion}，当前可审核成片为 v${currentVersion}，请刷新后重试`), { statusCode: 409 });
+  return currentVersion;
+}
+
+function assertCurrentOutputPath(job, outputVersion = Number(job.output?.version)) {
+  const jobDir = confined(jobsRoot, job.id);
+  const outputPath = confined(jobDir, job.output?.path || "");
+  const expectedPath = path.join(jobDir, `final-v${Number(outputVersion)}.mp4`);
+  const expectedUrl = `/video-jobs/${job.id}/final-v${Number(outputVersion)}.mp4`;
+  if (outputPath.toLowerCase() !== expectedPath.toLowerCase() || job.output?.url !== expectedUrl) {
+    throw Object.assign(new Error("当前成片路径或 URL 与任务版本不一致，请刷新任务后重试"), { statusCode: 409 });
+  }
+  return outputPath;
+}
+
+function fullRenderStageVersionForOutput(job, outputVersion) {
+  const stage = job.workflow?.stages?.full_render;
+  if (!stage) return null;
+  if (!["awaiting_review", "approved", "error"].includes(stage.status)) return null;
+  const run = [...(stage.runs || [])].reverse().find(item => item.status === "completed" && Number(item.artifacts?.output?.version) === Number(outputVersion));
+  const runOutput = run?.artifacts?.output;
+  const dependenciesMatch = output => Number(output?.workflowDependencies?.keyframeVersion) === Number(job.workflow?.stages?.keyframe_review?.approvedVersion)
+    && Number(output?.workflowDependencies?.motionSampleVersion) === Number(job.workflow?.stages?.motion_sample?.approvedVersion);
+  if (Number(run?.version) > 0 && dependenciesMatch(runOutput)) return Number(run.version);
+  const artifactStageVersion = Number(stage.artifacts?.output?.workflowStageVersion);
+  if (["awaiting_review", "approved"].includes(stage.status)
+    && Number(stage.artifacts?.output?.version) === Number(outputVersion)
+    && dependenciesMatch(stage.artifacts?.output)
+    && artifactStageVersion > 0) return artifactStageVersion;
+  return null;
+}
+
+async function rejectVisualGate(job, stageId, body = {}) {
+  ensureVisualWorkflowState(job, normalizeVisualWorkflowConfig(visualWorkflowDefaults, job.workflow?.config || {}));
+  const rejection = rejectVisualGateState(job, stageId, body.feedback);
+  await saveJob(job);
+  return rejection;
+}
+
 async function renderVersion(job, version) {
   const jobDir = confined(jobsRoot, job.id), plan = job.currentPlan, segments = plan.keepSegments;
   job.status = version > 1 ? "revising" : "rendering"; job.progress = 2; await saveJob(job);
@@ -1850,8 +4251,14 @@ async function renderVersion(job, version) {
     createdAt: new Date().toISOString(),
     model: job.planModel || null
   };
+  await writePendingFinalReviewAlias(job, version, job.output?.finalReview || null);
   job.versions = [...(job.versions || []).filter(x => x.version !== version), versionResult];
-  job.output = versionResult; job.jobDir = jobDir; job.status = "awaiting_review"; job.progress = 100; await saveJob(job);
+  job.output = versionResult;
+  job.jobDir = jobDir;
+  job.status = "awaiting_review";
+  job.progress = 100;
+  await saveJob(job);
+  await auditRenderedJobAfterFinalRender(job, "legacy_ffmpeg_render_version");
 }
 async function processJob(job) {
   if (running.has(job.id)) return; running.set(job.id, true);
@@ -1898,7 +4305,7 @@ async function processJob(job) {
     job.status = "error"; job.error = error.message; job.errorDetail = String(error.stderr || "").slice(-8000); await saveJob(job);
   } finally { running.delete(job.id); }
 }
-async function reviseJob(job, feedback) {
+async function reviseJob(job, feedback, reviewEvidence = {}) {
   if (running.has(job.id)) return; running.set(job.id, true);
   const dir = confined(jobsRoot, job.id);
   const previous = {
@@ -1913,7 +4320,7 @@ async function reviseJob(job, feedback) {
   };
   try {
     const version = Number(job.currentVersion || 1) + 1;
-    job.status = "revising"; job.progress = 5; job.reviews = [...(job.reviews || []), { version: job.currentVersion, feedback, createdAt: new Date().toISOString() }]; await saveJob(job);
+    job.status = "revising"; job.progress = 5; job.reviews = [...(job.reviews || []), { version: job.output?.version || job.currentVersion, feedback, ...reviewEvidence, createdAt: new Date().toISOString() }]; await saveJob(job);
     const result = await runAi({ operation: "revise_plan", feedback, script: job.script, content_direction: job.contentDirection, source: job.source, transcript: job.transcript, base_plan: job.currentPlan }, dir, `edit-plan-v${version}`);
     const fallback = job.currentPlan.keepSegments;
     job.currentVersion = version; job.planModel = result.model; job.modelUsage = result.usage;
@@ -2004,37 +4411,84 @@ async function renderReviewedAssets(job, reason = "素材审核完成") {
     await saveJob(job);
   } finally { running.delete(job.id); }
 }
-async function autoReviewLocalAssetsForPreview(job) {
+
+function previewAssetAutoReviewDecision(rawAsset, job, outputDuration = null) {
+  const asset = normalizeAssetRecord(rawAsset);
+  const isLocalRenderable = !EXTERNAL_SOURCE_TYPES.has(asset.sourceType) && !PAID_SOURCE_TYPES.has(asset.sourceType)
+    && ["image", "video"].includes(asset.mediaKind) && asset.path && fs.existsSync(asset.path) && asset.placement;
+  const keyframeDirection = job.workflow?.stages?.keyframes?.artifacts?.direction;
+  const conflict = isLocalRenderable
+    ? findLockedVisualIntentConflict(asset, job.contentBreakdown, keyframeDirection)
+    : null;
+  const complianceIssues = asset.reviewStatus === "approved" ? assetComplianceIssues(asset, job, outputDuration) : [];
+  const requiresUpdate = asset.reviewStatus === "pending"
+    || (asset.reviewStatus === "approved" && (!!conflict || complianceIssues.length > 0));
+  const approved = requiresUpdate
+    ? asset.reviewStatus === "pending" && isLocalRenderable && !conflict
+    : asset.reviewStatus === "approved";
+  return {
+    approved,
+    reviewStatus: approved ? "approved" : "rejected",
+    requiresUpdate,
+    complianceIssues,
+    reason: complianceIssues.length
+      ? `完整预览模式撤销不可渲染素材：${complianceIssues.join("；")}`
+      : conflict
+      ? `与已批准关键帧 ${conflict.segmentId} 的 ${conflict.kind} 主视觉冲突，保留主视觉并跳过该素材`
+      : approved ? "完整预览模式自动采用可渲染的本地富媒体素材" : "完整预览模式跳过外部、付费、缺文件或缺时间段素材",
+    visualIntentConflict: conflict,
+  };
+}
+
+async function autoReviewLocalAssetsForPreview(job, options = {}) {
   const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
   const decidedAt = new Date().toISOString();
-  const decisions = [];
+  const pendingAuditEntries = [];
   for (const asset of job.assets || []) {
-    if (asset.reviewStatus !== "pending") continue;
-    const isLocalRenderable = !EXTERNAL_SOURCE_TYPES.has(asset.sourceType) && !PAID_SOURCE_TYPES.has(asset.sourceType)
-      && ["image", "video"].includes(asset.mediaKind) && asset.path && fs.existsSync(asset.path) && asset.placement;
-    asset.reviewStatus = isLocalRenderable ? "approved" : "rejected";
-    asset.approved = isLocalRenderable;
-    asset.updatedAt = decidedAt;
-    decisions.push({
-      assetId: asset.id,
-      reviewStatus: asset.reviewStatus,
-      placement: asset.placement || null,
+    const decision = previewAssetAutoReviewDecision(asset, job, duration);
+    if (decision.requiresUpdate) {
+      asset.reviewStatus = decision.reviewStatus;
+      asset.approved = decision.approved;
+      asset.updatedAt = decidedAt;
+    }
+    const state = await currentAssetDecisionState(asset);
+    const hasCurrentAudit = (job.assetDecisions || []).some(record => record?.assetId === state.assetId && record?.stateHash === state.stateHash);
+    if (!decision.requiresUpdate && hasCurrentAudit) continue;
+    pendingAuditEntries.push({
+      ...state,
+      eventType: decision.requiresUpdate ? "asset-auto-review-decided" : "asset-decision-audit-backfilled",
       licenseBasis: asset.licenseBasis || "",
       usagePurpose: asset.usagePurpose || "",
-      reason: isLocalRenderable ? "完整预览模式自动采用可渲染的本地富媒体素材" : "完整预览模式跳过外部、付费、缺文件或缺时间段素材",
-      decidedAt
+      reason: decision.requiresUpdate ? decision.reason : "根据任务中当前素材状态补齐缺失的 asset-decisions 审计记录",
+      visualIntentConflict: decision.visualIntentConflict,
+      auditBackfill: !decision.requiresUpdate,
+      decidedAt,
     });
   }
+  if (!(job.assets || []).length) {
+    const currentVersion = assetDecisionVersion(job);
+    const hasCurrentEmptyCatalogAudit = (job.assetDecisions || []).some(record =>
+      record?.eventType === "asset-catalog-empty" && Number(record?.decisionVersion || 0) === currentVersion,
+    );
+    if (!hasCurrentEmptyCatalogAudit) pendingAuditEntries.push({ ...emptyAssetCatalogAuditEntry(), decidedAt });
+  }
   job.options = { ...job.options, reviewMode: "full-preview-with-context-segments", autoReviewLocalAssets: true };
-  job.assetDecisions = [...(job.assetDecisions || []), ...decisions];
+  const auditBatch = appendAssetDecisionAudit(job, pendingAuditEntries, {
+    at: decidedAt,
+    invalidateSampleReview: options.invalidateSampleReview !== false,
+    reason: "素材自动审核或审计补齐后，动态样片必须重新生成",
+  });
   job.assetReview = assetReviewSummary(job, duration);
-  job.status = "awaiting_asset_review";
-  job.progress = 60;
+  const visualSampleInProgress = options.invalidateSampleReview === false
+    && job.workflow?.version === VISUAL_WORKFLOW_VERSION
+    && job.workflow?.currentStage === "motion_sample";
+  job.status = visualSampleInProgress ? "rendering_sample" : "awaiting_asset_review";
+  job.progress = visualSampleInProgress ? visualStageProgress("motion_sample") : 60;
   const jobDir = confined(jobsRoot, job.id);
-  await writeJson(path.join(jobDir, "asset-decisions.json"), job.assetDecisions);
+  await persistAssetDecisionAudit(job);
   await writeJson(path.join(jobDir, "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
   await saveJob(job);
-  return { decisions, review: job.assetReview };
+  return { decisions: auditBatch.entries, review: job.assetReview };
 }
 async function rerenderJob(job, reason = "", renderOptions = {}) {
   if (running.has(job.id)) return;
@@ -2133,16 +4587,293 @@ async function serveFile(req, res, file) {
   cors(res); res.writeHead(200, { "Content-Type": type, "Content-Length": stat.size, "Accept-Ranges": "bytes", "Cache-Control": "no-cache" }); fs.createReadStream(file).pipe(res);
 }
 
+const multiAgentEnabled = process.env.KOUBO_MULTI_AGENT_ENABLED === "1";
+const contentAdvisoryEnabled = process.env.KOUBO_CONTENT_ADVISORY_ENABLED !== "0";
+const multiAgentDataRoot = path.resolve(
+  root,
+  process.env.KOUBO_MULTI_AGENT_DATA_ROOT || "data/multi-agent"
+);
+const multiAgentPython = path.resolve(
+  root,
+  process.env.KOUBO_MULTI_AGENT_PYTHON || ".runtime-multi-agent/Scripts/python.exe"
+);
+const multiAgentBridge = path.join(here, "multi_agent_bridge.py");
+const multiAgentStore = openDomainStore({
+  dbPath: path.join(multiAgentDataRoot, "runtime", "memory.sqlite"),
+  exportRoot: path.join(multiAgentDataRoot, "library"),
+});
+const multiAgentProfiles = await loadAgentProfiles(root);
+const multiAgentContentPrinciples = validateLibrary(
+  "content-principle",
+  await readJsonFile(path.join(root, "config", "multi-agent", "content-principles.json"))
+);
+const multiAgentMemory = createMemoryService(multiAgentStore, multiAgentProfiles);
+const multiAgentBridgeRoot = path.join(multiAgentDataRoot, "runtime", "bridge");
+const multiAgentArtifactRoot = path.join(multiAgentDataRoot, "runtime", "artifacts");
+const configuredTutorialRoots = String(process.env.KOUBO_TUTORIAL_ROOTS || "")
+  .split(path.delimiter)
+  .map(item => item.trim())
+  .filter(Boolean)
+  .map(item => path.resolve(item));
+const allowedTutorialRoots = [
+  path.join(root, ".cache"),
+  jobsRoot,
+  ...configuredTutorialRoots,
+];
+
+function multiAgentSafeInput(value, seen = new WeakSet()) {
+  if (value === null || ["string", "number", "boolean"].includes(typeof value)) return value;
+  if (Array.isArray(value)) return value.map(item => multiAgentSafeInput(item, seen)).filter(item => item !== undefined);
+  if (!value || typeof value !== "object") return undefined;
+  if (seen.has(value)) return undefined;
+  seen.add(value);
+  const output = {};
+  for (const key of Object.keys(value).sort()) {
+    if (key === "signal" || /(api.?key|access.?token|password|authorization|cookie|secret)/i.test(key)) continue;
+    const item = multiAgentSafeInput(value[key], seen);
+    if (item !== undefined) output[key] = item;
+  }
+  seen.delete(value);
+  return output;
+}
+
+async function invokeMultiAgentBridge(request) {
+  if (!fs.existsSync(multiAgentPython) || !fs.existsSync(multiAgentBridge)) {
+    throw new Error("multi-agent Python runtime is unavailable");
+  }
+  await fsp.mkdir(multiAgentBridgeRoot, { recursive: true });
+  const id = crypto.randomUUID();
+  const requestFile = path.join(multiAgentBridgeRoot, `${id}.request.json`);
+  const responseFile = path.join(multiAgentBridgeRoot, `${id}.response.json`);
+  const safe = multiAgentSafeInput(request);
+  const payload = {
+    operation: safe.operation,
+    agent_id: safe.agentId,
+    prompt: canonicalJson(safe),
+  };
+  if (safe.fixture_response !== undefined) payload.fixture_response = safe.fixture_response;
+  await writeJson(requestFile, payload);
+  try {
+    try {
+      await run(
+        multiAgentPython,
+        [multiAgentBridge, "--request", requestFile, "--response", responseFile],
+        { cwd: root, env: process.env, signal: request.signal }
+      );
+    } catch (error) {
+      if (!fs.existsSync(responseFile)) throw error;
+    }
+    const response = await readJsonFile(responseFile);
+    if (!response.success) throw new Error(response.error || "multi-agent bridge failed");
+    return response;
+  } finally {
+    await Promise.all([
+      fsp.rm(requestFile, { force: true }),
+      fsp.rm(responseFile, { force: true }),
+    ]);
+  }
+}
+
+const multiAgentOrdinaryViewerCritic = createOrdinaryViewerCritic({
+  invokeAgent: request => invokeMultiAgentBridge({
+    ...request,
+    agentId: "ordinary-viewer-critic",
+  }),
+});
+
+const multiAgentOrchestrator = createOrchestrator({
+  invokeAgent: invokeMultiAgentBridge,
+  memory: multiAgentMemory,
+  contentPrinciples: multiAgentContentPrinciples,
+});
+
+async function writeMultiAgentArtifact(kind, id, value) {
+  const safeKind = safeName(kind).replace(/\./g, "_");
+  const safeId = safeName(id).replace(/\//g, "_");
+  const directory = confined(multiAgentArtifactRoot, safeKind);
+  await fsp.mkdir(directory, { recursive: true });
+  const file = path.join(directory, `${safeId}.json`);
+  const safeValue = multiAgentSafeInput(value);
+  const serialized = JSON.stringify(safeValue, null, 2);
+  try {
+    await fsp.writeFile(file, serialized, { encoding: "utf8", flag: "wx" });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    const existing = await readJsonFile(file);
+    if (canonicalJson(existing) !== canonicalJson(safeValue)) {
+      const conflict = new Error("multi-agent artifact id already exists with different immutable content");
+      conflict.statusCode = 409;
+      throw conflict;
+    }
+  }
+  return `/api/multi-agent/artifacts/${encodeURIComponent(safeKind)}/${encodeURIComponent(safeId)}`;
+}
+
+async function readMultiAgentArtifact(kind, id) {
+  const safeKind = safeName(kind).replace(/\./g, "_");
+  const safeId = safeName(id).replace(/\//g, "_");
+  const file = confined(path.join(multiAgentArtifactRoot, safeKind), `${safeId}.json`);
+  try {
+    return multiAgentSafeInput(await readJsonFile(file));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+async function listMultiAgentMemory({ kind, status } = {}) {
+  const conditions = [];
+  const values = [];
+  if (kind) {
+    conditions.push("kind = ?");
+    values.push(kind);
+  }
+  if (status) {
+    conditions.push("status = ?");
+    values.push(status);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  return multiAgentStore.db.prepare(
+    `SELECT records.kind, records.json,
+      (
+        SELECT transitions.id
+        FROM transitions
+        WHERE transitions.record_kind = records.kind
+          AND transitions.record_id = records.id
+          AND transitions.rolled_back_at IS NULL
+        ORDER BY transitions.created_at DESC, transitions.id DESC
+        LIMIT 1
+      ) AS latest_transition_id
+    FROM records ${where}
+    ORDER BY records.updated_at DESC, records.kind, records.id
+    LIMIT 500`
+  ).all(...values).map(row => ({
+    kind: row.kind,
+    ...multiAgentSafeInput(JSON.parse(row.json)),
+    latestTransitionId: row.latest_transition_id || null,
+  }));
+}
+
+function parseLastJson(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("tutorial runner returned no JSON");
+  return JSON.parse(text.slice(start, end + 1));
+}
+
+const multiAgentTutorials = {
+  async ingest({ inputPath, author, license, resume }) {
+    const args = [
+      path.join(root, "scripts", "ingest_tutorial.mjs"),
+      "--input", inputPath,
+      "--author", author,
+      "--license", license,
+      ...(resume ? ["--resume"] : []),
+    ];
+    const result = await run(process.execPath, args, {
+      cwd: root,
+      env: {
+        ...process.env,
+        KOUBO_MULTI_AGENT_DATA_ROOT: multiAgentDataRoot,
+        KOUBO_MULTI_AGENT_PYTHON: multiAgentPython,
+      },
+      timeoutMs: 90 * 60 * 1000,
+    });
+    return parseLastJson(result.stdout);
+  },
+  async get(id) {
+    const directory = path.join(multiAgentDataRoot, "runtime", "tutorial-ingest", "checkpoints");
+    let entries;
+    try { entries = await fsp.readdir(directory); } catch { return null; }
+    for (const name of entries.filter(item => item.endsWith(".json"))) {
+      try {
+        const checkpoint = await readJsonFile(path.join(directory, name));
+        if (checkpoint.id === id || checkpoint.sourceHash === id) return multiAgentSafeInput(checkpoint);
+      } catch {}
+    }
+    return null;
+  },
+};
+
+const multiAgentApi = createMultiAgentApi({
+  enabled: multiAgentEnabled,
+  advisoryEnabled: contentAdvisoryEnabled,
+  defaultPipeline: VISUAL_WORKFLOW_VERSION,
+  allowedTutorialRoots,
+  allowedRenderedRoots: [jobsRoot],
+  readJob: async id => {
+    const job = await readJob(id);
+    const keeps = Array.isArray(job.currentPlan?.keepSegments) ? job.currentPlan.keepSegments : [];
+    if (keeps.length) {
+      job.ordinaryViewerTranscript = transcriptCues(job.transcript, keeps, job.script)
+        .map(item => ({ start: Number(item.start), end: Number(item.end), text: String(item.text || "").trim() }))
+        .filter(item => item.text && Number.isFinite(item.start) && Number.isFinite(item.end) && item.end > item.start);
+    }
+    return job;
+  },
+  readContent,
+  writeArtifact: writeMultiAgentArtifact,
+  readArtifact: readMultiAgentArtifact,
+  listMemory: listMultiAgentMemory,
+  memory: multiAgentMemory,
+  tutorials: multiAgentTutorials,
+  orchestrator: multiAgentOrchestrator,
+  contentStrategist: {
+    analyze: async input => (await multiAgentOrchestrator.analyzeContentDirection(input)).analysis,
+  },
+  contentPrinciples: multiAgentContentPrinciples,
+  ordinaryViewerCritic: multiAgentOrdinaryViewerCritic,
+  buildBlindReviewBundle,
+});
+
 const server = http.createServer(async (req, res) => {
   try {
     cors(res); if (req.method === "OPTIONS") return res.writeHead(204).end();
     const url = new URL(req.url, `http://${host}:${port}`), pathname = decodeURIComponent(url.pathname);
+    if (await multiAgentApi.handle(req, res, url)) return;
     if (req.method === "GET" && pathname === "/api/health") {
       let ffmpeg = false, hyperframes = false, ai = null;
       try { await run("ffmpeg", ["-version"]); ffmpeg = true; } catch {}
       try { await run("npx", ["-y", "hyperframes", "--version"], { shell: true }); hyperframes = true; } catch {}
       try { ai = await runAi({ operation: "config" }, contentRoot, "model-config"); } catch (error) { ai = { success: false, error: error.message }; }
-      return json(res, 200, { ok: true, service: "koubo-ai-workflow", version: 3, localOnlyVideo: true, ffmpeg, hyperframes, ai: { configured: !!ai?.success, model: ai?.model || null, transcriptionModel: ai?.transcription_model || "faster-whisper/small" }, jobsRoot, contentRoot });
+      return json(res, 200, {
+        ok: true,
+        service: "koubo-ai-workflow",
+        version: 4,
+        defaultPipeline: VISUAL_WORKFLOW_VERSION,
+        legacyPipeline: "ffmpeg-v3",
+        localOnlyVideo: true,
+        ffmpeg,
+        hyperframes,
+        ai: { configured: !!ai?.success, model: ai?.model || null, transcriptionModel: ai?.transcription_model || "faster-whisper/small" },
+        workflow: {
+          version: visualWorkflowDefaults.workflowVersion,
+          engine: visualWorkflowDefaults.defaultEngine,
+          stages: VISUAL_STAGE_ORDER,
+          keyframeReviewRequired: true,
+          sampleReviewRequired: true,
+          finalMaster: visualWorkflowDefaults.rendering.final,
+        },
+        multiAgent: {
+          enabled: multiAgentEnabled,
+          pipeline: "controlled-multi-agent-v1",
+          default: false,
+          humanApprovalRequired: true,
+          autoPublish: false,
+        },
+        jobsRoot,
+        contentRoot,
+      });
+    }
+    if (req.method === "GET" && pathname === "/api/video-workflow/defaults") {
+      return json(res, 200, { workflow: visualWorkflowDefaults });
+    }
+    if (req.method === "POST" && pathname === "/api/video-workflow/drafts") {
+      const options = await readBodyJson(req, 512 * 1024);
+      const draftId = crypto.randomBytes(16).toString("hex");
+      workflowDrafts.set(draftId, { options, createdAt: Date.now() });
+      for (const [id, draft] of workflowDrafts) if (Date.now() - draft.createdAt > 30 * 60 * 1000) workflowDrafts.delete(id);
+      return json(res, 201, { draftId, expiresInSeconds: 1800 });
     }
     if (req.method === "GET" && pathname === "/api/contents") return json(res, 200, { items: await listGeneratedContents() });
     if (req.method === "POST" && pathname === "/api/contents/generate") {
@@ -2158,210 +4889,449 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && pathname === "/api/jobs") {
       const id = timestampId(), dir = confined(jobsRoot, id); await fsp.mkdir(dir, { recursive: false });
       const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "video.mp4")), sourcePath = path.join(dir, fileName);
-      let options = {}; try { options = JSON.parse(decodeURIComponent(req.headers["x-options"] || "%7B%7D")); } catch {}
+      const workflowDraftId = String(req.headers["x-workflow-draft"] || "");
+      let options = workflowDrafts.get(workflowDraftId)?.options || {};
+      if (!workflowDraftId || !workflowDrafts.has(workflowDraftId)) {
+        try { options = JSON.parse(decodeURIComponent(req.headers["x-options"] || "%7B%7D")); } catch {}
+      }
+      if (workflowDraftId) workflowDrafts.delete(workflowDraftId);
       const sizeBytes = await receiveUpload(req, sourcePath);
       const contentId = decodeURIComponent(req.headers["x-content-id"] || "");
+      const pipeline = options.pipeline === "ffmpeg-v3" || options.pipeline === "legacy-ffmpeg-v3" ? "ffmpeg-v3" : VISUAL_WORKFLOW_VERSION;
+      const workflowConfig = pipeline === VISUAL_WORKFLOW_VERSION
+        ? normalizeVisualWorkflowConfig(visualWorkflowDefaults, options.workflowConfig || {})
+        : null;
+      const contentSettings = workflowConfig?.stages?.content_breakdown?.settings || {};
       const job = {
         id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), status: "uploaded", progress: 0,
+        pipeline,
         fileName, sizeBytes, sourcePath, contentId, contentDirection: await contentDirectionFor(contentId), script: String(options.script || ""),
         options: {
-          removeSilence: options.removeSilence !== false, captions: options.captions !== false,
+          removeSilence: contentSettings.removeSilence === undefined ? options.removeSilence !== false : contentSettings.removeSilence !== false,
+          captions: options.captions !== false,
           captionStyle: normalizeCaptionStyle(options.captionStyle), informationPanels: options.informationPanels !== false,
-          layout: ["landscape-tech", "original", "vertical", "square"].includes(options.layout) ? options.layout : "landscape-tech",
+          layout: pipeline === VISUAL_WORKFLOW_VERSION ? "landscape-tech" : ["landscape-tech", "original", "vertical", "square"].includes(options.layout) ? options.layout : "landscape-tech",
           generateVariants: options.generateVariants !== false, generateCover: options.generateCover !== false,
           coverTitle: cleanCoverCopy(options.coverTitle, 42), contentTitle: cleanCoverCopy(options.contentTitle, 42),
-          silenceDb: Number(options.silenceDb ?? -36), silenceDuration: Number(options.silenceDuration ?? 0.45),
-          pauseKeep: Number(options.pauseKeep ?? 0.12), transcriptionModel: options.transcriptionModel || "small", aiMode: "full-auto",
+          silenceDb: Number(options.silenceDb ?? -36), silenceDuration: Number(contentSettings.silenceDuration ?? options.silenceDuration ?? 0.45),
+          pauseKeep: Number(contentSettings.pauseKeep ?? options.pauseKeep ?? 0.12), transcriptionModel: contentSettings.transcriptionModel || options.transcriptionModel || "small", aiMode: "full-auto",
           visualStrategy: "rich-media-first",
           cloudImageGenerationEnabled: options.cloudImageGenerationEnabled === true,
           paidImageGenerationConfirmation: options.paidImageGenerationConfirmation !== false,
           rightsReviewMode: options.rightsReviewMode === "advisory" ? "advisory" : "strict"
         },
-        versions: [], reviews: [], assets: [], jobDir: dir
+        versions: [], reviews: [], assets: [], jobDir: dir,
+        ...(workflowConfig ? { workflow: createVisualWorkflowState(workflowConfig) } : {}),
       };
-      await saveJob(job); processJob(job); return json(res, 202, { job });
+      if (workflowConfig) await saveVisualWorkflowConfig(job);
+      await saveJob(job);
+      if (pipeline === VISUAL_WORKFLOW_VERSION) runVisualWorkflowChain(job, "style_research");
+      else processJob(job);
+      return json(res, 202, { job });
     }
     const jobMatch = pathname.match(/^\/api\/jobs\/([^/]+)$/);
     if (req.method === "GET" && jobMatch) return json(res, 200, { job: await readJob(jobMatch[1]) });
+    const workflowStageMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/workflow\/stages\/([^/]+)\/(config|run|approve|reject)$/);
+    if (req.method === "POST" && workflowStageMatch) {
+      const [, jobId, requestedStageId, action] = workflowStageMatch;
+      const body = await readBodyJson(req, 256 * 1024);
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (job.pipeline !== VISUAL_WORKFLOW_VERSION && job.workflow?.version !== VISUAL_WORKFLOW_VERSION) return json(res, 409, { error: "该任务不是视觉导演 v4 工作流" });
+        const stageId = requestedStageId === "keyframe_review" && action === "run" ? "keyframes" : requestedStageId;
+        if (!VISUAL_STAGE_ORDER.includes(requestedStageId)) return json(res, 404, { error: "未知工作流阶段" });
+        if (action === "config") {
+          const stage = await updateVisualStageConfig(job, requestedStageId, body);
+          return json(res, 200, { job, stage });
+        }
+        if (["run", "approve", "reject"].includes(action) && ["keyframe_review", "motion_sample"].includes(requestedStageId)) {
+          assertVisualGateVersion(job, requestedStageId, body.expectedVersion);
+        }
+        if (action === "run") {
+          if (stageId === "motion_sample" && job.workflow?.stages?.keyframe_review?.status !== "approved") return json(res, 409, { error: "请先批准关键帧" });
+          if (stageId === "full_render" && job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+          if (stageId === "full_render") await assertMotionSampleAssetSnapshotCurrent(job);
+          if (body.settings !== undefined || body.prompt !== undefined) await updateVisualStageConfig(job, requestedStageId, body);
+        }
+        if (action === "approve") {
+          await approveVisualGate(job, requestedStageId, body);
+          return json(res, 202, { job, nextStage: requestedStageId === "keyframe_review" ? "motion_sample" : "full_render" });
+        }
+        if (action === "reject") {
+          const rejection = await rejectVisualGate(job, requestedStageId, body);
+          return json(res, 200, { job, rejection });
+        }
+        const feedback = String(body.feedback || "").trim();
+        runVisualWorkflowChain(job, stageId, feedback);
+        return json(res, 202, { job, stageId });
+      });
+    }
     const retryMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/retry$/);
     if (req.method === "POST" && retryMatch) {
-      const job = await readJob(retryMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      delete job.error; delete job.errorDetail; delete job.revisionError;
-      processJob(job);
-      return json(res, 202, { job });
+      const jobId = retryMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        delete job.error; delete job.errorDetail; delete job.revisionError;
+        if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          const failedStage = job.errorStage || job.workflow?.currentStage || "style_research";
+          const retryStage = failedStage === "keyframe_review" ? "keyframes" : failedStage;
+          runVisualWorkflowChain(job, retryStage);
+        } else processJob(job);
+        return json(res, 202, { job });
+      });
     }
     const reviseMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/revise$/);
     if (req.method === "POST" && reviseMatch) {
       const body = await readBodyJson(req); const feedback = String(body.feedback || "").trim();
       if (!feedback) return json(res, 400, { error: "请填写修改意见" });
-      const job = await readJob(reviseMatch[1]);
-      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-      if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行成片返修" });
-      reviseJob(job, feedback); return json(res, 202, { job });
+      const jobId = reviseMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
+        const currentOutputPath = assertCurrentOutputPath(job, outputVersion);
+        const mediaSha256 = await sha256File(currentOutputPath);
+        const ordinaryViewerAudit = job.output.ordinaryViewerAudit || null;
+        if (ordinaryViewerAudit?.mediaSha256 && String(ordinaryViewerAudit.mediaSha256).toLowerCase() !== mediaSha256.toLowerCase()) return json(res, 409, { error: "当前成片哈希与普通观众审查记录不一致，不能返修" });
+        const reviewEvidence = {
+          mediaSha256,
+          ordinaryViewerArtifactId: ordinaryViewerAudit?.artifactId || null,
+          transcriptSha256: ordinaryViewerAudit?.transcriptSha256 || null,
+        };
+        if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          const audioOnlyIntent = hasAudioOnlyRevisionIntent(feedback);
+          const audioOnlyRevision = parseAudioOnlyRevisionFeedback(feedback);
+          if (audioOnlyIntent && !audioOnlyRevision) return json(res, 400, { error: "检测到只改音频的意图，但反馈未满足安全旁路格式；请同时写明 LUFS、真峰值上限，以及画面、字幕、动效、时间线和素材全部保持不变" });
+          if (audioOnlyRevision) {
+            const configuredTargets = hyperframesMasterAudioTargets(job.workflow?.config?.rendering?.final || {});
+            if (Math.abs(audioOnlyRevision.loudnessLufs - configuredTargets.loudnessLufs) > 0.05 || Math.abs(audioOnlyRevision.truePeakDbtp - configuredTargets.truePeakDbtp) > 0.05) {
+              return json(res, 409, { error: `音频专用返修当前只支持工作流目标 ${configuredTargets.loudnessLufs} LUFS / ${configuredTargets.truePeakDbtp} dBTP` });
+            }
+          }
+          if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "动态样片尚未批准，不能返修完整视频" });
+          await assertMotionSampleAssetSnapshotCurrent(job);
+          job.reviews = [...(job.reviews || []), { version: outputVersion, feedback, ...reviewEvidence, createdAt: new Date().toISOString() }];
+          runVisualWorkflowChain(job, "full_render", feedback);
+          return json(res, 202, { job, reusedTranscript: true, reusedDesign: true });
+        }
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行成片返修" });
+        reviseJob(job, feedback, reviewEvidence); return json(res, 202, { job });
+      });
     }
     const replanMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/replan$/);
     if (req.method === "POST" && replanMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(replanMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      replanJob(job, String(body.feedback || ""));
-      return json(res, 202, { job, reusedTranscript: true });
+      const jobId = replanMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) runVisualWorkflowChain(job, "content_breakdown", String(body.feedback || ""));
+        else replanJob(job, String(body.feedback || ""));
+        return json(res, 202, { job, reusedTranscript: true });
+      });
     }
     const rerenderMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/rerender$/);
     if (req.method === "POST" && rerenderMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(rerenderMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-      if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行本地重渲染" });
-      rerenderJob(job, String(body.reason || ""), body);
-      return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
+      const jobId = rerenderMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (job.pipeline === VISUAL_WORKFLOW_VERSION || job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          if (job.workflow?.stages?.motion_sample?.status !== "approved") return json(res, 409, { error: "请先批准动态样片" });
+          await assertMotionSampleAssetSnapshotCurrent(job);
+          runVisualWorkflowChain(job, "full_render", String(body.reason || "本地重渲染"));
+          return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
+        }
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        if (!assetReviewSummary(job, duration).renderReady) return json(res, 409, { error: "请先在素材审核板处理全部候选，再进行本地重渲染" });
+        rerenderJob(job, String(body.reason || ""), body);
+        return json(res, 202, { job, reusedTranscript: true, reusedPlan: true });
+      });
     }
     const coverMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/cover$/);
     if (req.method === "POST" && coverMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(coverMatch[1]);
-      const cover = await regenerateCover(job, body);
-      return json(res, 200, { job, cover, reusedVideo: true, reusedPlan: true });
+      const jobId = coverMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const cover = await regenerateCover(job, body);
+        if (job.status === "approved") {
+          await buildPublishPackage(job, Number(job.output.version), {
+            mode: "save",
+            selectedTitle: cleanPublishText(body.coverTitle || job.publishPackage?.selectedTitle, 42),
+            automatic: false,
+          });
+          await saveJob(job);
+        }
+        return json(res, 200, { job, cover, publishPackage: job.publishPackage || null, reusedVideo: true, reusedPlan: true });
+      });
+    }
+    const publishPackageMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/publish-package$/);
+    if (req.method === "POST" && publishPackageMatch) {
+      const body = await readBodyJson(req);
+      const jobId = publishPackageMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
+        if (job.status !== "approved") return json(res, 409, { error: "请先审核通过当前成片，再生成发布素材包" });
+        const selectedTitle = cleanPublishText(body.selectedTitle, 42);
+        const currentCoverTitle = cleanPublishText(job.output?.cover?.design?.lines?.join(""), 42).replace(/\s+/g, "");
+        if (selectedTitle && body.syncCovers !== false && selectedTitle.replace(/\s+/g, "") !== currentCoverTitle) {
+          await regenerateCover(job, { coverTitle: selectedTitle });
+        }
+        const publishPackage = await buildPublishPackage(job, outputVersion, {
+          mode: body.mode === "save" ? "save" : "regenerate",
+          selectedTitle,
+          hashtags: body.hashtags,
+          platforms: body.platforms,
+          automatic: false,
+        });
+        await saveJob(job);
+        return json(res, 200, { job, publishPackage, reusedVideo: true });
+      });
     }
     const assetRediscoverMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/rediscover$/);
     if (req.method === "POST" && assetRediscoverMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(assetRediscoverMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
-      job.options = {
-        ...job.options,
-        visualStrategy: "rich-media-first",
-        cloudImageGenerationEnabled: body.cloudImageGenerationEnabled === true || job.options?.cloudImageGenerationEnabled === true,
-        paidImageGenerationConfirmation: body.paidImageGenerationConfirmation === false ? false : job.options?.paidImageGenerationConfirmation !== false,
-        rightsReviewMode: body.rightsReviewMode === "advisory" ? "advisory" : job.options?.rightsReviewMode || "strict"
-      };
-      await prepareAssetCandidates(job, { force: true, reason: String(body.reason || "按富媒体优先策略重新发现素材") });
-      job.status = "awaiting_asset_review";
-      job.progress = 60;
-      await saveJob(job);
-      return json(res, 200, { job, archivedVersions: (job.assetHistory || []).length });
+      const jobId = assetRediscoverMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
+        job.options = {
+          ...job.options,
+          visualStrategy: "rich-media-first",
+          cloudImageGenerationEnabled: body.cloudImageGenerationEnabled === true || job.options?.cloudImageGenerationEnabled === true,
+          paidImageGenerationConfirmation: body.paidImageGenerationConfirmation === false ? false : job.options?.paidImageGenerationConfirmation !== false,
+          rightsReviewMode: body.rightsReviewMode === "advisory" ? "advisory" : job.options?.rightsReviewMode || "strict"
+        };
+        await prepareAssetCandidates(job, { force: true, reason: String(body.reason || "按富媒体优先策略重新发现素材") });
+        job.status = "awaiting_asset_review";
+        job.progress = 60;
+        await saveJob(job);
+        return json(res, 200, { job, archivedVersions: (job.assetHistory || []).length });
+      });
     }
     const autoReviewPreviewMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/auto-review-preview$/);
     if (req.method === "POST" && autoReviewPreviewMatch) {
       const body = await readBodyJson(req);
-      const job = await readJob(autoReviewPreviewMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
-      const result = await autoReviewLocalAssetsForPreview(job);
-      if (!result.review.reviewComplete || !result.review.renderReady) return json(res, 409, { error: "自动素材决策后仍未达到预览渲染条件", review: result.review, job });
-      renderReviewedAssets(job, String(body.reason || "自动采用本地富媒体素材并生成完整预览与分段小样"));
-      return json(res, 202, { job, review: result.review, decisions: result.decisions });
+      const jobId = autoReviewPreviewMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        if (!job.source || !job.currentPlan?.keepSegments?.length) return json(res, 409, { error: "任务缺少源视频或剪辑计划" });
+        const result = await autoReviewLocalAssetsForPreview(job);
+        if (!result.review.reviewComplete || !result.review.renderReady) return json(res, 409, { error: "自动素材决策后仍未达到预览渲染条件", review: result.review, job });
+        renderReviewedAssets(job, String(body.reason || "自动采用本地富媒体素材并生成完整预览与分段小样"));
+        return json(res, 202, { job, review: result.review, decisions: result.decisions });
+      });
     }
     const assetUploadMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets$/);
     if (req.method === "POST" && assetUploadMatch) {
-      const job = await readJob(assetUploadMatch[1]);
-      const assetId = `asset-${crypto.randomBytes(4).toString("hex")}`;
-      const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
-      const assetsDir = path.join(confined(jobsRoot, job.id), "assets"); await fsp.mkdir(assetsDir, { recursive: true });
-      const assetPath = path.join(assetsDir, `${assetId}-${fileName}`);
-      const sizeBytes = await receiveUpload(req, assetPath);
-      const asset = normalizeAssetRecord({ id: assetId, fileName, path: assetPath, url: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, previewUrl: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, sizeBytes, sourceType: "local-upload", sourceLabel: "用户本地上传", mediaKind: mediaKindFor(fileName), ownership: "user-provided", licenseBasis: "pending-confirmation", reviewStatus: "pending", approved: false, placement: null, discoveredAutomatically: false, paymentRequired: false, paymentConfirmed: true, createdAt: new Date().toISOString() });
-      job.assets = [...(job.assets || []), asset];
-      job.status = "awaiting_asset_review";
-      job.assetReview = assetReviewSummary(job);
-      await saveJob(job);
-      return json(res, 201, { job, asset });
+      const jobId = assetUploadMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const assetId = `asset-${crypto.randomBytes(4).toString("hex")}`;
+        const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
+        const assetsDir = path.join(confined(jobsRoot, job.id), "assets"); await fsp.mkdir(assetsDir, { recursive: true });
+        const assetPath = path.join(assetsDir, `${assetId}-${fileName}`);
+        const sizeBytes = await receiveUpload(req, assetPath);
+        const asset = normalizeAssetRecord({ id: assetId, fileName, path: assetPath, url: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, previewUrl: `/video-jobs/${job.id}/assets/${assetId}-${fileName}`, sizeBytes, sourceType: "local-upload", sourceLabel: "用户本地上传", mediaKind: mediaKindFor(fileName), ownership: "user-provided", licenseBasis: "pending-confirmation", reviewStatus: "pending", approved: false, placement: null, discoveredAutomatically: false, paymentRequired: false, paymentConfirmed: true, createdAt: new Date().toISOString() });
+        job.assets = [...(job.assets || []), asset];
+        const uploadedAudit = await assetDecisionAuditEntry(asset, { eventType: "asset-uploaded", reason: "用户上传了新的本地素材" });
+        appendAssetDecisionAudit(job, [uploadedAudit], { reason: `素材 ${asset.id} 已上传，现有动态样片审核失效` });
+        job.status = "awaiting_asset_review";
+        job.assetReview = assetReviewSummary(job);
+        delete job.approvedAt;
+        await persistAssetDecisionAudit(job);
+        await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
+        await saveJob(job);
+        return json(res, 201, { job, asset });
+      });
     }
     const assetFileMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/([^/]+)\/file$/);
     if (req.method === "POST" && assetFileMatch) {
-      const job = await readJob(assetFileMatch[1]);
-      const asset = (job.assets || []).find(item => item.id === assetFileMatch[2]);
-      if (!asset) return json(res, 404, { error: "素材不存在" });
-      const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
-      const kind = mediaKindFor(fileName);
-      if (!["image", "video"].includes(kind)) return json(res, 400, { error: "替换文件必须是图片或视频" });
-      const assetsDir = path.join(confined(jobsRoot, job.id), "assets", "replacements");
-      await fsp.mkdir(assetsDir, { recursive: true });
-      const revision = (asset.fileVersions || []).length + 1;
-      const target = path.join(assetsDir, `${asset.id}-r${revision}-${fileName}`);
-      const sizeBytes = await receiveUpload(req, target);
-      asset.fileVersions = [...(asset.fileVersions || []), { path: asset.path || null, url: asset.url || null, fileName: asset.fileName || null, replacedAt: new Date().toISOString() }];
-      asset.path = target;
-      asset.url = `/video-jobs/${job.id}/assets/replacements/${asset.id}-r${revision}-${fileName}`;
-      asset.previewUrl = asset.url;
-      asset.fileName = fileName;
-      asset.mediaKind = kind;
-      asset.sizeBytes = sizeBytes;
-      asset.reviewStatus = "pending";
-      asset.approved = false;
-      asset.updatedAt = new Date().toISOString();
-      job.status = "awaiting_asset_review";
-      job.assetReview = assetReviewSummary(job);
-      await saveJob(job);
-      return json(res, 200, { job, asset });
+      const [jobId, assetId] = assetFileMatch.slice(1);
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const asset = (job.assets || []).find(item => item.id === assetId);
+        if (!asset) return json(res, 404, { error: "素材不存在" });
+        assertExpectedAssetDecisionVersion(job, req.headers["x-expected-asset-decision-version"]);
+        const fileName = safeName(decodeURIComponent(req.headers["x-file-name"] || "asset.bin"));
+        const kind = mediaKindFor(fileName);
+        if (!["image", "video"].includes(kind)) return json(res, 400, { error: "替换文件必须是图片或视频" });
+        const assetsDir = path.join(confined(jobsRoot, job.id), "assets", "replacements");
+        await fsp.mkdir(assetsDir, { recursive: true });
+        const revision = (asset.fileVersions || []).length + 1;
+        const target = path.join(assetsDir, `${asset.id}-r${revision}-${fileName}`);
+        const sizeBytes = await receiveUpload(req, target);
+        asset.fileVersions = [...(asset.fileVersions || []), { path: asset.path || null, url: asset.url || null, fileName: asset.fileName || null, replacedAt: new Date().toISOString() }];
+        asset.path = target;
+        asset.url = `/video-jobs/${job.id}/assets/replacements/${asset.id}-r${revision}-${fileName}`;
+        asset.previewUrl = asset.url;
+        asset.fileName = fileName;
+        asset.mediaKind = kind;
+        asset.sizeBytes = sizeBytes;
+        asset.reviewStatus = "pending";
+        asset.approved = false;
+        asset.updatedAt = new Date().toISOString();
+        const replacedAudit = await assetDecisionAuditEntry(asset, { eventType: "asset-file-replaced", reason: "素材本地文件已替换，必须重新审核" });
+        appendAssetDecisionAudit(job, [replacedAudit], { reason: `素材 ${asset.id} 的文件已替换，现有动态样片审核失效` });
+        job.status = "awaiting_asset_review";
+        job.assetReview = assetReviewSummary(job);
+        delete job.approvedAt;
+        await persistAssetDecisionAudit(job);
+        await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
+        await saveJob(job);
+        return json(res, 200, { job, asset });
+      });
     }
     const assetApprovalMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/([^/]+)\/approve$/);
     if (req.method === "POST" && assetApprovalMatch) {
-      const body = await readBodyJson(req), job = await readJob(assetApprovalMatch[1]);
-      const asset = (job.assets || []).find(item => item.id === assetApprovalMatch[2]);
-      if (!asset) return json(res, 404, { error: "素材不存在" });
-      const before = JSON.parse(JSON.stringify(asset));
-      const reviewStatus = body.reviewStatus === "rejected" || body.approved === false ? "rejected" : body.approved === true ? "approved" : "pending";
-      const nextSourceType = String(body.sourceType || asset.sourceType || "local-upload").slice(0, 80);
-      Object.assign(asset, {
-        reviewStatus,
-        approved: reviewStatus === "approved",
-        ownership: String(body.ownership || asset.ownership || "user-provided").slice(0, 120),
-        sourceType: nextSourceType,
-        creatorName: String(body.creatorName ?? asset.creatorName ?? "").trim().slice(0, 120),
-        workTitle: String(body.workTitle ?? asset.workTitle ?? "").trim().slice(0, 180),
-        sourceUrl: String(body.sourceUrl ?? asset.sourceUrl ?? "").trim().slice(0, 1000),
-        usagePurpose: String(body.usagePurpose ?? asset.usagePurpose ?? "").trim().slice(0, 500),
-        licenseBasis: String(body.licenseBasis || body.license || asset.licenseBasis || "").trim().slice(0, 120),
-        attributionText: String(body.attributionText ?? asset.attributionText ?? "").trim().slice(0, 240),
-        clipStart: Number.isFinite(Number(body.clipStart)) ? Math.max(0, Number(body.clipStart)) : Number(asset.clipStart || 0),
-        clipEnd: Number.isFinite(Number(body.clipEnd)) && Number(body.clipEnd) > 0 ? Number(body.clipEnd) : asset.clipEnd,
-        clipDuration: Number.isFinite(Number(body.clipDuration)) && Number(body.clipDuration) > 0 ? Number(body.clipDuration) : asset.clipDuration,
-        paymentConfirmed: PAID_SOURCE_TYPES.has(nextSourceType) ? body.paymentConfirmed === true : body.paymentConfirmed === undefined ? asset.paymentConfirmed === true : body.paymentConfirmed === true,
-        placement: body.placement ? normalizePlacement(body.placement) : asset.placement,
-        updatedAt: new Date().toISOString()
-      });
-      const normalized = normalizeAssetRecord(asset);
-      Object.assign(asset, normalized);
-      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-      const issues = assetComplianceIssues(asset, job, duration);
-      if (reviewStatus === "approved" && issues.length) {
+      const body = await readBodyJson(req);
+      const [jobId, assetId] = assetApprovalMatch.slice(1);
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const asset = (job.assets || []).find(item => item.id === assetId);
+        if (!asset) return json(res, 404, { error: "素材不存在" });
+        const expectedDecisionVersion = expectedAssetDecisionVersionValue(body.expectedAssetDecisionVersion);
+        const before = JSON.parse(JSON.stringify(asset));
+        const reviewStatus = body.reviewStatus === "rejected" || body.approved === false ? "rejected" : body.approved === true ? "approved" : "pending";
+        const nextSourceType = String(body.sourceType || asset.sourceType || "local-upload").slice(0, 80);
+        const candidate = normalizeAssetRecord({
+          ...asset,
+          reviewStatus,
+          approved: reviewStatus === "approved",
+          ownership: String(body.ownership || asset.ownership || "user-provided").slice(0, 120),
+          sourceType: nextSourceType,
+          creatorName: String(body.creatorName ?? asset.creatorName ?? "").trim().slice(0, 120),
+          workTitle: String(body.workTitle ?? asset.workTitle ?? "").trim().slice(0, 180),
+          sourceUrl: String(body.sourceUrl ?? asset.sourceUrl ?? "").trim().slice(0, 1000),
+          usagePurpose: String(body.usagePurpose ?? asset.usagePurpose ?? "").trim().slice(0, 500),
+          licenseBasis: String(body.licenseBasis || body.license || asset.licenseBasis || "").trim().slice(0, 120),
+          attributionText: String(body.attributionText ?? asset.attributionText ?? "").trim().slice(0, 240),
+          clipStart: Number.isFinite(Number(body.clipStart)) ? Math.max(0, Number(body.clipStart)) : Number(asset.clipStart || 0),
+          clipEnd: Number.isFinite(Number(body.clipEnd)) && Number(body.clipEnd) > 0 ? Number(body.clipEnd) : asset.clipEnd,
+          clipDuration: Number.isFinite(Number(body.clipDuration)) && Number(body.clipDuration) > 0 ? Number(body.clipDuration) : asset.clipDuration,
+          paymentConfirmed: PAID_SOURCE_TYPES.has(nextSourceType) ? body.paymentConfirmed === true : body.paymentConfirmed === undefined ? asset.paymentConfirmed === true : body.paymentConfirmed === true,
+          placement: body.placement ? normalizePlacement(body.placement) : asset.placement,
+          updatedAt: asset.updatedAt,
+        });
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        const issues = assetComplianceIssues(candidate, job, duration);
+        if (reviewStatus === "approved" && issues.length) {
+          return json(res, 409, { error: issues.join("；"), issues });
+        }
+        if (assetReviewDecisionFingerprint(before) === assetReviewDecisionFingerprint(candidate)) {
+          const currentDecisionVersion = assetDecisionVersion(job);
+          if (expectedDecisionVersion > currentDecisionVersion) assertExpectedAssetDecisionVersion(job, expectedDecisionVersion);
+          return json(res, 200, { job, asset, replayed: true });
+        }
+        assertExpectedAssetDecisionVersion(job, expectedDecisionVersion);
+        candidate.updatedAt = new Date().toISOString();
         Object.keys(asset).forEach(key => delete asset[key]);
-        Object.assign(asset, before);
-        return json(res, 409, { error: issues.join("；"), issues });
-      }
-      job.assetDecisions = [...(job.assetDecisions || []), { assetId: asset.id, reviewStatus, placement: asset.placement, licenseBasis: asset.licenseBasis, usagePurpose: asset.usagePurpose, decidedAt: new Date().toISOString() }];
-      job.assetReview = assetReviewSummary(job, duration);
-      job.status = "awaiting_asset_review";
-      delete job.approvedAt;
-      await writeJson(path.join(confined(jobsRoot, job.id), "asset-decisions.json"), job.assetDecisions);
-      await saveJob(job);
-      return json(res, 200, { job, asset });
+        Object.assign(asset, candidate);
+        const decisionAudit = await assetDecisionAuditEntry(asset, {
+          eventType: reviewStatus === "approved" ? "asset-approved" : reviewStatus === "rejected" ? "asset-rejected" : "asset-review-reset",
+          reason: reviewStatus === "approved" ? "用户批准素材进入渲染" : reviewStatus === "rejected" ? "用户拒绝素材进入渲染" : "素材审核状态已重置",
+        });
+        appendAssetDecisionAudit(job, [decisionAudit], { reason: `素材 ${asset.id} 的审核状态或时间段已变化，现有动态样片审核失效` });
+        job.assetReview = assetReviewSummary(job, duration);
+        job.status = "awaiting_asset_review";
+        delete job.approvedAt;
+        await persistAssetDecisionAudit(job);
+        await writeJson(path.join(confined(jobsRoot, job.id), "asset-candidates.json"), { discovery: job.assetDiscovery, assets: job.assets });
+        await saveJob(job);
+        return json(res, 200, { job, asset, replayed: false });
+      });
     }
     const assetRenderMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/assets\/render$/);
     if (req.method === "POST" && assetRenderMatch) {
-      const job = await readJob(assetRenderMatch[1]);
-      if (running.has(job.id)) return json(res, 409, { error: "任务仍在处理中" });
-      const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
-      const review = assetReviewSummary(job, duration);
-      if (!review.reviewComplete) return json(res, 409, { error: "仍有素材未批准或拒绝", review });
-      if (!review.renderReady) return json(res, 409, { error: review.complianceIssues.map(item => `${item.assetId}：${item.issue}`).join("；"), review });
-      renderReviewedAssets(job);
-      return json(res, 202, { job, review });
+      const jobId = assetRenderMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const duration = job.currentPlan?.keepSegments?.reduce((sum, segment) => sum + Number(segment.end) - Number(segment.start), 0) || Number(job.source?.duration || 0);
+        const review = assetReviewSummary(job, duration);
+        if (!review.reviewComplete) return json(res, 409, { error: "仍有素材未批准或拒绝", review });
+        if (!review.renderReady) return json(res, 409, { error: review.complianceIssues.map(item => `${item.assetId}：${item.issue}`).join("；"), review });
+        renderReviewedAssets(job);
+        return json(res, 202, { job, review });
+      });
     }
     const approveMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/approve$/);
     if (req.method === "POST" && approveMatch) {
-      const job = await readJob(approveMatch[1]);
-      if (!job.output) return json(res, 409, { error: "还没有可审核的成片" });
-      if (job.output.qaPass !== true) return json(res, 409, { error: "当前成片QA未通过，不能最终审核" });
-      const manifest = await readJsonFile(path.join(confined(jobsRoot, job.id), `media-manifest-v${job.output.version}.json`));
-      if (manifest.review?.reviewComplete !== true || manifest.assets.some(asset => asset.approved && asset.composited !== true)) return json(res, 409, { error: "素材审核或实际合成状态不完整，不能最终审核" });
-      job.status = "approved"; job.approvedAt = new Date().toISOString(); await saveJob(job);
-      await writeJson(path.join(confined(jobsRoot, job.id), "final-review.json"), { status: "approved", version: job.currentVersion, qaPass: true, mediaReview: manifest.review, renderedAssetIds: manifest.renderedAssetIds || [], approvedAt: job.approvedAt, autoPublish: false });
-      return json(res, 200, { job });
+      const body = await readBodyJson(req);
+      const jobId = approveMatch[1];
+      return await withJobMutation(jobId, async () => {
+        const job = await readJob(jobId);
+        const outputVersion = assertOutputReviewVersion(job, body.expectedVersion);
+        if (job.output.qaPass !== true) return json(res, 409, { error: "当前成片QA未通过，不能最终审核" });
+        const jobDir = confined(jobsRoot, job.id);
+        const manifestPath = path.join(jobDir, `media-manifest-v${outputVersion}.json`);
+        const reviewBundlePath = path.join(jobDir, `review-bundle-v${outputVersion}.json`);
+        const manifest = await readJsonFile(manifestPath);
+        if (manifest.review?.reviewComplete !== true || manifest.assets.some(asset => asset.approved && asset.composited !== true)) return json(res, 409, { error: "素材审核或实际合成状态不完整，不能最终审核" });
+        if (Number(manifest.version) !== outputVersion) return json(res, 409, { error: "素材清单版本与当前成片不一致，不能最终审核" });
+        const reviewBundle = await readJsonFile(reviewBundlePath);
+        if (Number(reviewBundle.version) !== outputVersion) return json(res, 409, { error: "审核预览包版本与当前成片不一致，不能最终审核" });
+        let workflowStageVersion = null;
+        if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          await assertMotionSampleAssetSnapshotCurrent(job);
+          workflowStageVersion = fullRenderStageVersionForOutput(job, outputVersion);
+          if (!workflowStageVersion) return json(res, 409, { error: "当前成片与完整渲染记录不匹配，不能最终审核" });
+        }
+        const currentOutputPath = assertCurrentOutputPath(job, outputVersion);
+        const mediaSha256 = await sha256File(currentOutputPath);
+        const ordinaryViewerAudit = job.output.ordinaryViewerAudit || null;
+        if (ordinaryViewerAudit?.outputVersion && Number(ordinaryViewerAudit.outputVersion) !== outputVersion) return json(res, 409, { error: "普通观众审查版本与当前成片不一致，不能最终审核" });
+        if (ordinaryViewerAudit?.mediaSha256 && String(ordinaryViewerAudit.mediaSha256).toLowerCase() !== mediaSha256.toLowerCase()) return json(res, 409, { error: "当前成片哈希与普通观众审查记录不一致，不能最终审核" });
+        const reviewBundleSha256 = await sha256File(reviewBundlePath);
+        const mediaManifestSha256 = await sha256File(manifestPath);
+        const reviewPreviewPath = reviewBundle.preview?.path ? confined(jobDir, reviewBundle.preview.path) : null;
+        if (!reviewPreviewPath || !fs.existsSync(reviewPreviewPath)) return json(res, 409, { error: "当前成片缺少真实审核预览，不能最终审核" });
+        const reviewPreviewSha256 = await sha256File(reviewPreviewPath);
+        const finalReviewName = `final-review-v${outputVersion}.json`;
+        const finalReviewUrl = `/video-jobs/${job.id}/${finalReviewName}`;
+        const proposedFinalReview = {
+          status: "approved",
+          version: outputVersion,
+          workflowStageVersion,
+          mediaSha256,
+          reviewBundle: { url: job.output.artifacts?.reviewBundle || `/video-jobs/${job.id}/review-bundle-v${outputVersion}.json`, sha256: reviewBundleSha256, previewUrl: reviewBundle.preview?.url || null, previewSha256: reviewPreviewSha256 },
+          mediaManifest: { url: job.output.artifacts?.mediaManifest || `/video-jobs/${job.id}/media-manifest-v${outputVersion}.json`, sha256: mediaManifestSha256 },
+          ordinaryViewerAudit: ordinaryViewerAudit ? { artifactId: ordinaryViewerAudit.artifactId || null, outputVersion: ordinaryViewerAudit.outputVersion || null, mediaSha256: ordinaryViewerAudit.mediaSha256 || null, transcriptSha256: ordinaryViewerAudit.transcriptSha256 || null, inspectionMode: ordinaryViewerAudit.inspectionMode || null } : null,
+          qaPass: true,
+          mediaReview: manifest.review,
+          renderedAssetIds: manifest.renderedAssetIds || [],
+          approvedAt: new Date().toISOString(),
+          autoPublish: false,
+        };
+        const persisted = await createOrReadVersionedFinalReview(path.join(jobDir, finalReviewName), proposedFinalReview);
+        if (persisted.replayed && job.status === "approved" && job.publishPackage?.status === "ready" && Number(job.publishPackage.outputVersion) === outputVersion) {
+          return json(res, 200, { job, finalReview: persisted.review, publishPackage: job.publishPackage, replayed: true });
+        }
+        const finalReview = persisted.review;
+        job.status = "approved";
+        job.approvedAt = finalReview.approvedAt;
+        if (job.workflow?.version === VISUAL_WORKFLOW_VERSION) {
+          const stage = job.workflow.stages.full_render;
+          stage.status = "approved";
+          stage.approvedVersion = workflowStageVersion;
+          stage.approvedOutputVersion = outputVersion;
+          stage.approvedAt = job.approvedAt;
+          job.workflow.audit ||= [];
+          if (!job.workflow.audit.some(item => item.type === "stage-approved" && item.stageId === "full_render" && Number(item.outputVersion) === outputVersion)) {
+            job.workflow.audit.push({ type: "stage-approved", stageId: "full_render", version: workflowStageVersion, outputVersion, at: job.approvedAt });
+          }
+        }
+        await writeJson(path.join(jobDir, "final-review.json"), finalReview);
+        job.output = { ...job.output, mediaSha256, finalReview: { status: "approved", version: outputVersion, url: finalReviewUrl, mediaSha256, approvedAt: job.approvedAt, evidenceHash: finalReview.evidenceHash, recordHash: finalReview.recordHash }, artifacts: { ...(job.output.artifacts || {}), finalReview: finalReviewUrl } };
+        job.versions = (job.versions || []).map(item => Number(item.version) === outputVersion ? job.output : item);
+        try {
+          await buildPublishPackage(job, outputVersion, { mode: "regenerate", automatic: true });
+        } catch (error) {
+          job.publishPackage = { status: "error", outputVersion, generatedAt: new Date().toISOString(), error: error.message, autoPublish: false };
+        }
+        await saveJob(job);
+        return json(res, 200, { job, finalReview, publishPackage: job.publishPackage, replayed: persisted.replayed });
+      });
     }
     if (pathname.startsWith("/video-jobs/")) return await serveFile(req, res, confined(jobsRoot, pathname.slice("/video-jobs/".length)));
     if (pathname.startsWith("/content-items/")) return await serveFile(req, res, confined(contentRoot, pathname.slice("/content-items/".length)));
@@ -2374,7 +5344,42 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) json(res, error.statusCode || (error.code === "ENOENT" ? 404 : 500), { error: error.message }); else res.destroy();
   }
 });
+let serverResourcesClosed = false;
+function closeMultiAgentStore() {
+  if (serverResourcesClosed) return;
+  serverResourcesClosed = true;
+  multiAgentStore.close();
+}
 server.on("error", error => { if (error.code === "EADDRINUSE") process.exit(0); console.error(error); process.exit(1); });
+server.on("close", closeMultiAgentStore);
 if (process.env.KOUBO_NO_LISTEN !== "1") server.listen(port, host, () => console.log(`AI口播工作台：http://${host}:${port}/`));
 
-export { normalizeAssetRecord, assetComplianceIssues, assetReviewSummary, candidatePlacement };
+export async function closeServerResourcesForTests() {
+  if (server.listening) {
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
+  closeMultiAgentStore();
+}
+
+export {
+  server as httpServerForTests,
+  normalizeAssetRecord,
+  assetComplianceIssues,
+  assetReviewSummary,
+  assetDecisionVersion,
+  currentAssetDecisionState,
+  assetDecisionAuditEntry,
+  appendAssetDecisionAudit,
+  buildAssetDecisionSnapshot,
+  assertMotionSampleAssetSnapshotCurrent,
+  autoReviewLocalAssetsForPreview,
+  candidatePlacement,
+  previewAssetAutoReviewDecision,
+  assertOutputReviewVersion,
+  fullRenderStageVersionForOutput,
+  finalReviewEvidenceHash,
+  finalReviewRecordHash,
+  createOrReadVersionedFinalReview,
+  withJobMutation,
+  writeMultiAgentArtifact,
+};
